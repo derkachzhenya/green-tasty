@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\ConsolidatedPreOrderController;
+use App\Http\Controllers\GuestDishSelectionController;
 use App\Http\Controllers\GuestInvitationController;
+use App\Http\Middleware\AuthenticateGuestInvitation;
 use App\Http\Middleware\InvitationSecurityHeaders;
 use Illuminate\Support\Facades\Route;
 
@@ -33,3 +35,13 @@ Route::get('invitations/{token}', [GuestInvitationController::class, 'show'])
     ->withoutMiddleware('web')
     ->middleware([InvitationSecurityHeaders::class, 'throttle:invitation-access'])
     ->name('invitations.show');
+
+Route::get('invitations/{token}/selections', [GuestDishSelectionController::class, 'show'])
+    ->withoutMiddleware('web')
+    ->middleware([InvitationSecurityHeaders::class, 'throttle:invitation-access', AuthenticateGuestInvitation::class])
+    ->name('invitations.selections.show');
+
+Route::put('invitations/{token}/selections', [GuestDishSelectionController::class, 'update'])
+    ->withoutMiddleware('web')
+    ->middleware([InvitationSecurityHeaders::class, 'throttle:guest-selections', AuthenticateGuestInvitation::class])
+    ->name('invitations.selections.update');

@@ -54,21 +54,13 @@ class GuestInvitationService
     /** @return InvitationView|null */
     public function view(#[SensitiveParameter] string $token): ?array
     {
-        if (preg_match('/\A[a-f0-9]{64}\z/', $token) !== 1) {
-            return null;
-        }
-
-        $guest = ReservationGuest::query()
-            ->where('invitation_token', hash('sha256', $token))
-            ->whereNull('invitation_revoked_at')
-            ->where('invitation_expires_at', '>', CarbonImmutable::now())
-            ->with('reservation.restaurant')
-            ->first();
+        $guest = $this->resolve($token);
 
         if ($guest === null) {
             return null;
         }
 
+        $guest->load('reservation.restaurant');
         $reservation = $guest->reservation;
         $restaurant = $reservation?->restaurant;
 
@@ -98,6 +90,32 @@ class GuestInvitationService
                 ])->all()),
             ])->all()),
         ];
+    }
+
+    /** Acquire the optional row lock only inside a database transaction. */
+    public function resolve(#[SensitiveParameter] string $token, bool $lockForUpdate = false): ?ReservationGuest
+    {
+        if (preg_match('/\A[a-f0-9]{64}\z/', $token) !== 1) {
+            return null;
+        }
+
+        $query = ReservationGuest::query()
+            ->where('invitation_token', hash('sha256', $token))
+            ->whereNull('invitation_revoked_at')
+            ->where('invitation_expires_at', '>', CarbonImmutable::now());
+
+        if ($lockForUpdate) {
+            $query->lockForUpdate();
+        }
+
+        $guest = $query->first();
+
+        // A locking query may have waited until after expiration.
+        if ($guest?->invitation_expires_at?->isFuture() !== true) {
+            return null;
+        }
+
+        return $guest;
     }
 
     /** @return IssuedInvitation */
