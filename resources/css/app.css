@@ -170,3 +170,20 @@
         @apply bg-background text-foreground;
     }
 }
+
+/* Verified visitor-page tokens from Figma, scoped to the public Green Tasty UI. */
+.green-tasty {
+    color-scheme: light;
+    --background: #f7f7ec;
+    --foreground: #232323;
+    --card: #ffffff;
+    --card-foreground: #232323;
+    --primary: #0b5b29;
+    --primary-foreground: #ffffff;
+    --accent: #d6e5d5;
+    --accent-foreground: #232323;
+    --muted: #f7f7ec;
+    --muted-foreground: #555555;
+    --border: #e4e7df;
+    --ring: #0b5b29;
+}
