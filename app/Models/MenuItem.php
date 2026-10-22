@@ -22,6 +22,7 @@ class MenuItem extends Model
         'sort_order',
     ];
 
+    /** @return array{price: 'decimal:2', is_available: 'boolean', sort_order: 'integer'} */
     protected function casts(): array
     {
         return [

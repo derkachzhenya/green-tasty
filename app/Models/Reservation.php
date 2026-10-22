@@ -25,6 +25,7 @@ class Reservation extends Model
         'special_requests',
     ];
 
+    /** @return array{reserved_at: 'datetime', guest_count: 'integer'} */
     protected function casts(): array
     {
         return [
