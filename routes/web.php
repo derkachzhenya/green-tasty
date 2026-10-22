@@ -4,11 +4,12 @@ use App\Http\Controllers\ConsolidatedPreOrderController;
 use App\Http\Controllers\GroupPreOrderSubmissionController;
 use App\Http\Controllers\GuestDishSelectionController;
 use App\Http\Controllers\GuestInvitationController;
+use App\Http\Controllers\RestaurantController;
 use App\Http\Middleware\AuthenticateGuestInvitation;
 use App\Http\Middleware\InvitationSecurityHeaders;
 use Illuminate\Support\Facades\Route;
 
-Route::inertia('/', 'Welcome')->name('home');
+Route::get('/', [RestaurantController::class, 'index'])->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
