@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import { dashboard, home, login } from '@/routes';
 import SiteContainer from './SiteContainer.vue';
 
 const page = usePage();
+const isHome = computed(() => page.component === 'restaurants/Index');
 </script>
 
 <template>
@@ -26,17 +28,22 @@ const page = usePage();
                 >
                     <Link
                         :href="home()"
-                        aria-current="page"
-                        class="inline-flex min-h-11 items-center border-b-2 border-primary text-sm font-medium text-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+                        :aria-current="isHome ? 'page' : undefined"
+                        :class="
+                            isHome
+                                ? 'border-primary text-primary'
+                                : 'border-transparent hover:text-primary'
+                        "
+                        class="inline-flex min-h-11 items-center border-b-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
                     >
                         Main page
                     </Link>
-                    <a
-                        href="#locations"
+                    <Link
+                        :href="`${home().url}#locations`"
                         class="inline-flex min-h-11 items-center rounded-sm text-sm font-medium hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
                     >
                         Locations
-                    </a>
+                    </Link>
                 </nav>
 
                 <Link
