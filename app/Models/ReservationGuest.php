@@ -13,6 +13,9 @@ class ReservationGuest extends Model
     /** @use HasFactory<ReservationGuestFactory> */
     use HasFactory;
 
+    // This column stores only SHA-256 digests, never raw invitation tokens.
+    protected $hidden = ['invitation_token'];
+
     protected $fillable = [
         'reservation_id',
         'user_id',
@@ -23,10 +26,13 @@ class ReservationGuest extends Model
         'responded_at',
     ];
 
+    /** @return array{responded_at: 'datetime', invitation_expires_at: 'immutable_datetime', invitation_revoked_at: 'immutable_datetime'} */
     protected function casts(): array
     {
         return [
             'responded_at' => 'datetime',
+            'invitation_expires_at' => 'immutable_datetime',
+            'invitation_revoked_at' => 'immutable_datetime',
         ];
     }
 
