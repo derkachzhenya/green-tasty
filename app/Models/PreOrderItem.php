@@ -21,6 +21,7 @@ class PreOrderItem extends Model
         'notes',
     ];
 
+    /** @return array{quantity: 'integer', unit_price: 'decimal:2'} */
     protected function casts(): array
     {
         return [
