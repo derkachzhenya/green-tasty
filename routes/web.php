@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ConsolidatedPreOrderController;
+use App\Http\Controllers\GroupPreOrderSubmissionController;
 use App\Http\Controllers\GuestDishSelectionController;
 use App\Http\Controllers\GuestInvitationController;
 use App\Http\Middleware\AuthenticateGuestInvitation;
@@ -16,6 +17,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 Route::get('reservations/{reservation}/pre-order/summary', [ConsolidatedPreOrderController::class, 'show'])
     ->middleware('auth')
     ->name('reservations.pre-order.summary');
+
+Route::post('reservations/{reservation}/pre-order/submit', [GroupPreOrderSubmissionController::class, 'store'])
+    ->middleware(['auth', 'throttle:pre-order-submission'])
+    ->name('reservations.pre-order.submit');
 
 require __DIR__.'/settings.php';
 

@@ -34,6 +34,8 @@ class AppServiceProvider extends ServiceProvider
             ->by('invitation-access:'.$request->ip()));
         RateLimiter::for('guest-selections', fn (Request $request) => Limit::perMinute(30)
             ->by('guest-selections:'.$request->ip()));
+        RateLimiter::for('pre-order-submission', fn (Request $request) => Limit::perMinute(30)
+            ->by('pre-order-submission:'.$request->user()?->id));
     }
 
     /**
