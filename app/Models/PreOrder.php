@@ -19,6 +19,7 @@ class PreOrder extends Model
         'submitted_at',
     ];
 
+    /** @return array{submitted_at: 'datetime'} */
     protected function casts(): array
     {
         return [
