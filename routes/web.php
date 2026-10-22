@@ -10,6 +10,7 @@ use App\Http\Middleware\InvitationSecurityHeaders;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [RestaurantController::class, 'index'])->name('home');
+Route::get('restaurants/{restaurant:slug}', [RestaurantController::class, 'show'])->name('restaurants.show');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');

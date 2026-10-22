@@ -1,38 +1,14 @@
 <script setup lang="ts">
-import { Deferred, Head, router } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { Head } from '@inertiajs/vue3';
 import RestaurantCard from '@/components/restaurants/RestaurantCard.vue';
 import RestaurantGridSkeleton from '@/components/restaurants/RestaurantGridSkeleton.vue';
 import ContentState from '@/components/site/ContentState.vue';
+import DeferredSection from '@/components/site/DeferredSection.vue';
 import SiteContainer from '@/components/site/SiteContainer.vue';
 import { Button } from '@/components/ui/button';
 import type { RestaurantListing } from '@/types/restaurant';
 
 defineProps<{ restaurants?: RestaurantListing[] }>();
-
-const retrying = ref(false);
-const reloadFailed = ref(false);
-
-function retry(): void {
-    router.reload({
-        only: ['restaurants'],
-        onStart: () => {
-            retrying.value = true;
-            reloadFailed.value = false;
-        },
-        onFinish: () => {
-            retrying.value = false;
-        },
-        onNetworkError: () => {
-            reloadFailed.value = true;
-            return false;
-        },
-        onHttpException: () => {
-            reloadFailed.value = true;
-            return false;
-        },
-    });
-}
 </script>
 
 <template>
@@ -79,33 +55,12 @@ function retry(): void {
             >
                 Locations
             </h2>
-            <Deferred data="restaurants">
+            <DeferredSection
+                data="restaurants"
+                error-title="We couldn’t load the locations"
+            >
                 <template #fallback>
                     <RestaurantGridSkeleton />
-                </template>
-                <template #rescue>
-                    <ContentState
-                        error
-                        title="We couldn’t load the locations"
-                        description="Please try again in a moment."
-                    >
-                        <Button
-                            :disabled="retrying"
-                            class="min-h-11"
-                            @click="retry"
-                            >{{
-                                retrying ? 'Trying again…' : 'Try again'
-                            }}</Button
-                        >
-                        <p
-                            v-if="reloadFailed"
-                            role="alert"
-                            class="mt-3 text-sm"
-                        >
-                            Still unable to connect. Please check your
-                            connection and try again.
-                        </p>
-                    </ContentState>
                 </template>
                 <ul
                     v-if="restaurants?.length"
@@ -125,7 +80,7 @@ function retry(): void {
                     title="No locations available"
                     description="We don’t have any locations to show right now. Please check back soon."
                 />
-            </Deferred>
+            </DeferredSection>
         </section>
     </SiteContainer>
 </template>
