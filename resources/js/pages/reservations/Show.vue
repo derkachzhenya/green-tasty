@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { computed, ref, shallowRef, watch } from 'vue';
+import GroupPreOrderSubmission from '@/components/reservations/GroupPreOrderSubmission.vue';
 import GroupPreOrderSummary from '@/components/reservations/GroupPreOrderSummary.vue';
 import GuestInvitationManager from '@/components/reservations/GuestInvitationManager.vue';
 import ReservationOverview from '@/components/reservations/ReservationOverview.vue';
@@ -9,24 +10,72 @@ import DeferredSection from '@/components/site/DeferredSection.vue';
 import SiteContainer from '@/components/site/SiteContainer.vue';
 import { Button } from '@/components/ui/button';
 import { show as restaurantShow } from '@/routes/restaurants';
-import type { DashboardOrder, ReservationDetails } from '@/types/reservation';
+import type {
+    DashboardOrder,
+    ReservationDetails,
+    SubmittedGroupOrder,
+} from '@/types/reservation';
 
-defineProps<{
+const props = defineProps<{
     reservation: ReservationDetails;
     groupOrder?: DashboardOrder;
     canManageInvitations: boolean;
+    canSubmitPreOrder: boolean;
 }>();
 const refreshing = ref(false);
 const refreshError = ref('');
+const submitting = ref(false);
+const confirming = ref(false);
+const refreshVersion = ref(0);
+const submittedResult = shallowRef<SubmittedGroupOrder | null>(null);
+const displayedOrder = computed<DashboardOrder | undefined>(() => {
+    if (
+        !submittedResult.value ||
+        (props.groupOrder?.status === 'submitted' &&
+            props.groupOrder.submitted_at)
+    )
+        return props.groupOrder;
+    const { status, submitted_at, ...summary } = submittedResult.value;
+    return {
+        participants: props.groupOrder?.participants ?? [],
+        summary,
+        status,
+        submitted_at,
+    };
+});
+function onSubmitted(result: SubmittedGroupOrder) {
+    submittedResult.value = result;
+    refresh();
+}
+watch(
+    () => props.reservation.id,
+    () => {
+        submittedResult.value = null;
+        refreshError.value = '';
+        refreshVersion.value = 0;
+    },
+);
 function refresh(): void {
+    if (refreshing.value) return;
     router.reload({
-        only: ['groupOrder'],
+        only: ['groupOrder', 'reservation', 'canSubmitPreOrder'],
         onStart: () => {
             refreshing.value = true;
             refreshError.value = '';
         },
         onFinish: () => {
             refreshing.value = false;
+        },
+        onSuccess: (page) => {
+            if (
+                page.rescuedProps?.includes('groupOrder') ||
+                !page.props.groupOrder
+            ) {
+                refreshError.value =
+                    'We couldn’t refresh the summary. Please try again.';
+                return;
+            }
+            refreshVersion.value++;
         },
         onNetworkError: () => {
             refreshError.value =
@@ -78,6 +127,7 @@ function refresh(): void {
             >
                 <DeferredSection
                     data="groupOrder"
+                    :resolved="Boolean(submittedResult)"
                     error-title="We couldn’t load your participants and group pre-order"
                 >
                     <template #fallback
@@ -92,20 +142,20 @@ function refresh(): void {
                                 class="mt-6 h-32 animate-pulse rounded-xl bg-accent motion-reduce:animate-none"
                             /></div
                     ></template>
-                    <template v-if="groupOrder">
+                    <template v-if="displayedOrder">
                         <GuestInvitationManager
                             v-if="canManageInvitations"
                             :reservation-id="reservation.id"
                             :timezone="reservation.timezone"
-                            :participants="groupOrder.participants"
-                            :selections="groupOrder.summary.guests"
-                            :refreshing="refreshing"
+                            :participants="displayedOrder.participants"
+                            :selections="displayedOrder.summary.guests"
+                            :refreshing="refreshing || submitting || confirming"
                             @changed="refresh"
                         />
                         <ReservationParticipants
                             v-else
-                            :participants="groupOrder.participants"
-                            :selections="groupOrder.summary.guests"
+                            :participants="displayedOrder.participants"
+                            :selections="displayedOrder.summary.guests"
                             :timezone="reservation.timezone"
                         />
                         <div class="space-y-5" :aria-busy="refreshing">
@@ -126,7 +176,9 @@ function refresh(): void {
                                     variant="outline"
                                     type="button"
                                     class="min-h-11 bg-card"
-                                    :disabled="refreshing"
+                                    :disabled="
+                                        refreshing || submitting || confirming
+                                    "
                                     @click="refresh"
                                     >{{
                                         refreshing
@@ -142,7 +194,30 @@ function refresh(): void {
                             >
                                 {{ refreshError }}
                             </p>
-                            <GroupPreOrderSummary :order="groupOrder" />
+                            <p
+                                v-if="submittedResult"
+                                role="status"
+                                class="rounded-xl bg-accent p-4 text-sm"
+                            >
+                                Group pre-order submitted. Guest selections are
+                                now locked.
+                            </p>
+                            <GroupPreOrderSummary
+                                :order="displayedOrder"
+                                :timezone="reservation.timezone"
+                            />
+                            <GroupPreOrderSubmission
+                                :reservation-id="reservation.id"
+                                :reservation-status="reservation.status"
+                                :order="displayedOrder"
+                                :can-submit="canSubmitPreOrder"
+                                :refreshing="refreshing"
+                                :refresh-version="refreshVersion"
+                                @submitted="onSubmitted"
+                                @refresh="refresh"
+                                @busy="submitting = $event"
+                                @confirming="confirming = $event"
+                            />
                         </div>
                     </template>
                 </DeferredSection>

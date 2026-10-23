@@ -70,6 +70,25 @@ function renderOrder(value = order()): Promise<string> {
 }
 
 describe('consolidated group pre-order', () => {
+    it('shows the submitted UTC timestamp in the reservation timezone without changing money', async () => {
+        const value = order({
+            status: 'submitted',
+            submitted_at: '2026-10-23T08:00:00+00:00',
+        });
+        const html = await renderToString(
+            createSSRApp({
+                render: () =>
+                    h(GroupPreOrderSummary, {
+                        order: value,
+                        timezone: 'Asia/Tbilisi',
+                    }),
+            }),
+        );
+        expect(html).toContain('datetime="2026-10-23T08:00:00+00:00"');
+        expect(html).toContain('23 Oct 2026, 12:00');
+        expect(html).toContain('Asia/Tbilisi');
+        expect(html).toContain('34.50');
+    });
     it('shows aggregation and different saved prices without inventing a single current price or currency', async () => {
         const html = await renderOrder();
         expect(html).toContain('Consolidated dishes');

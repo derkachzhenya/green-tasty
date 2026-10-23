@@ -1,13 +1,7 @@
 import type { IssuedInvitation } from '@/types/invitation';
+import { sessionJson } from './sessionJson';
 
-export class InvitationApiError extends Error {
-    constructor(
-        public status: number,
-        public errors: Record<string, string[]> = {},
-    ) {
-        super('Invitation request failed.');
-    }
-}
+export { SessionRequestError as InvitationApiError } from './sessionJson';
 
 export async function invitationRequest(
     url: string,
@@ -15,34 +9,7 @@ export async function invitationRequest(
     signal: AbortSignal,
     body?: { name: string },
 ): Promise<unknown> {
-    const cookie = document.cookie
-        .split('; ')
-        .find((entry) => entry.startsWith('XSRF-TOKEN='));
-    const headers: Record<string, string> = {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-    };
-    if (cookie)
-        headers['X-XSRF-TOKEN'] = decodeURIComponent(
-            cookie.slice('XSRF-TOKEN='.length),
-        );
-    const response = await fetch(url, {
-        method: method.toUpperCase(),
-        headers,
-        credentials: 'same-origin',
-        cache: 'no-store',
-        redirect: 'error',
-        signal,
-        ...(body ? { body: JSON.stringify(body) } : {}),
-    });
-    if (!response.ok) {
-        const data = (await response.json().catch(() => ({}))) as {
-            errors?: Record<string, string[]>;
-        };
-        throw new InvitationApiError(response.status, data.errors);
-    }
-    return response.status === 204 ? null : response.json();
+    return sessionJson(url, method, signal, body);
 }
 
 export function issuedInvitation(

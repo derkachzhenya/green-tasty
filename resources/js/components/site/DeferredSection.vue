@@ -4,7 +4,11 @@ import { ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import ContentState from './ContentState.vue';
 
-const props = defineProps<{ data: string; errorTitle: string }>();
+const props = defineProps<{
+    data: string;
+    errorTitle: string;
+    resolved?: boolean;
+}>();
 const retrying = ref(false);
 const reloadFailed = ref(false);
 
@@ -31,7 +35,8 @@ function retry(): void {
 </script>
 
 <template>
-    <Deferred :data="data">
+    <slot v-if="resolved" />
+    <Deferred v-else :data="data">
         <template #fallback><slot name="fallback" /></template>
         <template #rescue>
             <ContentState

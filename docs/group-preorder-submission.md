@@ -1,5 +1,9 @@
 # Group pre-order submission
 
+The owner dashboard provides the [submission UI](group-preorder-submission-ui.md),
+with explicit confirmation, progress/errors, submitted timestamp and a refreshed
+read-only summary. It calls the API below without changing its contract.
+
 `POST /reservations/{reservation}/pre-order/submit`
 (`reservations.pre-order.submit`) finalizes the reservation's shared pre-order.
 It uses session authentication, normal web CSRF protection, route model binding,

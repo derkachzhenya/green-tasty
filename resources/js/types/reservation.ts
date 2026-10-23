@@ -51,3 +51,8 @@ export type DashboardOrder = {
     status: string | null;
     submitted_at: string | null;
 };
+
+export type SubmittedGroupOrder = ConsolidatedSummary & {
+    status: 'submitted';
+    submitted_at: string;
+};

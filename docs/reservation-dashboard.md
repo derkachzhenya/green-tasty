@@ -1,5 +1,10 @@
 # Owner reservation dashboard and consolidated group pre-order
 
+Owners can finalize saved selections through the
+[Group Pre-Order Submission UI](group-preorder-submission-ui.md). The dashboard
+shows the submitted status/timestamp and retains the confirmed locked snapshot
+while refreshing the consolidated summary.
+
 ## Preview locally
 
 Start the existing Sail application and frontend development server:
