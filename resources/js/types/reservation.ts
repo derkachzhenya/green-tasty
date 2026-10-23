@@ -9,6 +9,7 @@ export type ReservationParticipant = {
     name: string;
     is_owner: boolean;
     response_status: string;
+    invitation_expires_at: string | null;
     invitation_status:
         | 'owner'
         | 'not_invited'

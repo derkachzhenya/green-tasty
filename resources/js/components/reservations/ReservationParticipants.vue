@@ -2,13 +2,16 @@
 import { computed } from 'vue';
 import ContentState from '@/components/site/ContentState.vue';
 import type { GuestOrder, ReservationParticipant } from '@/types/reservation';
+import { formatInvitationExpiration } from '@/lib/invitationApi';
 
 const props = withDefaults(
     defineProps<{
         participants: ReservationParticipant[];
         selections?: GuestOrder[];
+        timezone?: string;
+        title?: string;
     }>(),
-    { selections: () => [] },
+    { selections: () => [], timezone: 'UTC', title: 'Participants' },
 );
 const quantities = computed(
     () =>
@@ -35,12 +38,19 @@ const invitationLabels: Record<
 
 <template>
     <section aria-labelledby="participants-heading" class="space-y-5">
-        <h2 id="participants-heading" class="text-2xl leading-8 font-medium">
-            Participants
-            <span class="text-base font-normal text-muted-foreground"
-                >({{ participants.length }})</span
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <h2
+                id="participants-heading"
+                class="text-2xl leading-8 font-medium"
             >
-        </h2>
+                {{ title }}
+                <span class="text-base font-normal text-muted-foreground"
+                    >({{ participants.length }})</span
+                >
+            </h2>
+            <slot name="heading-actions" />
+        </div>
+        <slot name="introduction" />
         <ContentState
             v-if="!participants.length"
             title="No participants yet"
@@ -67,6 +77,22 @@ const invitationLabels: Record<
                 <p class="text-sm">
                     {{ invitationLabels[participant.invitation_status] }}
                 </p>
+                <p
+                    v-if="
+                        !participant.is_owner &&
+                        participant.invitation_expires_at
+                    "
+                    class="text-sm leading-6 text-muted-foreground"
+                >
+                    Expires:
+                    <time :datetime="participant.invitation_expires_at">{{
+                        formatInvitationExpiration(
+                            participant.invitation_expires_at,
+                            timezone,
+                        )
+                    }}</time>
+                    ({{ timezone }})
+                </p>
                 <p class="text-sm text-muted-foreground">
                     {{
                         quantities.has(participant.id)
@@ -83,6 +109,7 @@ const invitationLabels: Record<
                         participant.response_status
                     }}</span>
                 </p>
+                <slot name="actions" :participant="participant" />
             </li>
         </ul>
     </section>

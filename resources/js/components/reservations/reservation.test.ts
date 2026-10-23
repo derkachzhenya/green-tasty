@@ -164,6 +164,7 @@ describe('reservation participants', () => {
                                 is_owner: true,
                                 response_status: 'pending',
                                 invitation_status: 'owner',
+                                invitation_expires_at: null,
                             },
                             {
                                 id: 2,
@@ -171,6 +172,8 @@ describe('reservation participants', () => {
                                 is_owner: false,
                                 response_status: 'accepted',
                                 invitation_status: 'active',
+                                invitation_expires_at:
+                                    '2026-10-24T08:00:00+00:00',
                             },
                             {
                                 id: 3,
@@ -178,6 +181,7 @@ describe('reservation participants', () => {
                                 is_owner: false,
                                 response_status: 'pending',
                                 invitation_status: 'revoked',
+                                invitation_expires_at: null,
                             },
                             {
                                 id: 4,
@@ -185,6 +189,8 @@ describe('reservation participants', () => {
                                 is_owner: false,
                                 response_status: 'pending',
                                 invitation_status: 'expired',
+                                invitation_expires_at:
+                                    '2026-10-22T08:00:00+00:00',
                             },
                         ],
                     }),

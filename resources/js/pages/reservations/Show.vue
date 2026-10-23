@@ -2,6 +2,7 @@
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import GroupPreOrderSummary from '@/components/reservations/GroupPreOrderSummary.vue';
+import GuestInvitationManager from '@/components/reservations/GuestInvitationManager.vue';
 import ReservationOverview from '@/components/reservations/ReservationOverview.vue';
 import ReservationParticipants from '@/components/reservations/ReservationParticipants.vue';
 import DeferredSection from '@/components/site/DeferredSection.vue';
@@ -10,7 +11,11 @@ import { Button } from '@/components/ui/button';
 import { show as restaurantShow } from '@/routes/restaurants';
 import type { DashboardOrder, ReservationDetails } from '@/types/reservation';
 
-defineProps<{ reservation: ReservationDetails; groupOrder?: DashboardOrder }>();
+defineProps<{
+    reservation: ReservationDetails;
+    groupOrder?: DashboardOrder;
+    canManageInvitations: boolean;
+}>();
 const refreshing = ref(false);
 const refreshError = ref('');
 function refresh(): void {
@@ -88,9 +93,20 @@ function refresh(): void {
                             /></div
                     ></template>
                     <template v-if="groupOrder">
-                        <ReservationParticipants
+                        <GuestInvitationManager
+                            v-if="canManageInvitations"
+                            :reservation-id="reservation.id"
+                            :timezone="reservation.timezone"
                             :participants="groupOrder.participants"
                             :selections="groupOrder.summary.guests"
+                            :refreshing="refreshing"
+                            @changed="refresh"
+                        />
+                        <ReservationParticipants
+                            v-else
+                            :participants="groupOrder.participants"
+                            :selections="groupOrder.summary.guests"
+                            :timezone="reservation.timezone"
                         />
                         <div class="space-y-5" :aria-busy="refreshing">
                             <div

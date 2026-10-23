@@ -1,5 +1,9 @@
 # Guest invitations
 
+Owners can manage individual invitations from the reservation dashboard through
+the [Guest Invitation Management UI](guest-invitation-ui.md). It reuses the API
+documented below and displays newly issued links only in transient client state.
+
 All responses are JSON. Owner operations use the existing session authentication,
 CSRF protection, and the `ReservationPolicy::manageInvitations` owner check.
 

@@ -17,6 +17,7 @@ class ReservationDashboardController extends Controller
         Gate::authorize('viewSummary', $reservation);
 
         return Inertia::render('reservations/Show', [
+            'canManageInvitations' => Gate::allows('manageInvitations', $reservation),
             'reservation' => fn () => $bookings->confirmation($reservation),
             'groupOrder' => Inertia::defer(fn () => $dashboard->groupOrder($reservation), rescue: true),
         ]);
