@@ -1,0 +1,28 @@
+export type BookingRestaurant = {
+    id: number;
+    name: string;
+    slug: string;
+    address: string;
+};
+export type BookingTable = { id: number; name: string; seats: number };
+export type BookingRules = {
+    timezone: string;
+    duration_minutes: number;
+    slot_minutes: number;
+    min_date: string;
+    max_date: string;
+    default_date: string;
+};
+export type BookingConfirmation = {
+    id: number;
+    code: string;
+    status: 'draft' | 'confirmed' | 'cancelled' | 'completed';
+    guest_count: number;
+    restaurant: Pick<BookingRestaurant, 'name' | 'slug' | 'address'>;
+    table: Pick<BookingTable, 'name' | 'seats'> | null;
+    date: string;
+    time: string;
+    end_date: string;
+    end_time: string;
+    timezone: string;
+};

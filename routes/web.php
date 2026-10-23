@@ -4,6 +4,7 @@ use App\Http\Controllers\ConsolidatedPreOrderController;
 use App\Http\Controllers\GroupPreOrderSubmissionController;
 use App\Http\Controllers\GuestDishSelectionController;
 use App\Http\Controllers\GuestInvitationController;
+use App\Http\Controllers\RestaurantBookingController;
 use App\Http\Controllers\RestaurantController;
 use App\Http\Middleware\AuthenticateGuestInvitation;
 use App\Http\Middleware\InvitationSecurityHeaders;
@@ -11,6 +12,13 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', [RestaurantController::class, 'index'])->name('home');
 Route::get('restaurants/{restaurant:slug}', [RestaurantController::class, 'show'])->name('restaurants.show');
+
+Route::middleware(['auth', 'cache.headers:private;no_store'])->group(function () {
+    Route::get('restaurants/{restaurant:slug}/book', [RestaurantBookingController::class, 'create'])->name('restaurants.bookings.create');
+    Route::get('restaurants/{restaurant:slug}/availability', [RestaurantBookingController::class, 'availability'])->middleware('throttle:booking-availability')->name('restaurants.availability');
+    Route::post('restaurants/{restaurant:slug}/book', [RestaurantBookingController::class, 'store'])->middleware('throttle:booking-create')->name('restaurants.bookings.store');
+    Route::get('reservations/{reservation}/confirmation', [RestaurantBookingController::class, 'show'])->name('reservations.confirmation');
+});
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
