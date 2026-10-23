@@ -13,6 +13,7 @@ void createInertiaApp({
     layout: (name) => {
         switch (true) {
             case name.startsWith('restaurants/'):
+            case name.startsWith('bookings/'):
                 return SiteLayout;
             case name === 'Welcome':
                 return null;

@@ -43,12 +43,11 @@ marks Main page as current only on the listing. Menu category links are ordinary
 keyboard-accessible anchors to visible category sections, rather than tabs that
 hide dishes.
 
-The hero's **Reservation information** action leads to the Reservations section.
-It states that online booking is not available. When the stored phone can be
-normalized to a telephone number, a `tel:` link lets the visitor contact that
-restaurant. Otherwise, the real address is shown with an invitation to ask about
-a table in person. This feature makes no reservation request and shows no booking
-confirmation. There is no existing reservation-creation endpoint to connect to.
+The hero's **Book a table** action and the Reservations section now link to the
+authenticated booking workflow. A normalized phone still provides an optional
+`tel:` contact path. See [Restaurant booking](restaurant-booking.md) for the
+current rules, routes, concurrency behavior, and verification. The original
+details-only iteration used contact information before booking was implemented.
 
 ## Figma review and differences
 
@@ -84,8 +83,8 @@ Differences and assumptions:
   currency configuration; that product decision remains open.
 - Figma shows unavailable dishes as sold out. The public page hides them, as
   required by this feature.
-- The reservation action uses contact information instead of Figma's booking
-  flow, because online reservation creation is outside this feature.
+- The original details-only iteration used a contact action. The subsequent
+  booking feature now connects the reservation action to its authenticated flow.
 
 No existing migrations, business models, seeded records, or group pre-order
 services were modified. Development data is only read during browser verification.

@@ -8,6 +8,7 @@ import DeferredSection from '@/components/site/DeferredSection.vue';
 import SiteContainer from '@/components/site/SiteContainer.vue';
 import { Button } from '@/components/ui/button';
 import { home } from '@/routes';
+import { create } from '@/routes/restaurants/bookings';
 import type { MenuCategory, RestaurantDetails } from '@/types/restaurant';
 
 const props = defineProps<{
@@ -70,8 +71,8 @@ const phoneNumber = computed(() => {
                     </p>
                     <div class="flex flex-wrap gap-3">
                         <Button as-child class="min-h-11"
-                            ><a href="#reservation-info"
-                                >Reservation information</a
+                            ><Link :href="create(restaurant.slug)"
+                                >Book a table</Link
                             ></Button
                         >
                         <Button
@@ -117,8 +118,14 @@ const phoneNumber = computed(() => {
                 Reservations
             </h2>
             <p class="text-sm leading-6 text-muted-foreground">
-                Online booking is not available yet.
+                Choose a date, time and available table to book online. Sign in
+                is required.
             </p>
+            <Button as-child class="min-h-11"
+                ><Link :href="create(restaurant.slug)"
+                    >Find a table</Link
+                ></Button
+            >
             <template v-if="phoneNumber">
                 <p class="text-sm leading-6">
                     Contact the restaurant to ask about a table.
