@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import ContentState from '@/components/site/ContentState.vue';
+import { orderLocked, submissionTime } from '@/lib/groupPreOrder';
 import type { DashboardOrder } from '@/types/reservation';
 
-const props = defineProps<{ order: DashboardOrder }>();
+const props = withDefaults(
+    defineProps<{ order: DashboardOrder; timezone?: string }>(),
+    { timezone: 'UTC' },
+);
 const statusLabel = computed(() =>
     props.order.status === null ? 'Not started' : props.order.status,
 );
-const locked = computed(
-    () =>
-        (props.order.status !== 'draft' && props.order.status !== null) ||
-        props.order.submitted_at !== null,
-);
+const locked = computed(() => orderLocked(props.order));
 // Only collect display metadata. Every quantity and monetary total comes from the backend summary.
 const savedPrices = computed(() => {
     const prices = new Map<number, Set<string>>();
@@ -29,7 +29,11 @@ const savedPrices = computed(() => {
 <template>
     <section aria-labelledby="group-order-heading" class="space-y-6">
         <div class="flex flex-wrap items-center justify-between gap-3">
-            <h2 id="group-order-heading" class="text-2xl leading-8 font-medium">
+            <h2
+                id="group-order-heading"
+                tabindex="-1"
+                class="text-2xl leading-8 font-medium"
+            >
                 Group pre-order
             </h2>
             <span
@@ -37,6 +41,16 @@ const savedPrices = computed(() => {
                 >{{ statusLabel }}</span
             >
         </div>
+        <p
+            v-if="order.status === 'submitted' && order.submitted_at"
+            class="text-sm text-muted-foreground"
+        >
+            Submitted:
+            <time :datetime="order.submitted_at">{{
+                submissionTime(order.submitted_at, timezone)
+            }}</time>
+            ({{ timezone }})
+        </p>
         <p
             v-if="locked"
             role="status"
