@@ -12,7 +12,7 @@ defineProps<{ restaurant: RestaurantListing }>();
         <Link
             :href="show(restaurant.slug)"
             :aria-labelledby="`restaurant-${restaurant.id}`"
-            class="group block h-full overflow-hidden rounded-2xl border border-border bg-card shadow-sm hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+            class="group gt-card block h-full overflow-hidden border border-transparent bg-card hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
         >
             <div
                 class="flex aspect-[432/244] items-center justify-center bg-accent text-primary"

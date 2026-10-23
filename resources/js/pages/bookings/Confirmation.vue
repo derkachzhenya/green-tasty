@@ -17,7 +17,7 @@ defineProps<{ reservation: BookingConfirmation }>();
     /></Head>
     <SiteContainer>
         <section
-            class="mx-auto my-10 max-w-2xl space-y-6 rounded-2xl border border-border bg-card p-6 sm:my-16 sm:p-10"
+            class="gt-card mx-auto my-10 max-w-2xl space-y-6 bg-card p-6 sm:my-16 sm:p-10"
             aria-labelledby="confirmation-heading"
         >
             <CircleCheck
@@ -76,7 +76,7 @@ defineProps<{ reservation: BookingConfirmation }>();
                         >View reservation</Link
                     ></Button
                 >
-                <Button as-child class="min-h-11"
+                <Button as-child variant="outline" class="min-h-11"
                     ><Link
                         :href="`${show(reservation.restaurant.slug).url}#menu`"
                         >View menu</Link

@@ -78,7 +78,7 @@ const savedPrices = computed(() => {
         <template v-else>
             <section
                 aria-labelledby="consolidated-dishes-heading"
-                class="overflow-hidden rounded-2xl border border-border bg-card p-5 sm:p-8"
+                class="gt-card overflow-hidden bg-card p-5 sm:p-8"
             >
                 <h3
                     id="consolidated-dishes-heading"
@@ -144,7 +144,7 @@ const savedPrices = computed(() => {
                 <details
                     v-for="guest in order.summary.guests"
                     :key="guest.reservation_guest_id"
-                    class="min-w-0 rounded-2xl border border-border bg-card p-5 sm:p-6"
+                    class="gt-card min-w-0 bg-card p-5 sm:p-6"
                     open
                 >
                     <summary

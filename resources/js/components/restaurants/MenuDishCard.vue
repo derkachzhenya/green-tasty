@@ -9,7 +9,7 @@ withDefaults(defineProps<{ dish: MenuDish; heading?: 'h3' | 'h4' }>(), {
 <template>
     <article
         :aria-labelledby="`dish-${dish.id}`"
-        class="flex h-full flex-col gap-4 rounded-2xl border border-border bg-card p-6 shadow-sm"
+        class="gt-card flex h-full flex-col gap-4 bg-card p-6"
     >
         <component
             :is="heading"
