@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Gate;
  * @phpstan-import-type OrderSummary from ConsolidatedPreOrderService
  *
  * @phpstan-type InvitationStatus 'owner'|'not_invited'|'active'|'expired'|'revoked'|'unavailable'
- * @phpstan-type Participant array{id: int, name: string, is_owner: bool, response_status: string, invitation_status: InvitationStatus}
+ * @phpstan-type Participant array{id: int, name: string, is_owner: bool, response_status: string, invitation_status: InvitationStatus, invitation_expires_at: string|null}
  * @phpstan-type DashboardOrder array{participants: list<Participant>, summary: OrderSummary, status: string|null, submitted_at: string|null}
  */
 class ReservationDashboardService
@@ -41,6 +41,7 @@ class ReservationDashboardService
                     'is_owner' => $guest->user_id === $locked->owner_user_id,
                     'response_status' => $guest->status,
                     'invitation_status' => $this->invitationStatus($guest, $locked),
+                    'invitation_expires_at' => $guest->invitation_expires_at?->toIso8601String(),
                 ])->all()),
                 'summary' => $summary,
                 'status' => $preOrder?->status,

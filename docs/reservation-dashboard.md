@@ -43,7 +43,8 @@ Responses use `Cache-Control: private, no-store`; the page also declares
   actual pre-order status (or null when absent), and the saved submission timestamp.
 - Each participant exposes only ID, display name, owner flag, participation
   response status and derived invitation status. User IDs, contact information,
-  token hashes, raw tokens, invitation URLs and expiration timestamps are omitted.
+  token hashes, raw tokens and invitation URLs are omitted. The invitation UI
+  adds a nullable expiration timestamp for display.
   A link is **active** only while its stored expiration is in the future and a
   token hash exists; revocation takes precedence. Missing expiration is shown as
   unavailable. The owner needs no invitation. Active does not mean opened,
@@ -94,8 +95,9 @@ reservation's metadata; reload the page for updated booking details.
 Both drafts and submitted orders are read-only here. Submitted orders explicitly
 say selections are locked; other non-draft states or a submission timestamp are
 also treated conservatively as locked. A missing order is **Not started**, not
-an invented draft. No invitation management, selection editing, final submission,
-cancel/reschedule, or email controls are added.
+an invented draft. Selection editing, final submission, cancel/reschedule and
+email controls are not included. Owners can now manage individual links through
+the [guest invitation UI](guest-invitation-ui.md).
 
 ## Figma review and differences
 

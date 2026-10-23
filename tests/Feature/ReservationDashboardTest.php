@@ -63,8 +63,8 @@ class ReservationDashboardTest extends TestCase
             ->loadDeferredProps(fn (Assert $loaded) => $loaded
                 ->where('groupOrder.status', 'draft')->where('groupOrder.submitted_at', null)
                 ->where('groupOrder.participants', [
-                    ['id' => $ownerParticipant->id, 'name' => $this->owner->name, 'is_owner' => true, 'response_status' => 'pending', 'invitation_status' => 'owner'],
-                    ['id' => $alice->id, 'name' => 'Alice', 'is_owner' => false, 'response_status' => 'accepted', 'invitation_status' => 'active'],
+                    ['id' => $ownerParticipant->id, 'name' => $this->owner->name, 'is_owner' => true, 'response_status' => 'pending', 'invitation_status' => 'owner', 'invitation_expires_at' => null],
+                    ['id' => $alice->id, 'name' => 'Alice', 'is_owner' => false, 'response_status' => 'accepted', 'invitation_status' => 'active', 'invitation_expires_at' => '2026-10-24T08:00:00+00:00'],
                 ])
                 ->where('groupOrder.summary.items', [['menu_item_id' => $dish->id, 'name' => 'Vegetable Bowl', 'quantity' => 3, 'subtotal' => '34.50']])
                 ->where('groupOrder.summary.guests.0.items.0.unit_price', '12.50')
@@ -74,7 +74,7 @@ class ReservationDashboardTest extends TestCase
                 ->where('groupOrder.summary.total_quantity', 3)->where('groupOrder.summary.grand_total', '34.50')
                 ->missing('groupOrder.participants.1.email')->missing('groupOrder.participants.1.phone')
                 ->missing('groupOrder.participants.1.user_id')->missing('groupOrder.participants.1.invitation_token')
-                ->missing('groupOrder.participants.1.invitation_url')->missing('groupOrder.participants.1.invitation_expires_at')));
+                ->missing('groupOrder.participants.1.invitation_url')->where('groupOrder.participants.1.invitation_expires_at', '2026-10-24T08:00:00+00:00')));
         $this->get($this->url(), $this->deferredHeaders())->assertHeader('Cache-Control', 'no-store, private')
             ->assertDontSee($alice->invitation_token)->assertDontSee('private-token')
             ->assertDontSee('private-guest@example.test')->assertDontSee('+995555000001');
