@@ -234,7 +234,7 @@ onBeforeUnmount(() => {
     <section
         v-if="canSubmit && !locked"
         aria-label="Group pre-order submission"
-        class="space-y-4 rounded-2xl border border-border bg-card p-5 sm:p-8"
+        class="gt-card space-y-4 bg-card p-5 sm:p-8"
     >
         <div class="flex flex-wrap items-center justify-between gap-5">
             <div class="max-w-xl min-w-0">

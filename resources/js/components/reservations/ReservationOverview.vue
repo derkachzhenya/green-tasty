@@ -7,7 +7,7 @@ defineProps<{ reservation: ReservationDetails }>();
 <template>
     <section
         aria-labelledby="reservation-details-heading"
-        class="space-y-6 rounded-2xl border border-border bg-card p-6 sm:p-8"
+        class="gt-card space-y-6 bg-card p-6 sm:p-8"
     >
         <div class="flex flex-wrap items-start justify-between gap-4">
             <div class="min-w-0">

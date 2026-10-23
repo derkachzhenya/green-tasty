@@ -171,7 +171,7 @@
     }
 }
 
-/* Verified visitor-page tokens from Figma, scoped to the public Green Tasty UI. */
+/* Current Figma palette; scoped so account/settings themes remain independent. */
 .green-tasty {
     color-scheme: light;
     --background: #f7f7ec;
@@ -180,10 +180,88 @@
     --card-foreground: #232323;
     --primary: #0b5b29;
     --primary-foreground: #ffffff;
-    --accent: #d6e5d5;
+    --accent: #d9e5d9;
     --accent-foreground: #232323;
     --muted: #f7f7ec;
-    --muted-foreground: #555555;
-    --border: #e4e7df;
+    --muted-foreground: #454444;
+    --border: #dadada;
+    --input: #dadada;
+    --secondary: #d9e5d9;
+    --secondary-foreground: #232323;
+    --popover: #ffffff;
+    --popover-foreground: #232323;
+    --destructive: #a82319;
     --ring: #0b5b29;
+    --gt-card-shadow: 0 0 10px 4px rgb(218 218 218 / 70%);
+}
+
+/* The same white surface is used by Figma's dish cards and owner dialogs. */
+.green-tasty .gt-card {
+    border-radius: 24px;
+    box-shadow: var(--gt-card-shadow);
+}
+
+.green-tasty [data-slot='button'].bg-primary {
+    background-image: linear-gradient(90deg, #0b5b29, #0f7a37);
+}
+
+.green-tasty
+    [data-slot='button'].bg-primary:not(:disabled):not(
+        [aria-disabled='true']
+    ):hover {
+    background-image: none;
+    background-color: #0b5b29;
+}
+
+.green-tasty [data-slot='button'][data-variant='outline'] {
+    border-color: var(--primary);
+    background-color: var(--card);
+    box-shadow: none;
+}
+
+.green-tasty
+    [data-slot='button'][data-variant='outline']:not(:disabled):not(
+        [aria-disabled='true']
+    ):hover {
+    background-color: var(--accent);
+}
+
+/* Portaled dialogs carry their own scope; keep the 24px corners at every size. */
+[data-slot='dialog-overlay']:has(+ .green-tasty[data-slot='dialog-content']) {
+    background-color: rgb(0 0 0 / 45%);
+}
+
+.green-tasty[data-slot='dialog-content'] {
+    width: calc(100% - 2rem);
+    max-width: 520px;
+    gap: 24px;
+    border-radius: 24px;
+    box-shadow: var(--gt-card-shadow);
+}
+
+.green-tasty [data-slot='dialog-header'] {
+    text-align: left;
+}
+
+.green-tasty [data-slot='dialog-title'] {
+    padding-right: 32px;
+    font-size: 24px;
+    line-height: 32px;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+
+.green-tasty [data-slot='dialog-close'] {
+    top: 8px;
+    right: 8px;
+    display: grid;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+}
+
+@media (min-width: 640px) {
+    .green-tasty[data-slot='dialog-content'] {
+        padding: 40px;
+    }
 }

@@ -24,7 +24,7 @@ defineEmits<{ change: [id: number, quantity: number]; save: [] }>();
         id="your-order"
         aria-labelledby="your-order-heading"
         tabindex="-1"
-        class="scroll-mt-6 rounded-2xl border border-border bg-card p-6 shadow-sm lg:sticky lg:top-6"
+        class="gt-card scroll-mt-6 bg-card p-6 lg:sticky lg:top-6"
     >
         <div class="flex items-start justify-between gap-3">
             <h2 id="your-order-heading" class="text-xl font-medium">

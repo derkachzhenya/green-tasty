@@ -64,7 +64,7 @@ const invitationLabels: Record<
             <li
                 v-for="participant in participants"
                 :key="participant.id"
-                class="min-w-0 space-y-3 rounded-2xl border border-border bg-card p-5"
+                class="gt-card min-w-0 space-y-3 bg-card p-5"
             >
                 <p class="font-medium wrap-anywhere">
                     {{ participant.name

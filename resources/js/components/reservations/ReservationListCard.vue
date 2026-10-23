@@ -10,7 +10,7 @@ defineProps<{ reservation: OwnedReservation }>();
 <template>
     <article
         :aria-labelledby="`reservation-${reservation.id}-heading`"
-        class="flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
+        class="gt-card flex h-full min-w-0 flex-col overflow-hidden bg-card"
     >
         <p
             :class="
