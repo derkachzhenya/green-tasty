@@ -15,6 +15,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 class GroupPreOrderSubmissionConcurrencyTest extends TestCase
@@ -34,6 +35,8 @@ class GroupPreOrderSubmissionConcurrencyTest extends TestCase
 
     private ?Connection $heldConnection = null;
 
+    private ?Process $worker = null;
+
     private bool $databasePrepared = false;
 
     protected function beforeTruncatingDatabase(): void
@@ -41,6 +44,7 @@ class GroupPreOrderSubmissionConcurrencyTest extends TestCase
         if (DB::connection()->getDriverName() !== 'mysql') {
             $this->markTestSkipped('These tests require real MySQL row locks.');
         }
+        $this->assertSame('testing', DB::connection()->getDatabaseName(), 'Concurrency tests must only truncate the isolated testing database.');
     }
 
     protected function setUp(): void
@@ -64,6 +68,7 @@ class GroupPreOrderSubmissionConcurrencyTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->worker?->stop();
         if ($this->heldConnection !== null) {
             while ($this->heldConnection->transactionLevel() > 0) {
                 $this->heldConnection->rollBack();
@@ -117,6 +122,41 @@ class GroupPreOrderSubmissionConcurrencyTest extends TestCase
         $this->assertSame($first, app(GroupPreOrderSubmissionService::class)->submit($this->reservation, $this->owner));
         $this->assertSame(1, $this->preOrder->items()->firstOrFail()->quantity);
         $this->assertDatabaseCount('pre_orders', 1);
+    }
+
+    public function test_separate_submission_http_worker_waits_for_guest_update_and_returns_the_committed_summary(): void
+    {
+        $this->holdOperation(fn () => app(GuestDishSelectionService::class)->replace($this->token, [
+            ['menu_item_id' => $this->dish->id, 'quantity' => 3],
+        ]));
+        $this->worker = new Process([
+            PHP_BINARY, base_path('tests/Support/submission-request.php'),
+            (string) $this->owner->id, (string) $this->reservation->id,
+        ], base_path(), [
+            'APP_ENV' => 'testing', 'DB_DATABASE' => 'testing', 'DB_URL' => '',
+            'CACHE_STORE' => 'array', 'SESSION_DRIVER' => 'array',
+        ]);
+        $this->worker->setTimeout(15);
+        $this->worker->start();
+        $this->assertTrue(
+            $this->worker->waitUntil(fn ($type, $output) => str_contains($output, 'attempting-reservation-lock')),
+            $this->worker->getErrorOutput()
+        );
+        $this->assertTrue($this->worker->isRunning());
+        $this->assertSame('draft', $this->preOrder->fresh()->status);
+        $this->heldConnection->commit();
+        $this->worker->wait();
+
+        $this->assertTrue($this->worker->isSuccessful(), $this->worker->getErrorOutput());
+        $this->assertStringContainsString('response-status:200', $this->worker->getOutput());
+        $this->assertStringContainsString('grand-total:37.50', $this->worker->getOutput());
+        $this->assertSame('submitted', $this->preOrder->fresh()->status);
+        $this->assertSame(3, $this->preOrder->items()->sole()->quantity);
+        $this->actingAs($this->owner)->postJson(route('reservations.pre-order.submit', $this->reservation))
+            ->assertOk()->assertJsonPath('grand_total', '37.50');
+        $this->putJson(route('invitations.selections.update', $this->token), ['items' => []])->assertConflict();
+        $this->assertDatabaseCount('pre_orders', 1);
+        $this->assertDatabaseCount('pre_order_items', 1);
     }
 
     private function holdOperation(callable $operation): mixed
