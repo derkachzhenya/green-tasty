@@ -48,9 +48,12 @@ const isHome = computed(() => page.component === 'restaurants/Index');
 
                 <Link
                     :href="page.props.auth.user ? dashboard() : login()"
+                    :aria-current="
+                        page.component === 'Dashboard' ? 'page' : undefined
+                    "
                     class="inline-flex min-h-11 items-center justify-center rounded-sm border border-primary px-5 text-sm font-medium text-primary hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring sm:justify-self-end"
                 >
-                    {{ page.props.auth.user ? 'My account' : 'Sign in' }}
+                    {{ page.props.auth.user ? 'My reservations' : 'Sign in' }}
                 </Link>
             </div>
         </SiteContainer>

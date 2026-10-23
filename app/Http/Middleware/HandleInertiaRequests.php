@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -35,6 +36,9 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        // Authenticated pages must not survive account changes as plaintext history snapshots.
+        Inertia::encryptHistory($request->user() !== null);
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),

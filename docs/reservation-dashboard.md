@@ -14,17 +14,18 @@ Start the existing Sail application and frontend development server:
 ./vendor/bin/sail npm run dev
 ```
 
-Sign in, book a table through a restaurant's **Book a table** action, and follow
-**View reservation** on the persisted confirmation. For an existing reservation,
-open `/reservations/{id}` while signed in as its owner, using the application's
+Sign in and open [My reservations](my-reservations.md), or book a table through a
+restaurant's **Book a table** action and follow **View reservation** on the
+persisted confirmation. For an existing reservation, select **View reservation**
+from your list, or open `/reservations/{id}` while signed in as its owner, using the application's
 configured local URL (currently `http://localhost:8080`). IDs belong to the
 existing database; no particular ID is assumed. Existing invitation/selection
 backend endpoints can populate the order. A new booking initially shows its
 owner participant and a valid empty summary.
 
 This feature does not seed, migrate, or rewrite development data. No preview
-credentials or test fixtures are shipped in the application. The generic
-account dashboard and an index of all reservations are outside this iteration.
+credentials or test fixtures are shipped in the application. The account
+dashboard now provides the owner-scoped [My Reservations index](my-reservations.md).
 
 ## Route, authorization and data
 

@@ -5,6 +5,7 @@ use App\Http\Controllers\GroupPreOrderSubmissionController;
 use App\Http\Controllers\GuestDishSelectionController;
 use App\Http\Controllers\GuestInvitationController;
 use App\Http\Controllers\GuestMenuController;
+use App\Http\Controllers\MyReservationsController;
 use App\Http\Controllers\ReservationDashboardController;
 use App\Http\Controllers\RestaurantBookingController;
 use App\Http\Controllers\RestaurantController;
@@ -23,9 +24,9 @@ Route::middleware(['auth', 'cache.headers:private;no_store'])->group(function ()
     Route::get('reservations/{reservation}/confirmation', [RestaurantBookingController::class, 'show'])->name('reservations.confirmation');
 });
 
-Route::middleware(['auth', 'verified'])->group(function () {
-    Route::inertia('dashboard', 'Dashboard')->name('dashboard');
-});
+Route::get('dashboard', MyReservationsController::class)
+    ->middleware(['auth', 'verified', 'cache.headers:private;no_store'])
+    ->name('dashboard');
 
 Route::get('reservations/{reservation}/pre-order/summary', [ConsolidatedPreOrderController::class, 'show'])
     ->middleware('auth')

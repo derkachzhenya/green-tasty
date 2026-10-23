@@ -4,6 +4,22 @@ export type ReservationDetails = Omit<BookingConfirmation, 'status'> & {
     status: string;
 };
 
+export type OwnedReservation = ReservationDetails & {
+    pre_order_status: string | null;
+};
+
+export type MyReservationsPage = {
+    data: OwnedReservation[];
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+    from: number | null;
+    to: number | null;
+    prev_page_url: string | null;
+    next_page_url: string | null;
+};
+
 export type ReservationParticipant = {
     id: number;
     name: string;
