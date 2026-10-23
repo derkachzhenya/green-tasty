@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Reservation;
+use App\Models\ReservationGuest;
 use App\Models\Restaurant;
 use App\Models\RestaurantTable;
 use App\Models\User;
@@ -13,9 +14,7 @@ use App\Services\GuestDishSelectionService;
 use App\Services\GuestInvitationService;
 use App\Services\RestaurantBookingService;
 use Carbon\CarbonImmutable;
-use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
@@ -244,17 +243,27 @@ class RestaurantBookingTest extends TestCase
 
     public function test_booking_and_owner_participant_are_created_atomically(): void
     {
-        DB::listen(function (QueryExecuted $query): void {
-            if (str_starts_with($query->sql, 'insert into `reservation_guests`')) {
-                throw new RuntimeException('Simulated participant failure');
-            }
+        $failure = new RuntimeException('Simulated participant failure');
+        $caught = null;
+        $createdParticipant = null;
+
+        // Fail after the INSERT on any database driver, while the booking transaction is still open.
+        ReservationGuest::created(function (ReservationGuest $guest) use ($failure, &$createdParticipant): void {
+            $createdParticipant = $guest;
+            throw $failure;
         });
+
         try {
             app(RestaurantBookingService::class)->book($this->restaurant, $this->owner, app(BookingRules::class)->start('2026-10-24', '12:00'), 2, $this->table->id);
-            $this->fail('Participant failure must roll back the booking.');
         } catch (RuntimeException $exception) {
-            $this->assertSame('Simulated participant failure', $exception->getMessage());
+            $caught = $exception;
         }
+
+        // Assertions stay outside the catch: PHPUnit assertion failures also extend RuntimeException.
+        $this->assertSame($failure, $caught, 'The booking must propagate the simulated participant failure.');
+        $this->assertInstanceOf(ReservationGuest::class, $createdParticipant);
+        $this->assertTrue($createdParticipant->exists);
+        $this->assertNotNull($createdParticipant->getKey());
         $this->assertDatabaseCount('reservations', 0);
         $this->assertDatabaseCount('reservation_guests', 0);
     }
