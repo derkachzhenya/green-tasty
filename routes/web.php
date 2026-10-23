@@ -4,6 +4,7 @@ use App\Http\Controllers\ConsolidatedPreOrderController;
 use App\Http\Controllers\GroupPreOrderSubmissionController;
 use App\Http\Controllers\GuestDishSelectionController;
 use App\Http\Controllers\GuestInvitationController;
+use App\Http\Controllers\GuestMenuController;
 use App\Http\Controllers\ReservationDashboardController;
 use App\Http\Controllers\RestaurantBookingController;
 use App\Http\Controllers\RestaurantController;
@@ -57,6 +58,11 @@ Route::get('invitations/{token}/selections', [GuestDishSelectionController::clas
     ->withoutMiddleware('web')
     ->middleware([InvitationSecurityHeaders::class, 'throttle:invitation-access', AuthenticateGuestInvitation::class])
     ->name('invitations.selections.show');
+
+Route::get('invitations/{token}/menu', GuestMenuController::class)
+    ->withoutMiddleware('web')
+    ->middleware([InvitationSecurityHeaders::class, 'throttle:invitation-access', AuthenticateGuestInvitation::class])
+    ->name('invitations.menu');
 
 Route::put('invitations/{token}/selections', [GuestDishSelectionController::class, 'update'])
     ->withoutMiddleware('web')

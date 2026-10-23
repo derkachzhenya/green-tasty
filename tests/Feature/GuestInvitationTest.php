@@ -160,6 +160,7 @@ class GuestInvitationTest extends TestCase
 
     public function test_browser_access_is_stateless_and_cannot_cache_or_send_the_invitation_as_a_referrer(): void
     {
+        $this->withoutVite();
         $invitation = $this->issueInvitation();
 
         $response = $this->get($invitation['invitation_url'])->assertOk()

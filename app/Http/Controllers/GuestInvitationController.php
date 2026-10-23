@@ -8,6 +8,7 @@ use App\Models\Reservation;
 use App\Models\ReservationGuest;
 use App\Services\GuestInvitationService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
 use SensitiveParameter;
@@ -36,8 +37,15 @@ class GuestInvitationController extends Controller
         return response()->noContent();
     }
 
-    public function show(#[SensitiveParameter] string $token, GuestInvitationService $service): JsonResponse
+    public function show(Request $request, #[SensitiveParameter] string $token, GuestInvitationService $service): JsonResponse|Response
     {
+        // Keep bearer pages outside session/Inertia history, while preserving the JSON API.
+        if ($request->prefers(['application/json', 'text/html']) === 'text/html') {
+            $invalid = $service->resolve($token) === null;
+
+            return response()->view('guest', ['invalid' => $invalid], $invalid ? 404 : 200);
+        }
+
         $summary = $service->view($token);
 
         return $summary === null
