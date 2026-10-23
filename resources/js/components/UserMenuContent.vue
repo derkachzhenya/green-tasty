@@ -17,7 +17,8 @@ type Props = {
 };
 
 const handleLogout = () => {
-    router.flushAll();
+    // Discard the history decryption key as well as prefetched private pages.
+    router.clearHistory();
 };
 
 defineProps<Props>();

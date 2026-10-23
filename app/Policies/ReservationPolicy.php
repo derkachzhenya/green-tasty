@@ -8,6 +8,11 @@ use App\Models\User;
 
 class ReservationPolicy
 {
+    public function viewAny(User $user): bool
+    {
+        return true;
+    }
+
     public function create(User $user, Restaurant $restaurant): bool
     {
         return $restaurant->is_active;
