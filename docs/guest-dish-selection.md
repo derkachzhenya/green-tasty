@@ -1,8 +1,13 @@
 # Guest dish selection
 
+The [guest dish selection UI](guest-dish-selection-ui.md) now opens from invitation
+links in a browser. `GET /invitations/{token}/menu` combines the existing safe menu
+and selection DTOs with order editability for that UI; the selection APIs below
+retain their original JSON contracts.
+
 `GET /invitations/{token}/selections` (`invitations.selections.show`) reads only
 the invited guest's saved selections. The existing `GET /invitations/{token}`
-returns reservation/menu information and does not include selections. The new
+returns reservation/menu information with JSON Accept headers and does not include selections. The
 read endpoint uses the same invitation authentication, is stateless, and shares
 the invitation-access limit of 60 requests per minute per IP with invitation viewing.
 It never creates a pre-order, updates timestamps, or modifies saved selections.

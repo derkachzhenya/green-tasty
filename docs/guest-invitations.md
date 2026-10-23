@@ -7,12 +7,17 @@ documented below and displays newly issued links only in transient client state.
 All responses are JSON. Owner operations use the existing session authentication,
 CSRF protection, and the `ReservationPolicy::manageInvitations` owner check.
 
-| Method | Route                                                        | Purpose                                                       |
-| ------ | ------------------------------------------------------------ | ------------------------------------------------------------- |
-| POST   | `/reservations/{reservation}/invitations`                    | Create a guest and issue a link (201)                         |
-| POST   | `/reservations/{reservation}/invitations/{guest}/regenerate` | Rotate the same guest's link (200)                            |
-| DELETE | `/reservations/{reservation}/invitations/{guest}`            | Revoke the link without deleting the guest (204)              |
-| GET    | `/invitations/{token}`                                       | Read the invited guest's reservation and available menu (200) |
+| Method | Route                                                        | Purpose                                                                        |
+| ------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| POST   | `/reservations/{reservation}/invitations`                    | Create a guest and issue a link (201)                                          |
+| POST   | `/reservations/{reservation}/invitations/{guest}/regenerate` | Rotate the same guest's link (200)                                             |
+| DELETE | `/reservations/{reservation}/invitations/{guest}`            | Revoke the link without deleting the guest (204)                               |
+| GET    | `/invitations/{token}`                                       | Open the guest menu UI (HTML) or read the existing reservation/menu JSON (200) |
+
+Browser links now open the [guest dish selection UI](guest-dish-selection-ui.md).
+JSON clients should send `Accept: application/json`; its existing response shape
+is unchanged. The stateless `GET /invitations/{token}/menu` read supplies the UI
+with this guest's saved selections and group-order editability as well as the menu.
 
 Creation accepts `name` (required, up to 255 characters), optional `email`, `phone`
 (up to 30 characters), and `expires_at`. Regeneration accepts only `expires_at`.
