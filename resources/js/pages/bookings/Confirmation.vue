@@ -5,6 +5,7 @@ import SiteContainer from '@/components/site/SiteContainer.vue';
 import { Button } from '@/components/ui/button';
 import { show } from '@/routes/restaurants';
 import { create } from '@/routes/restaurants/bookings';
+import { show as reservationShow } from '@/routes/reservations';
 import type { BookingConfirmation } from '@/types/booking';
 
 defineProps<{ reservation: BookingConfirmation }>();
@@ -70,6 +71,11 @@ defineProps<{ reservation: BookingConfirmation }>();
                 <dd>{{ reservation.guest_count }}</dd>
             </dl>
             <div class="flex flex-wrap gap-3">
+                <Button as-child class="min-h-11"
+                    ><Link :href="reservationShow(reservation.id)"
+                        >View reservation</Link
+                    ></Button
+                >
                 <Button as-child class="min-h-11"
                     ><Link
                         :href="`${show(reservation.restaurant.slug).url}#menu`"
