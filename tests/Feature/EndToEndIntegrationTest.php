@@ -6,8 +6,10 @@ use App\Models\Reservation;
 use App\Models\ReservationGuest;
 use App\Models\Restaurant;
 use App\Models\User;
+use App\Notifications\AuthVerificationCode;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -31,15 +33,20 @@ class EndToEndIntegrationTest extends TestCase
             ->loadDeferredProps(fn (Assert $loaded) => $loaded->has('menu.0.dishes', 1)->where('menu.0.dishes.0.price', '0.10')));
         $this->get(route('restaurants.bookings.create', $restaurant))->assertRedirect(route('login'));
 
+        Notification::fake();
         $this->post(route('register.store'), [
             'name' => 'Journey Owner', 'email' => 'journey@example.test',
-            'password' => 'password', 'password_confirmation' => 'password',
+            'password' => 'Secure9!Pass', 'password_confirmation' => 'Secure9!Pass',
         ])->assertSessionHasNoErrors()->assertRedirect();
         $owner = User::query()->where('email', 'journey@example.test')->sole();
-        $this->assertAuthenticatedAs($owner);
-        $this->post(route('logout'))->assertRedirect();
+        $this->assertGuest();
+        Notification::assertSentOnDemand(AuthVerificationCode::class, function (AuthVerificationCode $notification): bool {
+            $this->postJson(route('auth.code.verify'), ['purpose' => 'registration', 'code' => $notification->code])->assertOk();
+
+            return true;
+        });
         $this->post(route('login.store'), ['email' => $owner->email, 'password' => 'wrong'])->assertSessionHasErrors('email');
-        $this->post(route('login.store'), ['email' => $owner->email, 'password' => 'password'])->assertSessionHasNoErrors()->assertRedirect();
+        $this->post(route('login.store'), ['email' => $owner->email, 'password' => 'Secure9!Pass'])->assertSessionHasNoErrors()->assertRedirect();
         $this->assertAuthenticatedAs($owner);
 
         $booking = ['date' => '2026-10-24', 'time' => '12:00', 'guest_count' => 3, 'restaurant_table_id' => $table->id];
@@ -84,7 +91,7 @@ class EndToEndIntegrationTest extends TestCase
             ->assertJsonPath('items.0.unit_price', '0.10')->assertJsonPath('items.0.quantity', 3)->assertJsonPath('subtotal', '0.30');
         $this->assertGuest();
 
-        $this->post(route('login.store'), ['email' => $owner->email, 'password' => 'password'])->assertRedirect();
+        $this->post(route('login.store'), ['email' => $owner->email, 'password' => 'Secure9!Pass'])->assertRedirect();
         $this->get(route('reservations.show', $reservation))->assertInertia(fn (Assert $page) => $page
             ->where('canSubmitPreOrder', true)->loadDeferredProps(fn (Assert $loaded) => $loaded
             ->has('groupOrder.participants', 3)->where('groupOrder.summary.grand_total', '0.70')));

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AuthSecurityHeaders;
 use Laravel\Fortify\Features;
 
 return [
@@ -101,7 +102,7 @@ return [
     |
     */
 
-    'middleware' => ['web'],
+    'middleware' => ['web', AuthSecurityHeaders::class],
 
     /*
     |--------------------------------------------------------------------------
@@ -115,7 +116,8 @@ return [
     */
 
     'limiters' => [
-        'login' => 'login',
+        // Fortify's failed-attempt limiter is extended to the approved five minutes.
+        'login' => null,
     ],
 
     /*

@@ -13,10 +13,12 @@ use App\Http\Middleware\AuthenticateGuestInvitation;
 use App\Http\Middleware\InvitationSecurityHeaders;
 use Illuminate\Support\Facades\Route;
 
+require __DIR__.'/auth.php';
+
 Route::get('/', [RestaurantController::class, 'index'])->name('home');
 Route::get('restaurants/{restaurant:slug}', [RestaurantController::class, 'show'])->name('restaurants.show');
 
-Route::middleware(['auth', 'cache.headers:private;no_store'])->group(function () {
+Route::middleware(['auth', 'verified', 'cache.headers:private;no_store'])->group(function () {
     Route::get('reservations/{reservation}', [ReservationDashboardController::class, 'show'])->name('reservations.show');
     Route::get('restaurants/{restaurant:slug}/book', [RestaurantBookingController::class, 'create'])->name('restaurants.bookings.create');
     Route::get('restaurants/{restaurant:slug}/availability', [RestaurantBookingController::class, 'availability'])->middleware('throttle:booking-availability')->name('restaurants.availability');
@@ -29,16 +31,16 @@ Route::get('dashboard', MyReservationsController::class)
     ->name('dashboard');
 
 Route::get('reservations/{reservation}/pre-order/summary', [ConsolidatedPreOrderController::class, 'show'])
-    ->middleware('auth')
+    ->middleware(['auth', 'verified'])
     ->name('reservations.pre-order.summary');
 
 Route::post('reservations/{reservation}/pre-order/submit', [GroupPreOrderSubmissionController::class, 'store'])
-    ->middleware(['auth', 'throttle:pre-order-submission'])
+    ->middleware(['auth', 'verified', 'throttle:pre-order-submission'])
     ->name('reservations.pre-order.submit');
 
 require __DIR__.'/settings.php';
 
-Route::middleware(['auth', InvitationSecurityHeaders::class, 'throttle:invitation-management'])
+Route::middleware(['auth', 'verified', InvitationSecurityHeaders::class, 'throttle:invitation-management'])
     ->scopeBindings()
     ->group(function () {
         Route::post('reservations/{reservation}/invitations', [GuestInvitationController::class, 'store'])

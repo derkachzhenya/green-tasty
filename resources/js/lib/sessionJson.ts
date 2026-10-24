@@ -2,6 +2,8 @@ export class SessionRequestError extends Error {
     constructor(
         public status: number,
         public errors: Record<string, string[]> = {},
+        public retryAfter = 0,
+        public reason = '',
     ) {
         super('Authenticated request failed.');
     }
@@ -10,7 +12,7 @@ export class SessionRequestError extends Error {
 /** Same-origin session authentication and Laravel's encrypted XSRF cookie. */
 export async function sessionJson(
     url: string,
-    method: 'post' | 'delete',
+    method: 'post' | 'patch' | 'delete',
     signal: AbortSignal,
     body?: Record<string, unknown>,
 ): Promise<unknown> {
@@ -38,6 +40,7 @@ export async function sessionJson(
     if (!response.ok) {
         const data = (await response.json().catch(() => null)) as {
             errors?: Record<string, unknown>;
+            reason?: unknown;
         } | null;
         const errors = Object.fromEntries(
             Object.entries(data?.errors ?? {}).map(([key, value]) => [
@@ -49,7 +52,13 @@ export async function sessionJson(
                     : [],
             ]),
         );
-        throw new SessionRequestError(response.status, errors);
+        const retryAfter = Number(response.headers.get('Retry-After'));
+        throw new SessionRequestError(
+            response.status,
+            errors,
+            Number.isFinite(retryAfter) ? Math.max(0, retryAfter) : 0,
+            typeof data?.reason === 'string' ? data.reason : '',
+        );
     }
     return response.status === 204 ? null : response.json();
 }
