@@ -265,3 +265,133 @@
         padding: 40px;
     }
 }
+
+/* Approved authentication components have their own geometry, distinct from owner dialogs. */
+.green-tasty.auth-dialog[data-slot='dialog-content'] {
+    --tw-translate-x: 0;
+    --tw-translate-y: 0;
+    inset: 0;
+    display: grid;
+    width: 100%;
+    height: 100dvh;
+    max-width: none;
+    max-height: none;
+    transform: none;
+    translate: none;
+    place-items: center;
+    gap: 0;
+    padding: 16px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    overflow-y: auto;
+    animation: none;
+}
+
+.auth-panel {
+    width: 100%;
+    max-width: 576px;
+    max-height: calc(100dvh - 32px);
+    padding: 24px;
+    overflow-y: auto;
+    border-radius: 24px;
+    background: #f7f7f7;
+    box-shadow: 0 8px 40px rgb(0 0 0 / 18%);
+}
+
+.auth-dialog [data-slot='dialog-title'] {
+    padding-right: 24px;
+    font-size: 26px;
+    line-height: 40px;
+    font-weight: 500;
+    letter-spacing: 0;
+}
+
+.auth-close {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    display: grid;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+    border-radius: 8px;
+}
+
+.auth-close:focus-visible {
+    outline: 2px solid #0b5b29;
+    outline-offset: -4px;
+}
+
+.auth-input {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    height: 44px;
+    padding-inline: 16px;
+    border: 1px solid #dadada;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #232323;
+    font-size: 14px;
+    line-height: 24px;
+}
+
+.auth-input:focus-visible {
+    border: 2px solid #cc8b00;
+    outline: none;
+}
+
+.auth-input[aria-invalid='true'] {
+    border-color: #a82319;
+}
+
+.auth-input.pr-12 {
+    padding-right: 48px;
+}
+
+.auth-dialog .auth-button {
+    min-height: 56px;
+    height: auto;
+    border-radius: 8px;
+    padding: 8px 24px;
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 600;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.auth-dialog .auth-button:disabled {
+    background: #898989;
+    color: #ffffff;
+    opacity: 1;
+}
+
+.auth-link {
+    border-radius: 2px;
+    color: #2349c4;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.auth-link:focus-visible {
+    outline: 2px solid #0b5b29;
+    outline-offset: 4px;
+}
+
+.auth-toast {
+    position: fixed;
+    top: 84px;
+    right: 40px;
+    z-index: 1;
+    width: min(416px, calc(100% - 32px));
+}
+
+@media (min-width: 640px) {
+    .auth-panel {
+        padding: 40px;
+    }
+}
