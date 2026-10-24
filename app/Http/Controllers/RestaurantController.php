@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Restaurant;
+use App\Services\HomepageMenuService;
 use App\Services\RestaurantDetailsService;
 use App\Services\RestaurantListingService;
 use Inertia\Inertia;
@@ -10,10 +11,11 @@ use Inertia\Response;
 
 class RestaurantController extends Controller
 {
-    public function index(RestaurantListingService $listing): Response
+    public function index(RestaurantListingService $listing, HomepageMenuService $menu): Response
     {
         return Inertia::render('restaurants/Index', [
             'restaurants' => Inertia::defer(fn () => $listing->listActive(), rescue: true),
+            'featuredPrices' => Inertia::defer(fn () => $menu->featuredPrices(), rescue: true),
         ]);
     }
 

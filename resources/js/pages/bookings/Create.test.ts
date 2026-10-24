@@ -130,6 +130,36 @@ afterEach(() => {
 });
 
 describe('booking availability and recovery', () => {
+    it.each([
+        ['location-1', '48 Rustaveli Avenue'],
+        ['location-2', '14 Baratashvili Street'],
+        ['location-3', '9 Abashidze Street'],
+    ])(
+        'retains the selected restaurant for %s through availability and submission',
+        async (slug, address) => {
+            mounted.setProps({
+                restaurant: {
+                    id: 90,
+                    slug,
+                    name: 'Selected restaurant',
+                    address,
+                },
+            });
+            await flush();
+            expect(text()).toContain(`Selected restaurant · ${address}`);
+            await search();
+            expect(fetchMock.mock.calls[0][0]).toContain(
+                `/restaurants/${slug}/availability?`,
+            );
+            form.restaurant_table_id = 7;
+            await flush();
+            await fire(button('Confirm reservation'), 'onClick');
+            expect(transport.post.mock.calls[0][0]).toBe(
+                `/restaurants/${slug}/book`,
+            );
+            expect(form.restaurant_table_id).toBe(7);
+        },
+    );
     it('checks availability without claiming a persisted booking and requires a table choice', async () => {
         expect(text()).toContain('Find your table');
         await search();

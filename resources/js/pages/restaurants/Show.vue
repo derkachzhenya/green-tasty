@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft, MapPin, Utensils } from '@lucide/vue';
+import { ArrowLeft } from '@lucide/vue';
 import { computed } from 'vue';
+import FigmaReviews from '@/components/restaurants/FigmaReviews.vue';
 import MenuSkeleton from '@/components/restaurants/MenuSkeleton.vue';
 import RestaurantMenu from '@/components/restaurants/RestaurantMenu.vue';
+import RestaurantProfileHero from '@/components/restaurants/RestaurantProfileHero.vue';
 import DeferredSection from '@/components/site/DeferredSection.vue';
 import SiteContainer from '@/components/site/SiteContainer.vue';
 import { Button } from '@/components/ui/button';
+import { homepageLocations } from '@/lib/homepage';
 import { home } from '@/routes';
 import { create } from '@/routes/restaurants/bookings';
 import type { MenuCategory, RestaurantDetails } from '@/types/restaurant';
@@ -15,6 +18,9 @@ const props = defineProps<{
     restaurant: RestaurantDetails;
     menu?: MenuCategory[];
 }>();
+const referenceLocation = computed(
+    () => homepageLocations([props.restaurant])[0],
+);
 const phoneNumber = computed(() => {
     const number = props.restaurant.phone?.replace(/[^\d+]/g, '') ?? '';
     return /^\+?\d{3,15}$/.test(number) ? number : null;
@@ -27,7 +33,11 @@ const phoneNumber = computed(() => {
             name="description"
             :content="`Explore the menu at ${restaurant.name}, ${restaurant.address}.`"
     /></Head>
+    <RestaurantProfileHero :restaurant="restaurant" />
     <SiteContainer>
+        <FigmaReviews
+            v-if="referenceLocation.referenceAddress === '48 Rustaveli Avenue'"
+        />
         <nav aria-label="Breadcrumb" class="py-5">
             <Link
                 :href="`${home().url}#locations`"
@@ -37,55 +47,6 @@ const phoneNumber = computed(() => {
             >
         </nav>
     </SiteContainer>
-
-    <section
-        aria-labelledby="restaurant-heading"
-        class="bg-accent py-8 sm:py-12"
-    >
-        <SiteContainer>
-            <div class="grid items-center gap-8 lg:grid-cols-2">
-                <div
-                    class="hidden min-h-64 items-center justify-center text-primary lg:flex"
-                    aria-hidden="true"
-                >
-                    <Utensils class="size-20" :stroke-width="1" />
-                </div>
-                <div
-                    class="min-w-0 space-y-6 rounded-2xl border border-border bg-card p-6 sm:p-8"
-                >
-                    <h1
-                        id="restaurant-heading"
-                        class="text-3xl leading-10 font-medium wrap-anywhere"
-                    >
-                        {{ restaurant.name }}
-                    </h1>
-                    <p class="flex items-start gap-2 leading-6 wrap-anywhere">
-                        <MapPin
-                            class="mt-0.5 size-5 shrink-0 text-primary"
-                            aria-hidden="true"
-                        /><span>{{ restaurant.address }}</span>
-                    </p>
-                    <p class="text-sm text-muted-foreground">
-                        {{ restaurant.table_count }}
-                        {{ restaurant.table_count === 1 ? 'table' : 'tables' }}
-                    </p>
-                    <div class="flex flex-wrap gap-3">
-                        <Button as-child class="min-h-11"
-                            ><Link :href="create(restaurant.slug)"
-                                >Book a table</Link
-                            ></Button
-                        >
-                        <Button
-                            as-child
-                            variant="outline"
-                            class="min-h-11 border-primary bg-card text-primary hover:bg-accent dark:bg-card dark:hover:bg-accent"
-                            ><a href="#menu">View menu</a></Button
-                        >
-                    </div>
-                </div>
-            </div>
-        </SiteContainer>
-    </section>
 
     <SiteContainer>
         <section
