@@ -1,0 +1,37 @@
+{
+    "dishes": [
+        {
+            "name": "Fresh Strawberry Mint Salad",
+            "image": "/images/green-tasty/dishes/fresh-strawberry-mint-salad.png"
+        },
+        {
+            "name": "Avocado Pine Nut Bowl",
+            "image": "/images/green-tasty/dishes/avocado-pine-nut-bowl.png"
+        },
+        {
+            "name": "Roasted Sweet Potato & Lentil Salad",
+            "image": "/images/green-tasty/dishes/roasted-sweet-potato-lentil-salad.png"
+        },
+        {
+            "name": "Spring Salad",
+            "image": "/images/green-tasty/dishes/spring-salad.png"
+        }
+    ],
+    "locations": [
+        {
+            "address": "48 Rustaveli Avenue",
+            "image": "/images/green-tasty/locations/Picture.png",
+            "demoSlug": "location-1"
+        },
+        {
+            "address": "14 Baratashvili Street",
+            "image": "/images/green-tasty/locations/14-baratashvili-street.png",
+            "demoSlug": "location-2"
+        },
+        {
+            "address": "9 Abashidze Street",
+            "image": "/images/green-tasty/locations/9-abashidze-street.png",
+            "demoSlug": "location-3"
+        }
+    ]
+}

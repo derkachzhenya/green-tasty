@@ -1,45 +1,89 @@
 <script setup lang="ts">
-import RestaurantCard from '@/components/restaurants/RestaurantCard.vue';
+import { computed } from 'vue';
+import HomepageHero from '@/components/restaurants/HomepageHero.vue';
+import HomepageLocationCard from '@/components/restaurants/HomepageLocationCard.vue';
+import PopularDishCard from '@/components/restaurants/PopularDishCard.vue';
 import RestaurantGridSkeleton from '@/components/restaurants/RestaurantGridSkeleton.vue';
 import ContentState from '@/components/site/ContentState.vue';
 import DeferredSection from '@/components/site/DeferredSection.vue';
 import SiteContainer from '@/components/site/SiteContainer.vue';
-import { Button } from '@/components/ui/button';
+import {
+    featuredPrice,
+    homepageDishes,
+    homepageLocations,
+} from '@/lib/homepage';
 import type { RestaurantListing } from '@/types/restaurant';
 
-defineProps<{ restaurants?: RestaurantListing[] }>();
+const props = defineProps<{
+    restaurants?: RestaurantListing[];
+    featuredPrices?: Record<string, string> | [];
+    pricesResolved?: boolean;
+}>();
+const locations = computed(() => homepageLocations(props.restaurants ?? []));
+
+// Only the price region is deferred; artwork/copy and geometry remain stable.
+const prices = computed(() =>
+    Array.isArray(props.featuredPrices) ? {} : props.featuredPrices,
+);
 </script>
 
 <template>
-    <section aria-labelledby="welcome-heading" class="bg-accent">
-        <SiteContainer>
-            <div
-                class="flex min-h-72 flex-col items-start justify-center gap-6 py-12 sm:min-h-[396px] sm:py-16"
-            >
-                <div class="space-y-4">
-                    <h1
-                        id="welcome-heading"
-                        class="max-w-2xl text-3xl leading-10 font-medium sm:text-5xl sm:leading-[52px]"
-                    >
-                        Green by nature,<br class="hidden sm:block" />
-                        Georgian by heart.
-                    </h1>
-                    <p class="text-sm leading-6 text-primary uppercase">
-                        Seasonal bowls • Vegan friendly • Tbilisi
-                    </p>
-                </div>
-                <Button as-child class="min-h-11 px-6">
-                    <a href="#locations">Explore locations</a>
-                </Button>
-            </div>
-        </SiteContainer>
-    </section>
+    <HomepageHero />
 
     <SiteContainer>
         <section
+            aria-labelledby="popular-dishes-heading"
+            class="relative pt-10 sm:pt-[60px]"
+        >
+            <h2
+                id="popular-dishes-heading"
+                class="mb-8 text-2xl leading-10 font-medium sm:text-[32px]"
+            >
+                Most Popular Dishes
+            </h2>
+            <div class="xl:min-h-[308px]">
+                <DeferredSection
+                    data="featuredPrices"
+                    error-title="We couldn’t load current menu prices"
+                    :resolved="pricesResolved"
+                >
+                    <template #fallback>
+                        <ul
+                            class="grid gap-6 sm:grid-cols-2 xl:grid-cols-4"
+                            aria-label="Popular dishes"
+                            aria-busy="true"
+                        >
+                            <li
+                                v-for="dish in homepageDishes"
+                                :key="dish.name"
+                                class="min-w-0"
+                            >
+                                <PopularDishCard v-bind="dish" loading />
+                            </li>
+                        </ul>
+                    </template>
+                    <ul
+                        class="grid gap-6 sm:grid-cols-2 xl:grid-cols-4"
+                        aria-label="Popular dishes"
+                    >
+                        <li
+                            v-for="dish in homepageDishes"
+                            :key="dish.name"
+                            class="min-w-0"
+                        >
+                            <PopularDishCard
+                                v-bind="dish"
+                                :price="featuredPrice(dish.name, prices)"
+                            />
+                        </li>
+                    </ul>
+                </DeferredSection>
+            </div>
+        </section>
+        <section
             id="locations"
             aria-labelledby="locations-heading"
-            class="scroll-mt-6 py-10 sm:py-[60px]"
+            class="scroll-mt-6 py-10 sm:pt-[60px] sm:pb-[53px]"
         >
             <h2
                 id="locations-heading"
@@ -55,16 +99,16 @@ defineProps<{ restaurants?: RestaurantListing[] }>();
                     <RestaurantGridSkeleton />
                 </template>
                 <ul
-                    v-if="restaurants?.length"
+                    v-if="locations.length"
                     class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
                     aria-label="Restaurant locations"
                 >
                     <li
-                        v-for="restaurant in restaurants"
-                        :key="restaurant.id"
+                        v-for="location in locations"
+                        :key="location.restaurant.id"
                         class="min-w-0"
                     >
-                        <RestaurantCard :restaurant="restaurant" />
+                        <HomepageLocationCard :location="location" />
                     </li>
                 </ul>
                 <ContentState

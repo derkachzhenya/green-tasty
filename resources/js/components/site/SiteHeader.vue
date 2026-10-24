@@ -10,21 +10,27 @@ const isHome = computed(() => page.component === 'restaurants/Index');
 
 <template>
     <header class="border-b border-border bg-card">
-        <SiteContainer>
+        <SiteContainer class="site-header-container">
             <div
-                class="flex min-h-[68px] flex-wrap items-center justify-between gap-x-6 gap-y-2 py-3 sm:grid sm:grid-cols-3 sm:py-0"
+                class="flex min-h-[67px] flex-wrap items-center justify-between gap-x-2 gap-y-2 py-3 md:grid md:grid-cols-3 md:gap-x-6 md:py-0"
             >
                 <Link
                     :href="home()"
                     aria-label="Green Tasty home"
                     class="w-fit rounded-sm text-lg font-medium tracking-tight text-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
                 >
-                    Green Tasty
+                    <img
+                        src="/images/green-tasty/logo.png"
+                        alt="Green Tasty — Healthy Eating Restaurant"
+                        width="112"
+                        height="38"
+                        class="h-[38px] w-[112px]"
+                    />
                 </Link>
 
                 <nav
                     aria-label="Main navigation"
-                    class="order-last flex w-full justify-center gap-6 sm:order-none sm:w-auto"
+                    class="order-last flex w-full justify-center whitespace-nowrap md:order-none md:w-max md:justify-self-center"
                 >
                     <Link
                         :href="home()"
@@ -34,15 +40,15 @@ const isHome = computed(() => page.component === 'restaurants/Index');
                                 ? 'border-primary text-primary'
                                 : 'border-transparent hover:text-primary'
                         "
-                        class="inline-flex min-h-11 items-center border-b-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+                        class="inline-flex min-h-11 items-center border-b-2 px-6 text-base font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring md:min-h-[67px] md:text-xl md:leading-8"
                     >
                         Main page
                     </Link>
                     <Link
                         :href="`${home().url}#locations`"
-                        class="inline-flex min-h-11 items-center rounded-sm text-sm font-medium hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+                        class="inline-flex min-h-11 items-center rounded-sm px-6 text-base font-medium hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring md:text-xl md:leading-8"
                     >
-                        Locations
+                        Book a Table
                     </Link>
                 </nav>
 
@@ -51,11 +57,19 @@ const isHome = computed(() => page.component === 'restaurants/Index');
                     :aria-current="
                         page.component === 'Dashboard' ? 'page' : undefined
                     "
-                    class="inline-flex min-h-11 items-center justify-center rounded-sm border border-primary px-5 text-sm font-medium text-primary hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring sm:justify-self-end"
+                    class="inline-flex min-h-11 items-center justify-center rounded-lg border border-primary px-6 text-sm font-semibold text-primary hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring md:justify-self-end lg:text-base"
                 >
-                    {{ page.props.auth.user ? 'My reservations' : 'Sign in' }}
+                    {{ page.props.auth.user ? 'My reservations' : 'Sign In' }}
                 </Link>
             </div>
         </SiteContainer>
     </header>
 </template>
+
+<style scoped>
+@media (min-width: 1024px) {
+    .site-header-container {
+        padding-inline: 40px;
+    }
+}
+</style>

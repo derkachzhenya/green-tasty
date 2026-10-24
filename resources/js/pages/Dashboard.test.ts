@@ -437,13 +437,13 @@ describe('site reservation navigation', () => {
         mounted = mountComponent(SiteHeader, {});
         expect(link('My reservations').props.href).toBe('/dashboard');
         expect(link('My reservations').props['aria-current']).toBe('page');
-        expect(link('Locations').props.href).toBe('/#locations');
+        expect(link('Book a Table').props.href).toBe('/#locations');
     });
     it('keeps the sign-in path for unauthenticated visitors', () => {
         mounted.unmount();
         navigation.setUser(false);
         mounted = mountComponent(SiteHeader, {});
-        expect(link('Sign in').props.href).toBe('/login');
+        expect(link('Sign In').props.href).toBe('/login');
         expect(text()).not.toContain('My reservations');
     });
 });
