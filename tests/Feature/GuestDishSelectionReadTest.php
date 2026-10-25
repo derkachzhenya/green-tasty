@@ -96,7 +96,7 @@ class GuestDishSelectionReadTest extends TestCase
         $written = $this->putJson(route('invitations.selections.update', ['token' => $this->token]), ['items' => [
             ['menu_item_id' => $this->salad->id, 'quantity' => 1],
             ['menu_item_id' => $this->bowl->id, 'quantity' => 2],
-        ]])->assertOk()->json();
+        ]], ['If-Match' => '"0"'])->assertOk()->json();
 
         $response = $this->getJson($this->url)->assertOk()->assertExactJson([
             'items' => [

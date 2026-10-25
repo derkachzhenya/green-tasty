@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import MenuDishCard from '@/components/restaurants/MenuDishCard.vue';
+import { ShoppingCart, ChevronRight } from '@lucide/vue';
+import { computed, nextTick, ref, watch } from 'vue';
+import BookingModal from '@/components/bookings/BookingModal.vue';
+import GuestCartDrawer from '@/components/guest/GuestCartDrawer.vue';
+import GuestDishCard from '@/components/guest/GuestDishCard.vue';
+import GuestReservationDetails from '@/components/guest/GuestReservationDetails.vue';
 import ContentState from '@/components/site/ContentState.vue';
 import SiteContainer from '@/components/site/SiteContainer.vue';
-import GuestOrderPanel from '@/components/guest/GuestOrderPanel.vue';
-import QuantityControl from '@/components/guest/QuantityControl.vue';
 import { Button } from '@/components/ui/button';
 import { useGuestSelections } from '@/composables/useGuestSelections';
-import { formatInvitationExpiration } from '@/lib/invitationApi';
+import { bookingDate } from '@/lib/booking';
+import { sortedDishes, type MenuSort } from '@/lib/guestMenu';
 
 const props = withDefaults(defineProps<{ initiallyInvalid?: boolean }>(), {
     initiallyInvalid: false,
@@ -24,230 +28,467 @@ const {
     invalid,
     error,
     validation,
-    success,
     unavailable,
     load,
     save,
     setQuantity,
+    identify,
+    submit,
+    identifying,
+    submitting,
 } = useGuestSelections(props.initiallyInvalid);
+const cartOpen = ref(false);
+const nameOpen = ref(false);
+const name = ref('');
+const nameError = ref('');
+const categoryId = ref<number | null>(null);
+const sort = ref<MenuSort>('popular');
+const confirmationHeading = ref<HTMLElement | null>(null);
+const needsName = computed(() =>
+    Boolean(
+        menu.value &&
+        !menu.value.guest_state.name_confirmed &&
+        !menu.value.guest_state.submitted_at &&
+        menu.value.order.editable,
+    ),
+);
+const submitted = computed(() => Boolean(menu.value?.guest_state.submitted_at));
+const categories = computed(() => menu.value?.catalog ?? []);
+const activeCategory = computed(
+    () =>
+        categories.value.find((category) => category.id === categoryId.value) ??
+        categories.value[0],
+);
+const dishes = computed(() =>
+    sortedDishes(activeCategory.value?.dishes ?? [], sort.value),
+);
+watch(needsName, (value) => {
+    nameOpen.value = value;
+    if (value) name.value = menu.value?.invitation.guest.name ?? '';
+});
 function quantity(id: number): number {
     return rows.value.find((row) => row.menu_item_id === id)?.quantity ?? 0;
 }
+async function browse(): Promise<void> {
+    const value = name.value.trim();
+    nameError.value = !value
+        ? 'Enter your name.'
+        : value.length > 255 || /[\p{Cc}\p{Cf}]/u.test(value)
+          ? 'Enter a name of up to 255 characters without control characters.'
+          : '';
+    if (nameError.value) return;
+    if (await identify(value)) nameOpen.value = false;
+}
+async function change(id: number, value: number): Promise<void> {
+    if (needsName.value) {
+        nameOpen.value = true;
+        return;
+    }
+    setQuantity(id, value);
+    await save();
+}
+async function confirm(): Promise<void> {
+    if (await submit()) {
+        cartOpen.value = false;
+        await nextTick();
+        confirmationHeading.value?.focus();
+    }
+}
+function categoryKey(event: KeyboardEvent, index: number): void {
+    let next = index;
+    if (event.key === 'ArrowRight')
+        next = (index + 1) % categories.value.length;
+    else if (event.key === 'ArrowLeft')
+        next = (index - 1 + categories.value.length) % categories.value.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = categories.value.length - 1;
+    else return;
+    event.preventDefault();
+    categoryId.value = categories.value[next].id;
+    document.getElementById(`guest-category-${categoryId.value}`)?.focus();
+}
 </script>
-
 <template>
     <div
         class="green-tasty min-h-screen bg-background font-[Poppins,sans-serif] text-foreground"
     >
         <a
             href="#main-content"
-            class="sr-only z-50 rounded-sm bg-primary px-4 py-3 text-primary-foreground focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:outline-2 focus:outline-offset-4 focus:outline-ring"
+            class="sr-only z-50 bg-card px-4 py-3 focus:not-sr-only focus:fixed focus:top-4 focus:left-4"
             >Skip to content</a
         >
         <header class="border-b border-border bg-card">
-            <SiteContainer>
-                <div
-                    class="flex min-h-[68px] items-center justify-between gap-4 py-3"
-                >
+            <SiteContainer
+                ><div class="flex h-[68px] items-center justify-between gap-4">
                     <a
                         href="/"
-                        class="rounded-sm text-lg font-medium tracking-tight text-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
                         aria-label="Green Tasty home"
-                        >Green Tasty</a
+                        class="rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4"
+                        ><img
+                            src="/images/green-tasty/logo.png"
+                            alt="Green Tasty — Healthy Eating Restaurant"
+                            width="114"
+                            height="40"
+                            class="w-[114px]"
+                    /></a>
+                    <button
+                        v-if="menu && !submitted"
+                        class="relative grid size-11 place-items-center rounded-md focus-visible:outline-2 focus-visible:outline-ring"
+                        :disabled="needsName"
+                        :aria-label="`Open cart, ${count} items`"
+                        @click="cartOpen = true"
                     >
-                    <a
-                        v-if="menu"
-                        href="#your-order"
-                        class="inline-flex min-h-11 items-center rounded-sm px-2 text-sm font-medium text-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
-                        >Your pre-order ({{ count }})</a
-                    >
-                </div>
-            </SiteContainer>
+                        <ShoppingCart class="size-6" aria-hidden="true" /><span
+                            v-if="count"
+                            class="absolute -top-1 -right-1 min-w-5 rounded-full bg-primary px-1 text-xs leading-5 text-white"
+                            >{{ count }}</span
+                        >
+                    </button>
+                </div></SiteContainer
+            >
         </header>
         <main id="main-content" tabindex="-1">
-            <SiteContainer v-if="invalid" class="py-16">
-                <h1 class="mb-6 text-3xl font-medium">
+            <SiteContainer v-if="invalid" class="py-16"
+                ><h1 class="mb-6 text-3xl font-medium">
                     Invitation unavailable
                 </h1>
                 <ContentState
                     title="This invitation cannot be opened"
                     description="The link may be invalid, expired, revoked or replaced. Ask the reservation owner for a new invitation."
                     error
-                />
-            </SiteContainer>
-            <SiteContainer v-else-if="!menu" class="py-16">
-                <h1 class="mb-6 text-3xl font-medium">Your guest pre-order</h1>
+            /></SiteContainer>
+            <SiteContainer v-else-if="!menu" class="py-16"
+                ><h1 class="mb-6 text-3xl font-medium">Your guest pre-order</h1>
                 <ContentState
                     v-if="loading || !error"
                     title="Loading your menu…"
                     description="Checking your invitation and saved selections."
-                />
-                <ContentState
+                /><ContentState
                     v-else
                     title="Unable to load your menu"
-                    :description="error || 'Please try again.'"
+                    :description="error"
                     error
-                >
-                    <Button type="button" class="min-h-11" @click="load()"
-                        >Try again</Button
+                    ><Button @click="load()">Try again</Button></ContentState
+                ></SiteContainer
+            >
+            <template v-else-if="submitted">
+                <SiteContainer class="py-6 sm:py-10">
+                    <section
+                        class="mx-auto max-w-[620px] rounded-3xl bg-card p-6 shadow-[0_2px_20px_#00000005] sm:p-10"
                     >
-                </ContentState>
-            </SiteContainer>
-            <template v-else>
-                <div class="bg-accent">
-                    <SiteContainer class="py-4 text-sm leading-6">
-                        <p class="wrap-anywhere">
-                            A pre-order for
-                            <span class="font-medium">{{
-                                menu.invitation.guest.name
-                            }}</span>
-                            ·
-                            {{
-                                formatInvitationExpiration(
-                                    menu.invitation.reservation.reserved_at,
-                                    menu.timezone,
-                                )
-                            }}
-                            ({{ menu.timezone }})
+                        <img
+                            src="/images/green-tasty/icons/Check Image.png"
+                            alt=""
+                            width="72"
+                            height="72"
+                            class="mx-auto mb-6"
+                        />
+                        <h1
+                            ref="confirmationHeading"
+                            tabindex="-1"
+                            class="text-center text-[28px] leading-10 font-medium focus:outline-none sm:text-[32px]"
+                        >
+                            Pre-Order Submitted!
+                        </h1>
+                        <p
+                            class="mt-4 text-center text-sm leading-6 text-muted-foreground"
+                        >
+                            Your selections have been added to this
+                            reservation.<br />The reservation owner submits the
+                            group order to the restaurant.
                         </p>
-                    </SiteContainer>
-                </div>
-                <SiteContainer class="py-8 sm:py-12">
-                    <div
-                        class="mb-8 flex flex-wrap items-end justify-between gap-4"
-                    >
-                        <div class="min-w-0">
-                            <p
-                                class="mb-2 text-sm font-medium wrap-anywhere text-primary"
-                            >
-                                {{ menu.invitation.restaurant.name }}
-                            </p>
-                            <h1
-                                class="text-3xl leading-tight font-medium sm:text-4xl"
-                            >
-                                Menu
-                            </h1>
-                            <p
-                                class="mt-3 text-sm leading-6 text-muted-foreground"
-                            >
-                                Choose something you’ll love. No account needed.
-                            </p>
+                        <div class="my-6 border-y border-border py-6">
+                            <GuestReservationDetails
+                                :context="menu.context"
+                                :timezone="menu.timezone"
+                            />
                         </div>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            class="min-h-11"
-                            :disabled="busy"
-                            @click="load(true)"
-                            >{{
-                                loading
-                                    ? 'Refreshing…'
-                                    : 'Refresh menu and status'
-                            }}</Button
+                        <h2 class="mb-4 text-base font-medium">Your items</h2>
+                        <ul class="space-y-3 text-sm">
+                            <li
+                                v-for="item in menu.selections.items"
+                                :key="item.menu_item_id"
+                                class="flex justify-between gap-4"
+                            >
+                                <span class="min-w-0 wrap-anywhere"
+                                    >{{ item.name }} × {{ item.quantity }}</span
+                                ><span class="shrink-0 tabular-nums">{{
+                                    item.subtotal
+                                }}</span>
+                            </li>
+                        </ul>
+                        <div
+                            class="mt-6 flex justify-between gap-4 font-medium"
+                        >
+                            <span>Total</span
+                            ><output
+                                aria-label="Submitted pre-order total"
+                                class="text-primary"
+                                >{{ menu.selections.subtotal }}</output
+                            >
+                        </div>
+                        <p
+                            class="mt-6 text-center text-xs leading-5 text-muted-foreground"
+                        >
+                            This selection is confirmed and cannot be changed.
+                            Contact the reservation owner if you need help.
+                        </p>
+                    </section>
+                </SiteContainer>
+            </template>
+            <template v-else>
+                <div class="bg-[#47b16c]">
+                    <SiteContainer class="py-3 text-center text-sm leading-6"
+                        ><p class="wrap-anywhere">
+                            You are making a pre-order for the reservation
+                            {{ menu.context.address }},
+                            {{ menu.context.table }},
+                            {{ bookingDate(menu.context.date) }},
+                            {{ menu.context.time }} – {{ menu.context.end_time
+                            }}<span
+                                v-if="
+                                    menu.context.end_date !== menu.context.date
+                                "
+                            >
+                                ({{ bookingDate(menu.context.end_date) }})</span
+                            >
+                        </p></SiteContainer
+                    >
+                </div>
+                <SiteContainer
+                    ><nav
+                        aria-label="Breadcrumb"
+                        class="flex min-h-12 items-center gap-3 text-sm"
+                    >
+                        <a href="/" class="focus-visible:outline-2">Main page</a
+                        ><ChevronRight
+                            class="size-4 text-muted-foreground"
+                            aria-hidden="true"
+                        /><span aria-current="page">Menu</span>
+                    </nav></SiteContainer
+                >
+                <section class="relative isolate overflow-hidden bg-[#d9e7d9]">
+                    <img
+                        src="/images/green-tasty/dishes/salad1.png"
+                        alt=""
+                        width="532"
+                        height="405"
+                        class="absolute inset-y-0 right-0 -z-10 h-full w-[65%] object-cover object-center opacity-60 sm:opacity-90"
+                    />
+                    <div
+                        class="absolute inset-0 -z-10 bg-linear-to-r from-[#d9e7d9] via-[#d9e7d9]/80 to-transparent"
+                    ></div>
+                    <SiteContainer class="py-8 sm:py-12"
+                        ><p class="mb-2 text-sm font-medium text-primary">
+                            Green &amp; Tasty Restaurants
+                        </p>
+                        <h1
+                            class="text-[36px] leading-tight font-medium sm:text-5xl"
+                        >
+                            Menu
+                        </h1></SiteContainer
+                    >
+                </section>
+                <SiteContainer class="pb-12">
+                    <div
+                        v-if="needsName"
+                        role="status"
+                        class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-accent p-3 text-sm"
+                    >
+                        <span>Confirm your name to start your pre-order.</span
+                        ><Button @click="nameOpen = true"
+                            >Enter your name</Button
                         >
                     </div>
                     <div
-                        class="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_360px]"
+                        class="flex flex-wrap items-center justify-between gap-4 py-6 sm:py-8"
                     >
-                        <section
-                            aria-label="Restaurant menu"
-                            :aria-busy="loading"
-                            class="min-w-0 space-y-8"
+                        <div
+                            role="tablist"
+                            aria-label="Menu categories"
+                            class="flex max-w-full overflow-x-auto border-b border-border"
                         >
-                            <nav
-                                v-if="menu.invitation.menu_categories.length"
-                                aria-label="Menu categories"
-                                class="flex flex-wrap gap-x-6 gap-y-2 border-b border-border"
-                            >
-                                <a
-                                    v-for="category in menu.invitation
-                                        .menu_categories"
-                                    :key="category.id"
-                                    :href="`#category-${category.id}`"
-                                    class="inline-flex min-h-11 max-w-full items-center rounded-sm border-b-2 border-primary text-sm font-medium wrap-anywhere text-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
-                                    >{{ category.name }}</a
-                                >
-                            </nav>
-                            <ContentState
-                                v-if="!menu.invitation.menu_categories.length"
-                                title="The menu is being prepared"
-                                description="No dishes are available yet. Check back later or refresh the menu."
-                            />
-                            <section
-                                v-for="category in menu.invitation
-                                    .menu_categories"
-                                :id="`category-${category.id}`"
+                            <button
+                                v-for="(category, index) in categories"
+                                :id="`guest-category-${category.id}`"
                                 :key="category.id"
-                                :aria-labelledby="`category-heading-${category.id}`"
-                                tabindex="-1"
-                                class="scroll-mt-6 space-y-5"
+                                role="tab"
+                                :aria-selected="
+                                    activeCategory?.id === category.id
+                                "
+                                aria-controls="guest-dishes"
+                                :tabindex="
+                                    activeCategory?.id === category.id ? 0 : -1
+                                "
+                                class="min-h-11 shrink-0 border-b-2 px-4 text-sm focus-visible:outline-2 focus-visible:outline-offset-[-2px]"
+                                :class="
+                                    activeCategory?.id === category.id
+                                        ? 'border-primary font-medium text-primary'
+                                        : 'border-transparent'
+                                "
+                                @click="categoryId = category.id"
+                                @keydown="categoryKey($event, index)"
                             >
-                                <h2
-                                    :id="`category-heading-${category.id}`"
-                                    class="text-xl font-medium wrap-anywhere"
-                                >
-                                    {{ category.name }}
-                                </h2>
-                                <p
-                                    v-if="!category.dishes.length"
-                                    class="text-sm text-muted-foreground"
-                                >
-                                    No dishes are available in this category.
-                                </p>
-                                <div v-else class="grid gap-5 sm:grid-cols-2">
-                                    <MenuDishCard
-                                        v-for="dish in category.dishes"
-                                        :key="dish.id"
-                                        :dish="dish"
-                                        heading="h3"
-                                    >
-                                        <p
-                                            v-if="locked"
-                                            class="text-xs text-muted-foreground"
-                                        >
-                                            Selections are locked
-                                        </p>
-                                        <QuantityControl
-                                            v-else-if="quantity(dish.id)"
-                                            :name="dish.name"
-                                            :quantity="quantity(dish.id)"
-                                            :disabled="busy"
-                                            @change="
-                                                setQuantity(dish.id, $event)
-                                            "
-                                        />
-                                        <Button
-                                            v-else
-                                            type="button"
-                                            class="min-h-11 w-full"
-                                            :disabled="
-                                                busy || rows.length >= 100
-                                            "
-                                            :aria-label="`Add ${dish.name}`"
-                                            @click="setQuantity(dish.id, 1)"
-                                            >Add to pre-order</Button
-                                        >
-                                    </MenuDishCard>
-                                </div>
-                            </section>
-                        </section>
-                        <GuestOrderPanel
-                            :items="rows"
-                            :total="total"
-                            :count="count"
-                            :dirty="dirty"
-                            :locked="locked"
-                            :busy="busy"
-                            :saving="saving"
-                            :unavailable="unavailable"
-                            :error="error"
-                            :validation="validation"
-                            :success="success"
-                            @change="setQuantity"
-                            @save="save"
+                                {{ category.name }}
+                            </button>
+                        </div>
+                        <label class="flex min-w-0 items-center gap-3 text-sm"
+                            >Sort by:<select
+                                :value="sort"
+                                @change="
+                                    sort = ($event.target as HTMLSelectElement)
+                                        .value as MenuSort
+                                "
+                                class="min-h-11 min-w-0 rounded-lg border border-border bg-card px-3 pr-8 focus-visible:outline-2 focus-visible:outline-primary"
+                                aria-label="Sort menu"
+                            >
+                                <option value="popular">Popular First</option>
+                                <option value="newest">Newest First</option>
+                                <option value="price-asc">
+                                    Price: Low to High
+                                </option>
+                                <option value="price-desc">
+                                    Price: High to Low
+                                </option>
+                            </select></label
+                        >
+                    </div>
+                    <p
+                        v-if="error"
+                        role="alert"
+                        class="mb-4 text-sm text-destructive"
+                    >
+                        {{ error }}
+                        <button
+                            :disabled="busy"
+                            class="min-h-11 underline"
+                            @click="load()"
+                        >
+                            Refresh menu and status
+                        </button>
+                    </p>
+                    <p v-if="saving" role="status" class="sr-only">
+                        Saving cart…
+                    </p>
+                    <p
+                        v-if="locked"
+                        role="status"
+                        class="mb-4 rounded-lg bg-accent p-4 text-sm"
+                    >
+                        This group order is read-only. You can review your saved
+                        dishes in the cart.
+                    </p>
+                    <div
+                        v-if="activeCategory"
+                        id="guest-dishes"
+                        role="tabpanel"
+                        :aria-labelledby="`guest-category-${activeCategory.id}`"
+                        tabindex="0"
+                        class="focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                        <div
+                            v-if="dishes.length"
+                            class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4"
+                        >
+                            <GuestDishCard
+                                v-for="dish in dishes"
+                                :key="dish.id"
+                                :dish="dish"
+                                :quantity="quantity(dish.id)"
+                                :disabled="
+                                    busy ||
+                                    needsName ||
+                                    (rows.length >= 100 && !quantity(dish.id))
+                                "
+                                :locked="locked"
+                                @change="change(dish.id, $event)"
+                            />
+                        </div>
+                        <ContentState
+                            v-else
+                            title="No dishes in this category"
+                            description="Choose another category or check back later."
                         />
                     </div>
+                    <ContentState
+                        v-else
+                        title="The menu is being prepared"
+                        description="No dishes are available yet. Check back later."
+                    />
                 </SiteContainer>
+                <BookingModal
+                    v-model:open="nameOpen"
+                    title="You’re Invited!"
+                    description="Confirm your guest name to browse this reservation’s menu."
+                    :busy="identifying"
+                >
+                    <p class="-mt-4 text-sm leading-6">
+                        You’re invited to pre-order for an upcoming reservation.
+                    </p>
+                    <GuestReservationDetails
+                        :context="menu.context"
+                        :timezone="menu.timezone"
+                    />
+                    <form class="space-y-5" @submit.prevent="browse">
+                        <div>
+                            <label for="guest-name" class="mb-2 block text-sm"
+                                >Enter Your Name</label
+                            ><input
+                                id="guest-name"
+                                v-model="name"
+                                class="auth-input"
+                                placeholder="e.g. Jonson D."
+                                autocomplete="name"
+                                maxlength="255"
+                                :disabled="identifying"
+                                :aria-invalid="
+                                    !!nameError || validation.length > 0
+                                "
+                                aria-describedby="guest-name-errors"
+                            />
+                            <div
+                                id="guest-name-errors"
+                                class="mt-2 space-y-1 text-sm text-destructive"
+                            >
+                                <p v-if="nameError" role="alert">
+                                    {{ nameError }}
+                                </p>
+                                <p
+                                    v-for="message in validation"
+                                    :key="message"
+                                    role="alert"
+                                >
+                                    {{ message }}
+                                </p>
+                                <p v-if="error" role="alert">{{ error }}</p>
+                            </div>
+                        </div>
+                        <Button
+                            type="submit"
+                            class="min-h-12 w-full"
+                            :disabled="identifying"
+                            >{{
+                                identifying ? 'Saving name…' : 'Browse Menu'
+                            }}</Button
+                        >
+                    </form>
+                </BookingModal>
+                <GuestCartDrawer
+                    v-model:open="cartOpen"
+                    :items="rows"
+                    :total="total"
+                    :busy="busy"
+                    :locked="locked"
+                    :dirty="dirty"
+                    :unavailable="unavailable"
+                    :error="error"
+                    :validation="validation"
+                    :submitting="submitting"
+                    @change="change"
+                    @save="save"
+                    @submit="confirm"
+                    @refresh="load()"
+                />
             </template>
         </main>
     </div>

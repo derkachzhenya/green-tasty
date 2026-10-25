@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Validator;
 
 class GuestDishSelectionRequest extends FormRequest
@@ -43,5 +44,15 @@ class GuestDishSelectionRequest extends FormRequest
         }
 
         return $selections;
+    }
+
+    public function expectedVersion(): int
+    {
+        $header = $this->header('If-Match');
+        if (! is_string($header) || preg_match('/\A"(0|[1-9][0-9]{0,9})"\z/', $header, $matches) !== 1) {
+            throw ValidationException::withMessages(['version' => 'Refresh your cart before saving.']);
+        }
+
+        return (int) $matches[1];
     }
 }

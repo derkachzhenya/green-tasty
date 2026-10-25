@@ -6,6 +6,7 @@ use App\Http\Controllers\GroupPreOrderSubmissionController;
 use App\Http\Controllers\GuestDishSelectionController;
 use App\Http\Controllers\GuestInvitationController;
 use App\Http\Controllers\GuestMenuController;
+use App\Http\Controllers\GuestPreOrderController;
 use App\Http\Controllers\MyReservationsController;
 use App\Http\Controllers\ReservationDashboardController;
 use App\Http\Controllers\RestaurantBookingController;
@@ -76,3 +77,13 @@ Route::put('invitations/{token}/selections', [GuestDishSelectionController::clas
     ->withoutMiddleware('web')
     ->middleware([InvitationSecurityHeaders::class, 'throttle:guest-selections', AuthenticateGuestInvitation::class])
     ->name('invitations.selections.update');
+
+Route::post('invitations/{token}/identity', [GuestPreOrderController::class, 'identify'])
+    ->withoutMiddleware('web')
+    ->middleware([InvitationSecurityHeaders::class, 'throttle:guest-selections', AuthenticateGuestInvitation::class])
+    ->name('invitations.identity');
+
+Route::post('invitations/{token}/submit', [GuestPreOrderController::class, 'submit'])
+    ->withoutMiddleware('web')
+    ->middleware([InvitationSecurityHeaders::class, 'throttle:guest-selections', AuthenticateGuestInvitation::class])
+    ->name('invitations.submit');

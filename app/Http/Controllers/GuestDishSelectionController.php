@@ -20,7 +20,7 @@ class GuestDishSelectionController extends Controller
 
     public function update(GuestDishSelectionRequest $request, #[SensitiveParameter] string $token, GuestDishSelectionService $service): JsonResponse
     {
-        $summary = $service->replace($token, $request->selections());
+        $summary = $service->replace($token, $request->selections(), $request->expectedVersion());
 
         return $summary === null
             ? response()->json(['message' => 'Invitation not found.'], 404)

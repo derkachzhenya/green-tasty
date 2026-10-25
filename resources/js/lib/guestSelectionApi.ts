@@ -17,19 +17,46 @@ export async function guestRequest(
     path: string,
     signal: AbortSignal,
     items?: SelectionInput[],
+    version?: number,
+): Promise<unknown> {
+    return request(
+        path,
+        signal,
+        items === undefined ? 'GET' : 'PUT',
+        items === undefined ? undefined : { items },
+        version,
+    );
+}
+
+export function guestAction(
+    path: string,
+    signal: AbortSignal,
+    body: unknown,
+    version?: number,
+): Promise<unknown> {
+    return request(path, signal, 'POST', body, version);
+}
+
+async function request(
+    path: string,
+    signal: AbortSignal,
+    method: string,
+    body?: unknown,
+    version?: number,
 ): Promise<unknown> {
     const response = await fetch(path, {
-        method: items === undefined ? 'GET' : 'PUT',
+        method,
         headers: {
             Accept: 'application/json',
             'Content-Type': 'application/json',
+            ...(version === undefined ? {} : { 'If-Match': `"${version}"` }),
         },
         credentials: 'omit',
         cache: 'no-store',
         redirect: 'error',
         referrerPolicy: 'no-referrer',
         signal,
-        ...(items === undefined ? {} : { body: JSON.stringify({ items }) }),
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
     if (!response.ok) {
         const data = (await response.json().catch(() => null)) as {
@@ -102,9 +129,50 @@ export function guestMenu(value: unknown): GuestMenu {
     const data = record(value);
     const invitation = record(data.invitation);
     const order = record(data.order);
+    const context = record(data.context);
+    const state = record(data.guest_state);
+    if (typeof state.name_confirmed !== 'boolean')
+        throw new Error('Invalid guest response.');
     if (typeof order.editable !== 'boolean')
         throw new Error('Invalid guest response.');
     return {
+        context: {
+            restaurant: string(context.restaurant),
+            address: string(context.address),
+            table: string(context.table),
+            date: string(context.date),
+            time: string(context.time),
+            end_date: string(context.end_date),
+            end_time: string(context.end_time),
+            guests: integer(context.guests),
+        },
+        guest_state: {
+            name_confirmed: state.name_confirmed,
+            submitted_at: nullableString(state.submitted_at),
+            version: integer(state.version, 0),
+        },
+        catalog: list(data.catalog).map((value) => {
+            const category = record(value);
+            return {
+                id: integer(category.id),
+                name: string(category.name),
+                dishes: list(category.dishes).map((value) => {
+                    const dish = record(value);
+                    if (typeof dish.available !== 'boolean')
+                        throw new Error('Invalid guest response.');
+                    return {
+                        id: integer(dish.id),
+                        name: string(dish.name),
+                        description: nullableString(dish.description),
+                        price: money(dish.price),
+                        available: dish.available,
+                        created_at: nullableString(dish.created_at),
+                        popularity: integer(dish.popularity, 0),
+                        sort_order: integer(dish.sort_order, 0),
+                    };
+                }),
+            };
+        }),
         invitation: {
             restaurant: { name: string(record(invitation.restaurant).name) },
             guest: { name: string(record(invitation.guest).name) },

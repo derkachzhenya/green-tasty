@@ -8,6 +8,7 @@ import {
 import {
     GuestSelectionError,
     guestMenu,
+    guestAction,
     guestRequest,
     selectionSummary,
 } from '@/lib/guestSelectionApi';
@@ -19,6 +20,8 @@ export function useGuestSelections(initiallyInvalid: boolean) {
     const invalid = ref(initiallyInvalid);
     const loading = ref(false);
     const saving = ref(false);
+    const submitting = ref(false);
+    const identifying = ref(false);
     const error = ref('');
     const validation = ref<string[]>([]);
     const success = ref('');
@@ -44,7 +47,13 @@ export function useGuestSelections(initiallyInvalid: boolean) {
     const locked = computed(
         () => conflict.value || menu.value?.order.editable === false,
     );
-    const busy = computed(() => loading.value || saving.value);
+    const busy = computed(
+        () =>
+            loading.value ||
+            saving.value ||
+            submitting.value ||
+            identifying.value,
+    );
     const unavailable = computed(() =>
         rows.value.some((row) => !row.available),
     );
@@ -59,6 +68,8 @@ export function useGuestSelections(initiallyInvalid: boolean) {
         validation.value = [];
         loading.value = false;
         saving.value = false;
+        submitting.value = false;
+        identifying.value = false;
     }
     function failure(reason: unknown) {
         if (reason instanceof GuestSelectionError && reason.status === 404) {
@@ -127,7 +138,7 @@ export function useGuestSelections(initiallyInvalid: boolean) {
             !dirty.value ||
             unavailable.value
         )
-            return;
+            return false;
         saving.value = true;
         error.value = '';
         success.value = '';
@@ -135,7 +146,7 @@ export function useGuestSelections(initiallyInvalid: boolean) {
         const current = ++generation;
         controller = new AbortController();
         try {
-            const selections = selectionSummary(
+            const saved = selectionSummary(
                 await guestRequest(
                     `${path}/selections`,
                     controller.signal,
@@ -143,15 +154,29 @@ export function useGuestSelections(initiallyInvalid: boolean) {
                         menu_item_id,
                         quantity,
                     })),
+                    menu.value?.guest_state.version,
                 ),
             );
             if (current !== generation || !menu.value) return;
-            menu.value = { ...menu.value, selections };
-            input.value = selections.items.map(
+            const refreshed = guestMenu(
+                await guestRequest(`${path}/menu`, controller.signal),
+            );
+            if (current !== generation) return false;
+            menu.value = refreshed;
+            input.value = refreshed.selections.items.map(
                 ({ menu_item_id, quantity }) => ({ menu_item_id, quantity }),
             );
-            success.value =
-                'Your selections are saved. The reservation owner submits the group pre-order.';
+            if (
+                JSON.stringify(saved) !==
+                    JSON.stringify(refreshed.selections) ||
+                !refreshed.order.editable
+            ) {
+                error.value =
+                    'Your cart or order status changed. Review the saved selections before submitting.';
+                return false;
+            }
+            success.value = 'Your cart is saved.';
+            return true;
         } catch (reason) {
             if (current !== generation) return;
             if (
@@ -168,7 +193,7 @@ export function useGuestSelections(initiallyInvalid: boolean) {
                         }),
                     ) ?? [];
                 error.value =
-                    'The group pre-order is locked. Your changes were not saved.';
+                    'Your cart or order status changed. Refresh before making more changes.';
             } else if (
                 reason instanceof GuestSelectionError &&
                 reason.status === 422
@@ -181,6 +206,97 @@ export function useGuestSelections(initiallyInvalid: boolean) {
             } else failure(reason);
         } finally {
             if (current === generation) saving.value = false;
+        }
+    }
+    async function identify(name: string): Promise<boolean> {
+        if (busy.value || invalid.value || !menu.value) return false;
+        identifying.value = true;
+        error.value = '';
+        validation.value = [];
+        const current = ++generation;
+        controller = new AbortController();
+        try {
+            const data = guestMenu(
+                await guestAction(`${path}/identity`, controller.signal, {
+                    name,
+                }),
+            );
+            if (current !== generation) return false;
+            menu.value = data;
+            input.value = data.selections.items.map(
+                ({ menu_item_id, quantity }) => ({ menu_item_id, quantity }),
+            );
+            return true;
+        } catch (reason) {
+            if (current === generation) {
+                if (
+                    reason instanceof GuestSelectionError &&
+                    reason.status === 422
+                )
+                    validation.value = reason.messages;
+                else if (
+                    reason instanceof GuestSelectionError &&
+                    reason.status === 409
+                )
+                    error.value =
+                        'This pre-order is no longer editable. Refresh to see its saved status.';
+                else failure(reason);
+            }
+            return false;
+        } finally {
+            if (current === generation) identifying.value = false;
+        }
+    }
+    async function submit(): Promise<boolean> {
+        if (
+            busy.value ||
+            locked.value ||
+            invalid.value ||
+            !menu.value ||
+            !input.value.length ||
+            unavailable.value
+        )
+            return false;
+        if (dirty.value && !(await save())) return false;
+        submitting.value = true;
+        error.value = '';
+        validation.value = [];
+        const current = ++generation;
+        controller = new AbortController();
+        try {
+            const data = guestMenu(
+                await guestAction(
+                    `${path}/submit`,
+                    controller.signal,
+                    { items: input.value },
+                    menu.value.guest_state.version,
+                ),
+            );
+            if (current !== generation) return false;
+            menu.value = data;
+            input.value = data.selections.items.map(
+                ({ menu_item_id, quantity }) => ({ menu_item_id, quantity }),
+            );
+            return data.guest_state.submitted_at !== null;
+        } catch (reason) {
+            if (current === generation) {
+                if (
+                    reason instanceof GuestSelectionError &&
+                    reason.status === 422
+                )
+                    validation.value = reason.messages;
+                else if (
+                    reason instanceof GuestSelectionError &&
+                    reason.status === 409
+                ) {
+                    conflict.value = true;
+                    error.value =
+                        'Your cart or order status changed. Refresh before submitting.';
+                } else failure(reason);
+            }
+            return false;
+        } finally {
+            if (current === generation) submitting.value = false;
         }
     }
     function beforeUnload(event: BeforeUnloadEvent) {
@@ -229,5 +345,9 @@ export function useGuestSelections(initiallyInvalid: boolean) {
         load,
         save,
         setQuantity,
+        identify,
+        submit,
+        submitting,
+        identifying,
     };
 }

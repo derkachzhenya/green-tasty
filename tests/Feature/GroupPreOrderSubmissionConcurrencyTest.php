@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\GroupPreOrderSubmissionService;
 use App\Services\GuestDishSelectionService;
 use App\Services\GuestInvitationService;
+use App\Services\GuestPreOrderService;
 use Illuminate\Database\Connection;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\DatabaseTruncation;
@@ -62,7 +63,7 @@ class GroupPreOrderSubmissionConcurrencyTest extends TestCase
         $this->dish = $category->items()->create(['name' => 'Vegetable Bowl', 'price' => '12.50']);
         $invitation = app(GuestInvitationService::class)->create($this->reservation, ['name' => 'Alice']);
         $this->token = basename(parse_url($invitation['invitation_url'], PHP_URL_PATH));
-        app(GuestDishSelectionService::class)->replace($this->token, [['menu_item_id' => $this->dish->id, 'quantity' => 1]]);
+        app(GuestDishSelectionService::class)->replace($this->token, [['menu_item_id' => $this->dish->id, 'quantity' => 1]], 0);
         $this->preOrder = $this->reservation->preOrder()->firstOrFail();
     }
 
@@ -87,7 +88,7 @@ class GroupPreOrderSubmissionConcurrencyTest extends TestCase
     {
         $this->holdOperation(fn () => app(GuestDishSelectionService::class)->replace($this->token, [
             ['menu_item_id' => $this->dish->id, 'quantity' => 3],
-        ]));
+        ], 1));
 
         $this->assertBlockedByRowLock(fn () => app(GroupPreOrderSubmissionService::class)->submit($this->reservation, $this->owner));
         $this->assertSame('draft', $this->preOrder->fresh()->status);
@@ -108,12 +109,12 @@ class GroupPreOrderSubmissionConcurrencyTest extends TestCase
 
         $this->assertBlockedByRowLock(fn () => app(GuestDishSelectionService::class)->replace($this->token, [
             ['menu_item_id' => $this->dish->id, 'quantity' => 5],
-        ]));
+        ], 1));
         $this->assertBlockedByRowLock(fn () => app(GroupPreOrderSubmissionService::class)->submit($this->reservation, $this->owner));
         $this->heldConnection->commit();
 
         try {
-            app(GuestDishSelectionService::class)->replace($this->token, []);
+            app(GuestDishSelectionService::class)->replace($this->token, [], 1);
             $this->fail('Guest editing must fail after the submitted transaction commits.');
         } catch (ConflictHttpException $exception) {
             $this->assertSame(409, $exception->getStatusCode());
@@ -128,7 +129,7 @@ class GroupPreOrderSubmissionConcurrencyTest extends TestCase
     {
         $this->holdOperation(fn () => app(GuestDishSelectionService::class)->replace($this->token, [
             ['menu_item_id' => $this->dish->id, 'quantity' => 3],
-        ]));
+        ], 1));
         $this->worker = new Process([
             PHP_BINARY, base_path('tests/Support/submission-request.php'),
             (string) $this->owner->id, (string) $this->reservation->id,
@@ -154,9 +155,51 @@ class GroupPreOrderSubmissionConcurrencyTest extends TestCase
         $this->assertSame(3, $this->preOrder->items()->sole()->quantity);
         $this->actingAs($this->owner)->postJson(route('reservations.pre-order.submit', $this->reservation))
             ->assertOk()->assertJsonPath('grand_total', '37.50');
-        $this->putJson(route('invitations.selections.update', $this->token), ['items' => []])->assertConflict();
+        $this->putJson(route('invitations.selections.update', $this->token), ['items' => []], ['If-Match' => '"2"'])->assertConflict();
         $this->assertDatabaseCount('pre_orders', 1);
         $this->assertDatabaseCount('pre_order_items', 1);
+    }
+
+    public function test_guest_confirmation_serializes_with_edits_and_owner_group_submission(): void
+    {
+        app(GuestPreOrderService::class)->identify($this->token, 'Alice');
+        $this->holdOperation(fn () => app(GuestPreOrderService::class)->submit($this->token, [
+            ['menu_item_id' => $this->dish->id, 'quantity' => 1],
+        ], 1));
+        $this->assertBlockedByRowLock(fn () => app(GuestDishSelectionService::class)->replace($this->token, [], 1));
+        $this->assertBlockedByRowLock(fn () => app(GroupPreOrderSubmissionService::class)->submit($this->reservation, $this->owner));
+        $this->heldConnection->commit();
+        $this->assertSame('draft', $this->preOrder->fresh()->status);
+        $this->assertNotNull(app(GuestInvitationService::class)->resolve($this->token)->pre_order_submitted_at);
+        try {
+            app(GuestDishSelectionService::class)->replace($this->token, [], 1);
+            $this->fail('A confirmed guest selection must stay immutable.');
+        } catch (ConflictHttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+        $this->assertSame('12.50', app(GroupPreOrderSubmissionService::class)->submit($this->reservation, $this->owner)['grand_total']);
+    }
+
+    public function test_guest_confirmation_rechecks_the_version_after_waiting_for_another_cart_write(): void
+    {
+        app(GuestPreOrderService::class)->identify($this->token, 'Alice');
+        $this->holdOperation(fn () => app(GuestDishSelectionService::class)->replace($this->token, [
+            ['menu_item_id' => $this->dish->id, 'quantity' => 3],
+        ], 1));
+        $this->assertBlockedByRowLock(fn () => app(GuestPreOrderService::class)->submit($this->token, [
+            ['menu_item_id' => $this->dish->id, 'quantity' => 1],
+        ], 1));
+        $this->heldConnection->commit();
+        try {
+            app(GuestPreOrderService::class)->submit($this->token, [
+                ['menu_item_id' => $this->dish->id, 'quantity' => 1],
+            ], 1);
+            $this->fail('A stale submission must not replace the newer cart.');
+        } catch (ConflictHttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+        $this->assertNull(app(GuestInvitationService::class)->resolve($this->token)->pre_order_submitted_at);
+        $this->assertSame(3, $this->preOrder->items()->sole()->quantity);
     }
 
     private function holdOperation(callable $operation): mixed

@@ -13,6 +13,7 @@ use App\Services\ConsolidatedPreOrderService;
 use App\Services\GuestDishSelectionService;
 use App\Services\GuestInvitationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use Mockery;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -58,7 +59,7 @@ class GuestDishSelectionTest extends TestCase
 
     public function test_anonymous_guest_can_save_multiple_dishes_with_server_prices(): void
     {
-        $response = $this->putJson($this->url, ['items' => [
+        $response = $this->updateSelections($this->url, ['items' => [
             ['menu_item_id' => $this->salad->id, 'quantity' => 1],
             ['menu_item_id' => $this->bowl->id, 'quantity' => 2],
         ]])->assertOk()->assertExactJson([
@@ -83,13 +84,13 @@ class GuestDishSelectionTest extends TestCase
 
     public function test_guest_can_update_quantities_and_remove_omitted_dishes(): void
     {
-        $this->putJson($this->url, ['items' => [
+        $this->updateSelections($this->url, ['items' => [
             ['menu_item_id' => $this->bowl->id, 'quantity' => 1],
             ['menu_item_id' => $this->salad->id, 'quantity' => 2],
         ]])->assertOk();
         $originalId = $this->item($this->bowl)->id;
 
-        $this->putJson($this->url, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 3]]])
+        $this->updateSelections($this->url, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 3]]])
             ->assertOk()->assertJsonCount(1, 'items')->assertJsonPath('subtotal', '37.50');
 
         $this->assertSame($originalId, $this->item($this->bowl)->id);
@@ -99,7 +100,7 @@ class GuestDishSelectionTest extends TestCase
 
     public function test_empty_selections_do_not_create_an_order_when_none_exists(): void
     {
-        $this->putJson($this->url, ['items' => []])->assertOk()->assertExactJson([
+        $this->updateSelections($this->url, ['items' => []])->assertOk()->assertExactJson([
             'items' => [], 'total_quantity' => 0, 'subtotal' => '0.00',
         ]);
 
@@ -111,12 +112,12 @@ class GuestDishSelectionTest extends TestCase
     {
         $other = app(GuestInvitationService::class)->create($this->reservation, ['name' => 'Bob Private']);
         $otherUrl = route('invitations.selections.update', ['token' => basename(parse_url($other['invitation_url'], PHP_URL_PATH))]);
-        $this->putJson($otherUrl, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 5]]])->assertOk();
+        $this->updateSelections($otherUrl, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 5]]])->assertOk();
         $otherItem = PreOrderItem::where('reservation_guest_id', $other['guest_id'])->firstOrFail()->toArray();
-        $this->putJson($this->url, ['items' => [['menu_item_id' => $this->salad->id, 'quantity' => 2]]])
+        $this->updateSelections($this->url, ['items' => [['menu_item_id' => $this->salad->id, 'quantity' => 2]]])
             ->assertOk()->assertDontSee('Bob Private')->assertJsonPath('total_quantity', 2);
 
-        $this->putJson($this->url, ['items' => []])->assertOk()->assertExactJson([
+        $this->updateSelections($this->url, ['items' => []])->assertOk()->assertExactJson([
             'items' => [], 'total_quantity' => 0, 'subtotal' => '0.00',
         ]);
 
@@ -132,13 +133,13 @@ class GuestDishSelectionTest extends TestCase
             ['menu_item_id' => $this->bowl->id, 'quantity' => 2],
             ['menu_item_id' => $this->salad->id, 'quantity' => 1],
         ];
-        $first = $this->putJson($this->url, ['items' => $items])->assertOk()->json();
+        $first = $this->updateSelections($this->url, ['items' => $items])->assertOk()->json();
         $before = $this->state();
         $orderBefore = $this->reservation->preOrder()->firstOrFail()->toArray();
         $this->bowl->update(['price' => '99.99']);
         $this->travel(2)->seconds();
 
-        $this->putJson($this->url, ['items' => array_reverse($items)])->assertOk()->assertExactJson($first);
+        $this->updateSelections($this->url, ['items' => array_reverse($items)])->assertOk()->assertExactJson($first);
 
         $this->assertSame($before, $this->state());
         $this->assertSame($orderBefore, $this->reservation->preOrder()->firstOrFail()->toArray());
@@ -146,23 +147,23 @@ class GuestDishSelectionTest extends TestCase
 
     public function test_retained_dishes_keep_their_snapshot_but_readded_dishes_use_the_new_price(): void
     {
-        $this->putJson($this->url, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 1]]])->assertOk();
+        $this->updateSelections($this->url, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 1]]])->assertOk();
         $this->bowl->update(['price' => '20.00']);
 
-        $this->putJson($this->url, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 3]]])
+        $this->updateSelections($this->url, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 3]]])
             ->assertOk()->assertJsonPath('items.0.unit_price', '12.50')->assertJsonPath('subtotal', '37.50');
-        $this->putJson($this->url, ['items' => []])->assertOk();
-        $this->putJson($this->url, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 3]]])
+        $this->updateSelections($this->url, ['items' => []])->assertOk();
+        $this->updateSelections($this->url, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 3]]])
             ->assertOk()->assertJsonPath('items.0.unit_price', '20.00')->assertJsonPath('subtotal', '60.00');
     }
 
     public function test_guest_selections_integrate_with_consolidation_using_each_guests_historical_price(): void
     {
-        $this->putJson($this->url, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 2]]])->assertOk();
+        $this->updateSelections($this->url, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 2]]])->assertOk();
         $this->bowl->update(['price' => '14.00']);
         $other = app(GuestInvitationService::class)->create($this->reservation, ['name' => 'Bob']);
         $otherUrl = route('invitations.selections.update', ['token' => basename(parse_url($other['invitation_url'], PHP_URL_PATH))]);
-        $this->putJson($otherUrl, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 3]]])->assertOk();
+        $this->updateSelections($otherUrl, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 3]]])->assertOk();
 
         $summary = app(ConsolidatedPreOrderService::class)->summarize($this->reservation);
 
@@ -174,9 +175,9 @@ class GuestDishSelectionTest extends TestCase
         $this->assertSame(5, $summary['total_quantity']);
         $this->assertDatabaseCount('pre_orders', 1);
 
-        $this->putJson($this->url, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 1]]])->assertOk();
+        $this->updateSelections($this->url, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 1]]])->assertOk();
         $this->assertSame('54.50', app(ConsolidatedPreOrderService::class)->summarize($this->reservation)['grand_total']);
-        $this->putJson($this->url, ['items' => []])->assertOk();
+        $this->updateSelections($this->url, ['items' => []])->assertOk();
         $summary = app(ConsolidatedPreOrderService::class)->summarize($this->reservation);
         $this->assertSame('42.00', $summary['grand_total']);
         $this->assertSame([$other['guest_id']], array_column($summary['guests'], 'reservation_guest_id'));
@@ -217,7 +218,7 @@ class GuestDishSelectionTest extends TestCase
             $id = $category->items()->create(['name' => 'Other dish', 'price' => '1.00'])->id;
         }
 
-        $this->putJson($this->url, ['items' => [['menu_item_id' => $id, 'quantity' => 1]]])
+        $this->updateSelections($this->url, ['items' => [['menu_item_id' => $id, 'quantity' => 1]]])
             ->assertUnprocessable()->assertJsonValidationErrors('items');
 
         $this->assertDatabaseCount('pre_orders', 0);
@@ -231,13 +232,13 @@ class GuestDishSelectionTest extends TestCase
 
     public function test_a_mixed_valid_and_invalid_replacement_leaves_the_previous_selection_unchanged(): void
     {
-        $this->putJson($this->url, ['items' => [
+        $this->updateSelections($this->url, ['items' => [
             ['menu_item_id' => $this->bowl->id, 'quantity' => 1],
             ['menu_item_id' => $this->salad->id, 'quantity' => 2],
         ]])->assertOk();
         $before = $this->state();
 
-        $this->putJson($this->url, ['items' => [
+        $this->updateSelections($this->url, ['items' => [
             ['menu_item_id' => $this->bowl->id, 'quantity' => 5],
             ['menu_item_id' => 999999, 'quantity' => 1],
         ]])->assertUnprocessable();
@@ -247,7 +248,7 @@ class GuestDishSelectionTest extends TestCase
 
     public function test_duplicate_menu_item_ids_are_rejected(): void
     {
-        $this->putJson($this->url, ['items' => [
+        $this->updateSelections($this->url, ['items' => [
             ['menu_item_id' => $this->bowl->id, 'quantity' => 1],
             ['menu_item_id' => $this->bowl->id, 'quantity' => 2],
         ]])->assertUnprocessable()->assertJsonValidationErrors('items.0.menu_item_id');
@@ -258,7 +259,7 @@ class GuestDishSelectionTest extends TestCase
     #[DataProvider('forbiddenRootFields')]
     public function test_client_supplied_prices_and_identities_are_never_accepted(string $field): void
     {
-        $this->putJson($this->url, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 1]], $field => 1])
+        $this->updateSelections($this->url, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 1]], $field => 1])
             ->assertUnprocessable()->assertJsonValidationErrors($field);
 
         $this->assertDatabaseCount('pre_orders', 0);
@@ -274,7 +275,7 @@ class GuestDishSelectionTest extends TestCase
     #[DataProvider('forbiddenLineFields')]
     public function test_extra_line_item_fields_are_rejected(string $field): void
     {
-        $this->putJson($this->url, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 1, $field => 1]]])
+        $this->updateSelections($this->url, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 1, $field => 1]]])
             ->assertUnprocessable()->assertJsonValidationErrors('items.0');
 
         $this->assertDatabaseCount('pre_orders', 0);
@@ -287,11 +288,11 @@ class GuestDishSelectionTest extends TestCase
 
     public function test_items_are_required_and_must_be_a_bounded_list(): void
     {
-        $this->putJson($this->url, [])->assertUnprocessable()->assertJsonValidationErrors('items');
-        $this->putJson($this->url, ['items' => null])->assertUnprocessable()->assertJsonValidationErrors('items');
-        $this->putJson($this->url, ['items' => ['custom' => ['menu_item_id' => $this->bowl->id, 'quantity' => 1]]])
+        $this->updateSelections($this->url, [])->assertUnprocessable()->assertJsonValidationErrors('items');
+        $this->updateSelections($this->url, ['items' => null])->assertUnprocessable()->assertJsonValidationErrors('items');
+        $this->updateSelections($this->url, ['items' => ['custom' => ['menu_item_id' => $this->bowl->id, 'quantity' => 1]]])
             ->assertUnprocessable()->assertJsonValidationErrors('items');
-        $this->putJson($this->url, ['items' => array_fill(0, 101, ['menu_item_id' => $this->bowl->id, 'quantity' => 1])])
+        $this->updateSelections($this->url, ['items' => array_fill(0, 101, ['menu_item_id' => $this->bowl->id, 'quantity' => 1])])
             ->assertUnprocessable()->assertJsonValidationErrors('items');
 
         $this->assertDatabaseCount('pre_orders', 0);
@@ -300,7 +301,7 @@ class GuestDishSelectionTest extends TestCase
     #[DataProvider('invalidInvitationStates')]
     public function test_invalid_invitations_are_rejected_before_payload_validation(string $state): void
     {
-        $this->putJson($this->url, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 1]]])->assertOk();
+        $this->updateSelections($this->url, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 1]]])->assertOk();
         $before = $this->state();
         $url = $this->url;
         if ($state === 'malformed') {
@@ -317,7 +318,7 @@ class GuestDishSelectionTest extends TestCase
             app(GuestInvitationService::class)->regenerate($this->reservation, $this->guest);
         }
 
-        $this->putJson($url, [])->assertNotFound()->assertExactJson(['message' => 'Invitation not found.']);
+        $this->updateSelections($url, [])->assertNotFound()->assertExactJson(['message' => 'Invitation not found.']);
         $this->assertSame($before, $this->state());
     }
 
@@ -338,13 +339,13 @@ class GuestDishSelectionTest extends TestCase
     #[DataProvider('finalizedStates')]
     public function test_non_draft_or_submitted_orders_cannot_be_changed_or_cleared(string $status, bool $hasSubmittedAt): void
     {
-        $this->putJson($this->url, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 1]]])->assertOk();
+        $this->updateSelections($this->url, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 1]]])->assertOk();
         $order = $this->reservation->preOrder()->firstOrFail();
         $order->update(['status' => $status, 'submitted_at' => $hasSubmittedAt ? now() : null]);
         $before = $this->state();
 
-        $this->putJson($this->url, ['items' => [['menu_item_id' => $this->salad->id, 'quantity' => 2]]])->assertConflict();
-        $this->putJson($this->url, ['items' => []])->assertConflict();
+        $this->updateSelections($this->url, ['items' => [['menu_item_id' => $this->salad->id, 'quantity' => 2]]])->assertConflict();
+        $this->updateSelections($this->url, ['items' => []])->assertConflict();
         $this->assertSame($before, $this->state());
     }
 
@@ -366,7 +367,7 @@ class GuestDishSelectionTest extends TestCase
 
         $service = new GuestDishSelectionService($invitationService);
 
-        $this->assertNull($service->replace($this->token, [['menu_item_id' => $this->bowl->id, 'quantity' => 1]]));
+        $this->assertNull($service->replace($this->token, [['menu_item_id' => $this->bowl->id, 'quantity' => 1]], 0));
         $this->assertDatabaseCount('pre_orders', 0);
         $this->assertDatabaseCount('pre_order_items', 0);
     }
@@ -403,8 +404,8 @@ class GuestDishSelectionTest extends TestCase
         ]);
         $before = $otherOrder->items()->orderBy('id')->get()->toArray();
 
-        $this->putJson($this->url, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 2]]])->assertOk();
-        $this->putJson($this->url, ['items' => []])->assertOk();
+        $this->updateSelections($this->url, ['items' => [['menu_item_id' => $this->bowl->id, 'quantity' => 2]]])->assertOk();
+        $this->updateSelections($this->url, ['items' => []])->assertOk();
 
         $this->assertSame($before, $otherOrder->items()->orderBy('id')->get()->toArray());
     }
@@ -412,11 +413,19 @@ class GuestDishSelectionTest extends TestCase
     public function test_writes_are_rate_limited_by_ip_even_with_invalid_tokens(): void
     {
         foreach (range(1, 30) as $index) {
-            $this->putJson(route('invitations.selections.update', ['token' => 'invalid-'.$index]), ['items' => []])->assertNotFound();
+            $this->updateSelections(route('invitations.selections.update', ['token' => 'invalid-'.$index]), ['items' => []])->assertNotFound();
         }
 
-        $this->putJson($this->url, ['items' => []])->assertTooManyRequests()->assertHeader('Cache-Control', 'no-store, private');
+        $this->updateSelections($this->url, ['items' => []])->assertTooManyRequests()->assertHeader('Cache-Control', 'no-store, private');
         $this->assertDatabaseCount('pre_orders', 0);
+    }
+
+    private function updateSelections(string $url, array $items): TestResponse
+    {
+        $token = basename(dirname(parse_url($url, PHP_URL_PATH)));
+        $version = app(GuestInvitationService::class)->resolve($token)?->selection_version ?? 0;
+
+        return $this->putJson($url, $items, ['If-Match' => '"'.$version.'"']);
     }
 
     private function item(MenuItem $dish): PreOrderItem

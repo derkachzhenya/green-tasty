@@ -272,8 +272,8 @@ class GroupPreOrderSubmissionTest extends TestCase
         $this->actingAs($this->owner)->postJson($this->url)->assertOk();
         $url = route('invitations.selections.update', ['token' => $this->guestToken]);
 
-        $this->putJson($url, ['items' => [['menu_item_id' => $this->dish->id, 'quantity' => 5]]])->assertConflict();
-        $this->putJson($url, ['items' => []])->assertConflict();
+        $this->putJson($url, ['items' => [['menu_item_id' => $this->dish->id, 'quantity' => 5]]], ['If-Match' => '"0"'])->assertConflict();
+        $this->putJson($url, ['items' => []], ['If-Match' => '"0"'])->assertConflict();
         $this->getJson(route('invitations.selections.show', ['token' => $this->guestToken]))->assertOk()
             ->assertJsonPath('items.0.unit_price', '12.50')->assertJsonPath('total_quantity', 2);
 
