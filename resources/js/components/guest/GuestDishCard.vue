@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Utensils } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
-import { dishImage, dishWeight } from '@/lib/guestMenu';
+import { dishImage, dishImageCropped, dishWeight } from '@/lib/guestMenu';
 import type { GuestCatalogDish } from '@/types/guest-selection';
 import QuantityControl from './QuantityControl.vue';
 defineProps<{
@@ -32,7 +32,12 @@ defineEmits<{ change: [quantity: number] }>();
                 :alt="dish.name"
                 width="224"
                 height="224"
-                class="mx-auto aspect-square w-full max-w-40 object-contain"
+                class="mx-auto aspect-square w-full max-w-40"
+                :class="
+                    dishImageCropped(dish.name)
+                        ? 'rounded-full object-cover'
+                        : 'object-contain'
+                "
             />
             <div
                 v-else

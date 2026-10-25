@@ -1,27 +1,25 @@
-import catalog from '../../data/homepage.json';
+import catalog from '../../data/restaurant-menu.json';
 import { cents } from '@/lib/guestSelection';
 import type { GuestCatalogDish } from '@/types/guest-selection';
 
 export type MenuSort = 'popular' | 'newest' | 'price-asc' | 'price-desc';
 
-export function dishImage(name: string): string | null {
-    if (name.trim().toLowerCase() === 'avocado pine nut bowl')
-        return '/images/green-tasty/dishes/gjgk.png';
-    return (
-        catalog.dishes.find(
-            (dish) => dish.name.toLowerCase() === name.trim().toLowerCase(),
-        )?.image ?? null
+function catalogDish(name: string) {
+    return catalog.dishes.find(
+        (dish) => dish.name.toLowerCase() === name.trim().toLowerCase(),
     );
 }
 
-// Display-only weights supplied by the Figma reference; never sent to order APIs.
+export function dishImage(name: string): string | null {
+    return catalogDish(name)?.image ?? null;
+}
+
 export function dishWeight(name: string): string | null {
-    const weights: Record<string, string> = {
-        'fresh strawberry mint salad': '430 g',
-        'roasted sweet potato & lentil salad': '380 g',
-        'spring salad': '280 g',
-    };
-    return weights[name.trim().toLowerCase()] ?? null;
+    return catalogDish(name)?.weight ?? null;
+}
+
+export function dishImageCropped(name: string): boolean {
+    return catalogDish(name)?.crop ?? false;
 }
 
 export function sortedDishes(

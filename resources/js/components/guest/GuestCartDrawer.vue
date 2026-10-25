@@ -7,7 +7,7 @@ import {
     SheetDescription,
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { dishImage } from '@/lib/guestMenu';
+import { dishImage, dishImageCropped } from '@/lib/guestMenu';
 import type { DraftDish } from '@/types/guest-selection';
 import QuantityControl from './QuantityControl.vue';
 const props = defineProps<{
@@ -110,7 +110,12 @@ function close(): void {
                             alt=""
                             width="96"
                             height="96"
-                            class="size-16 shrink-0 self-start object-contain sm:size-24"
+                            class="size-16 shrink-0 self-start sm:size-24"
+                            :class="
+                                dishImageCropped(item.name)
+                                    ? 'rounded-full object-cover'
+                                    : 'object-contain'
+                            "
                         />
                         <div class="min-w-0 flex-1">
                             <div class="flex items-start justify-between gap-2">

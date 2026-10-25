@@ -1,13 +1,29 @@
 # Guest pre-order flow from Figma
 
-Latest status: **Guest-screen visual refinement** below records the latest UI
-acceptance. The historical independent review still documents mandatory version
+Latest status: the persistent application menu and its deployment initialization
+are documented in [menu-catalog-deployment.md](menu-catalog-deployment.md).
+The **Guest-screen visual refinement** below records the preceding UI acceptance. The historical independent review still documents mandatory version
 checks and the existing backend security guarantees.
 
 Implemented on `feature/guest-preorder-figma-flow`, based on booking PR #18 at
 `4f6013a`. This continues the existing guest-selection architecture. It does not
 replace reservation booking, authentication, invitation issuance or owner-only
 group submission. No commit, push, merge or deployment is part of this task.
+
+## Permanent catalog acceptance
+
+The missing-content issue is fixed by the shared catalog and explicit
+`menu:install --apply` initializer. It adds eight photographed dishes to Appetizers
+for each of the three existing local locations without changing any original row.
+The current Inna invitation for reservation 8 was opened in actual Chrome on
+localhost:8080 and showed the permanent catalog; its cart was not modified.
+A production-bundle check on isolated fixtures loaded all eight images at all four
+required widths and confirmed/persisted 27.00 through the existing guest flow.
+No AWS deployment has been performed. See [menu-catalog-deployment.md](menu-catalog-deployment.md)
+for accepted starter names/prices, strict catalog validation, final regression
+results, preservation evidence, remaining differences and release initialization
+commands. The historical smaller-menu/unknown-asparagus limitations
+below describe the earlier implementation, before this catalog was installed.
 
 ## Guest-screen visual refinement
 
