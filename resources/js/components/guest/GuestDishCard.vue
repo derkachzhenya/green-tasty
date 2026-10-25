@@ -3,6 +3,7 @@ import { Utensils } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { dishImage, dishImageCropped, dishWeight } from '@/lib/guestMenu';
 import type { GuestCatalogDish } from '@/types/guest-selection';
+import GuestDishPreview from './GuestDishPreview.vue';
 import QuantityControl from './QuantityControl.vue';
 defineProps<{
     dish: GuestCatalogDish;
@@ -26,28 +27,35 @@ defineEmits<{ change: [quantity: number] }>();
             class="flex flex-1 flex-col"
             :class="{ 'opacity-40': !dish.available }"
         >
-            <img
-                v-if="dishImage(dish.name)"
-                :src="dishImage(dish.name)!"
-                :alt="dish.name"
-                width="224"
-                height="224"
-                class="mx-auto aspect-square w-full max-w-40"
-                :class="
-                    dishImageCropped(dish.name)
-                        ? 'rounded-full object-cover'
-                        : 'object-contain'
-                "
-            />
-            <div
-                v-else
-                class="mx-auto flex aspect-square w-full max-w-40 items-center justify-center rounded-full bg-accent"
+            <GuestDishPreview
+                :dish="dish"
+                :disabled="disabled"
+                :locked="locked"
+                @add="$emit('change', quantity + 1)"
             >
-                <Utensils
-                    class="size-16 text-primary/40"
-                    aria-hidden="true"
-                /><span class="sr-only">Dish photograph unavailable</span>
-            </div>
+                <img
+                    v-if="dishImage(dish.name)"
+                    :src="dishImage(dish.name)!"
+                    :alt="dish.name"
+                    width="224"
+                    height="224"
+                    class="mx-auto aspect-square w-full max-w-40"
+                    :class="
+                        dishImageCropped(dish.name)
+                            ? 'rounded-full object-cover'
+                            : 'object-contain'
+                    "
+                />
+                <div
+                    v-else
+                    class="mx-auto flex aspect-square w-full max-w-40 items-center justify-center rounded-full bg-accent"
+                >
+                    <Utensils
+                        class="size-16 text-primary/40"
+                        aria-hidden="true"
+                    /><span class="sr-only">Dish photograph unavailable</span>
+                </div>
+            </GuestDishPreview>
             <div class="mt-2 flex items-start justify-between gap-3">
                 <h2 class="min-w-0 text-sm leading-6 font-medium wrap-anywhere">
                     {{ dish.name }}

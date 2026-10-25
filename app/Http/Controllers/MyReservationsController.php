@@ -12,8 +12,10 @@ class MyReservationsController extends Controller
     public function __invoke(MyReservationsRequest $request, MyReservationsService $reservations): Response
     {
         return Inertia::render('Dashboard', [
+            'reservationCounts' => Inertia::defer(fn () => $reservations->counts($request->user()), rescue: true),
+            'activeStatus' => $request->string('status', 'all')->toString(),
             'reservations' => Inertia::defer(
-                fn () => $reservations->forOwner($request->user(), $request->integer('page', 1)),
+                fn () => $reservations->forOwner($request->user(), $request->integer('page', 1), $request->string('status', 'all')->toString()),
                 rescue: true,
             ),
         ]);

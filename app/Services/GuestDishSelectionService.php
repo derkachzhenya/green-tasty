@@ -6,8 +6,11 @@ use App\Models\MenuCategory;
 use App\Models\MenuItem;
 use App\Models\PreOrderItem;
 use App\Models\Reservation;
+use App\Models\ReservationGuest;
+use App\Models\User;
 use Brick\Math\BigDecimal;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use SensitiveParameter;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
@@ -60,78 +63,118 @@ class GuestDishSelectionService
                 return null;
             }
 
-            $preOrder = $reservation->preOrder()->lockForUpdate()->first();
+            return $this->replaceLocked($reservation, $guest, $selections, $expectedVersion);
+        }, attempts: 3);
+    }
 
-            if ($guest->pre_order_submitted_at !== null || in_array($reservation->status, ['cancelled', 'completed'], true)
-                || ($preOrder !== null && ($preOrder->status !== 'draft' || $preOrder->submitted_at !== null))) {
-                throw new ConflictHttpException('The pre-order is no longer editable.');
-            }
-
+    /**
+     * @param  list<Selection>  $selections
+     * @return SelectionSummary
+     */
+    public function replaceForOwner(Reservation $reservation, User $owner, array $selections, int $expectedVersion): array
+    {
+        return DB::transaction(function () use ($reservation, $owner, $selections, $expectedVersion): array {
+            $locked = Reservation::query()->whereKey($reservation->id)->lockForUpdate()->firstOrFail();
+            Gate::forUser($owner)->authorize('view', $locked);
+            $guest = $locked->guests()->where('user_id', $owner->id)->lockForUpdate()->firstOrFail();
+            $result = $this->replaceLocked($locked, $guest, $selections, $expectedVersion, true);
             if ($guest->selection_version !== $expectedVersion) {
-                throw new ConflictHttpException('Your cart changed in another tab. Refresh before saving.');
+                $guest->forceFill(['pre_order_submitted_at' => null])->save();
             }
 
-            if ($selections === []) {
-                if ($preOrder?->items()->where('reservation_guest_id', $guest->id)->delete()) {
-                    $guest->increment('selection_version');
-                }
+            return $result;
+        }, attempts: 3);
+    }
 
-                return $this->summary([]);
-            }
+    /** @return SelectionSummary */
+    public function forGuest(ReservationGuest $guest): array
+    {
+        return $this->summary($guest->preOrderItems()
+            ->whereRelation('preOrder', 'reservation_id', $guest->reservation_id)
+            ->with('menuItem')->orderBy('menu_item_id')->get());
+    }
 
-            $ids = array_column($selections, 'menu_item_id');
-            sort($ids);
-            $quantities = array_column($selections, 'quantity', 'menu_item_id');
+    /**
+     * @param  list<Selection>  $selections
+     * @return SelectionSummary
+     */
+    private function replaceLocked(Reservation $reservation, ReservationGuest $guest, array $selections, int $expectedVersion, bool $ownerEdit = false): array
+    {
+        $preOrder = $reservation->preOrder()->lockForUpdate()->first();
 
-            // Shared locks keep category availability and menu prices stable through the write.
-            $categoryIds = MenuCategory::query()
-                ->where('restaurant_id', $reservation->restaurant_id)
-                ->where('is_active', true)
-                ->orderBy('id')->sharedLock()->pluck('id');
-            $dishes = MenuItem::query()
-                ->whereIn('id', $ids)
-                ->whereIn('menu_category_id', $categoryIds)
-                ->where('is_available', true)
-                ->orderBy('id')->sharedLock()->get()->keyBy('id');
+        if ((! $ownerEdit && $guest->pre_order_submitted_at !== null) || in_array($reservation->status, ['cancelled', 'completed'], true)
+            || ($preOrder !== null && ($preOrder->status !== 'draft' || $preOrder->submitted_at !== null))) {
+            throw new ConflictHttpException('The pre-order is no longer editable.');
+        }
 
-            if ($dishes->count() !== count($ids)) {
-                throw ValidationException::withMessages(['items' => 'One or more dishes are not available for this reservation.']);
-            }
+        if ($ownerEdit && ! ReservationCardState::acceptsPreOrder($reservation)) {
+            throw new ConflictHttpException('This reservation is no longer accepting pre-orders.');
+        }
 
-            $preOrder ??= $reservation->preOrder()->create(['status' => 'draft']);
-            $existing = $preOrder->items()->where('reservation_guest_id', $guest->id)
-                ->orderBy('id')->lockForUpdate()->get()->keyBy('menu_item_id');
-            $changed = $existing->count() !== count($selections);
-            $preOrder->items()->where('reservation_guest_id', $guest->id)->whereNotIn('menu_item_id', $ids)->delete();
-            $savedItems = [];
+        if ($guest->selection_version !== $expectedVersion) {
+            throw new ConflictHttpException('Your cart changed in another tab. Refresh before saving.');
+        }
 
-            // Stable ordering also makes a reordered retry return the same representation.
-            foreach ($dishes as $dish) {
-                $quantity = $quantities[$dish->id];
-                $item = $existing->get($dish->id);
-
-                if ($item === null) {
-                    $changed = true;
-                    $item = $preOrder->items()->create([
-                        'reservation_guest_id' => $guest->id,
-                        'menu_item_id' => $dish->id,
-                        'quantity' => $quantity,
-                        'unit_price' => $dish->price,
-                    ]);
-                } elseif ($item->quantity !== $quantity) {
-                    $changed = true;
-                    $item->fill(['quantity' => $quantity])->save();
-                }
-
-                $savedItems[] = $item->setRelation('menuItem', $dish);
-            }
-
-            if ($changed) {
+        if ($selections === []) {
+            if ($preOrder?->items()->where('reservation_guest_id', $guest->id)->delete()) {
                 $guest->increment('selection_version');
             }
 
-            return $this->summary($savedItems);
-        }, attempts: 3);
+            return $this->summary([]);
+        }
+
+        $ids = array_column($selections, 'menu_item_id');
+        sort($ids);
+        $quantities = array_column($selections, 'quantity', 'menu_item_id');
+
+        // Shared locks keep category availability and menu prices stable through the write.
+        $categoryIds = MenuCategory::query()
+            ->where('restaurant_id', $reservation->restaurant_id)
+            ->where('is_active', true)
+            ->orderBy('id')->sharedLock()->pluck('id');
+        $dishes = MenuItem::query()
+            ->whereIn('id', $ids)
+            ->whereIn('menu_category_id', $categoryIds)
+            ->where('is_available', true)
+            ->orderBy('id')->sharedLock()->get()->keyBy('id');
+
+        if ($dishes->count() !== count($ids)) {
+            throw ValidationException::withMessages(['items' => 'One or more dishes are not available for this reservation.']);
+        }
+
+        $preOrder ??= $reservation->preOrder()->create(['status' => 'draft']);
+        $existing = $preOrder->items()->where('reservation_guest_id', $guest->id)
+            ->orderBy('id')->lockForUpdate()->get()->keyBy('menu_item_id');
+        $changed = $existing->count() !== count($selections);
+        $preOrder->items()->where('reservation_guest_id', $guest->id)->whereNotIn('menu_item_id', $ids)->delete();
+        $savedItems = [];
+
+        // Stable ordering also makes a reordered retry return the same representation.
+        foreach ($dishes as $dish) {
+            $quantity = $quantities[$dish->id];
+            $item = $existing->get($dish->id);
+
+            if ($item === null) {
+                $changed = true;
+                $item = $preOrder->items()->create([
+                    'reservation_guest_id' => $guest->id,
+                    'menu_item_id' => $dish->id,
+                    'quantity' => $quantity,
+                    'unit_price' => $dish->price,
+                ]);
+            } elseif ($item->quantity !== $quantity) {
+                $changed = true;
+                $item->fill(['quantity' => $quantity])->save();
+            }
+
+            $savedItems[] = $item->setRelation('menuItem', $dish);
+        }
+
+        if ($changed) {
+            $guest->increment('selection_version');
+        }
+
+        return $this->summary($savedItems);
     }
 
     /**

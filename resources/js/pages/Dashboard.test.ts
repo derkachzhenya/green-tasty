@@ -191,10 +191,9 @@ describe('My reservations', () => {
         expect(text()).toContain('2026-10-24');
         expect(text()).toContain('12:00 – 14:00');
         expect(text()).toContain('Asia/Tbilisi');
-        expect(text()).toContain('3 guests');
-        expect(text()).toContain('Group pre-orderNot started');
-        expect(link('Book a table').props.href).toBe('/#locations');
-        expect(link('Account settings').props.href).toBe('/settings/profile');
+        expect(text()).toContain('3 Guests');
+        expect(text()).toContain('Pre-orders: 0/3');
+        expect(link('Upcoming').props.href).toBe('/dashboard?status=upcoming');
         expect(
             link(
                 'View reservation at Green Tasty Garden on 2026-10-24 at 12:00',
@@ -205,6 +204,73 @@ describe('My reservations', () => {
                 String(node.props.href).includes('github.com'),
             ),
         ).toBe(false);
+    });
+    it.each([
+        [
+            'upcoming',
+            'Reserved',
+            {
+                can_add_pre_order: true,
+                can_invite: true,
+                submitted_pre_orders: 1,
+            },
+            ['Add Pre-Order', 'Invite Guests', 'Pre-orders: 1/3'],
+        ],
+        [
+            'upcoming',
+            'Reserved',
+            { can_view_group: true, submitted_pre_orders: 3 },
+            ['Group Pre-Order', 'Pre-orders: 3/3'],
+        ],
+        [
+            'in_progress',
+            'In Progress',
+            { feedback_action: 'leave' },
+            ['Leave Feedback'],
+        ],
+        [
+            'completed',
+            'Completed',
+            { feedback_action: 'update' },
+            ['Update Feedback'],
+        ],
+        ['canceled', 'Cancelled', {}, []],
+    ] as const)(
+        'renders server-authorized %s card actions',
+        async (phase, label, extra, actions) => {
+            mounted.setProps({
+                reservations: result({
+                    data: [reservation({ phase, ...extra })],
+                }),
+            });
+            await flush();
+            expect(text()).toContain(label);
+            for (const action of actions) expect(text()).toContain(action);
+            if (phase !== 'upcoming') {
+                expect(text()).not.toContain('Invite Guests');
+                expect(text()).not.toContain('Add Pre-Order');
+                expect(text()).not.toContain('Group Pre-Order');
+            }
+        },
+    );
+    it('renders global counters independently of filtered page size and identifies the active filter', async () => {
+        mounted.setProps({
+            activeStatus: 'completed',
+            reservationCounts: {
+                all: 12,
+                upcoming: 6,
+                in_progress: 2,
+                completed: 3,
+                canceled: 1,
+            },
+        });
+        await flush();
+        const completed = links().find(
+            (node) => node.props.href === '/dashboard?status=completed',
+        )!;
+        expect(textContent(completed)).toContain('Completed3');
+        expect(completed.props['aria-current']).toBe('page');
+        expect(text()).toContain('All12');
     });
     it('shows an empty state with a real location browsing path', async () => {
         mounted.setProps({
@@ -291,8 +357,8 @@ describe('My reservations', () => {
             }),
         });
         await flush();
-        expect(text()).toContain('Reservation status: completed');
-        expect(text()).toContain('Group pre-ordersubmitted');
+        expect(text()).toContain('Completed');
+        expect(text()).toContain('Pre-orders: 0/3');
         expect(text()).not.toContain('Confirm submission');
         expect(text()).not.toContain('Invite guests');
         expect(
@@ -313,9 +379,9 @@ describe('My reservations', () => {
             }),
         });
         await flush();
-        expect(text()).toContain('23:30 – 01:30 (2026-10-25)');
-        expect(text()).toContain('1 guest');
-        expect(text()).not.toContain('1 guests');
+        expect(text()).toContain('23:30 – 01:30(2026-10-25)');
+        expect(text()).toContain('1 Guest');
+        expect(text()).not.toContain('1 Guests');
     });
     it('renders untrusted names as text, with unique headings for multiple cards', async () => {
         mounted.setProps({

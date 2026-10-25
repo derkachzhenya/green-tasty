@@ -64,6 +64,12 @@ class Reservation extends Model
         return $this->hasMany(ReservationGuest::class);
     }
 
+    /** @return HasOne<ReservationFeedback, $this> */
+    public function feedback(): HasOne
+    {
+        return $this->hasOne(ReservationFeedback::class);
+    }
+
     /** @return HasOne<PreOrder, $this> */
     public function preOrder(): HasOne
     {

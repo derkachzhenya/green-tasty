@@ -9,6 +9,7 @@ use App\Models\ReservationGuest;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use SensitiveParameter;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 /**
  * @phpstan-type IssuedInvitation array{guest_id: int, name: string, expires_at: string, invitation_url: string}
@@ -25,7 +26,9 @@ class GuestInvitationService
     public function create(Reservation $reservation, array $attributes, ?string $expiresAt = null): array
     {
         return DB::transaction(function () use ($reservation, $attributes, $expiresAt): array {
-            $guest = $reservation->guests()->create($attributes);
+            $locked = Reservation::query()->whereKey($reservation->id)->lockForUpdate()->firstOrFail();
+            $this->ensureOpen($locked);
+            $guest = $locked->guests()->create($attributes);
 
             return $this->issue($guest, $expiresAt);
         });
@@ -35,7 +38,9 @@ class GuestInvitationService
     public function regenerate(Reservation $reservation, ReservationGuest $guest, ?string $expiresAt = null): array
     {
         return DB::transaction(function () use ($reservation, $guest, $expiresAt): array {
-            $lockedGuest = $reservation->guests()->whereKey($guest->id)->lockForUpdate()->firstOrFail();
+            $locked = Reservation::query()->whereKey($reservation->id)->lockForUpdate()->firstOrFail();
+            $this->ensureOpen($locked);
+            $lockedGuest = $locked->guests()->whereKey($guest->id)->lockForUpdate()->firstOrFail();
 
             return $this->issue($lockedGuest, $expiresAt);
         });
@@ -116,6 +121,14 @@ class GuestInvitationService
         }
 
         return $guest;
+    }
+
+    private function ensureOpen(Reservation $reservation): void
+    {
+        $order = $reservation->preOrder()->lockForUpdate()->first();
+        if (! ReservationCardState::acceptsPreOrder($reservation) || ($order !== null && ($order->status !== 'draft' || $order->submitted_at !== null))) {
+            throw new ConflictHttpException('This reservation is no longer accepting invitations.');
+        }
     }
 
     /** @return IssuedInvitation */

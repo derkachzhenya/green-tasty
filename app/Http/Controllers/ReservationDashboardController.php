@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Reservation;
+use App\Services\ReservationCardState;
 use App\Services\ReservationDashboardService;
 use App\Services\RestaurantBookingService;
 use Illuminate\Support\Facades\Gate;
@@ -17,8 +18,9 @@ class ReservationDashboardController extends Controller
         Gate::authorize('viewSummary', $reservation);
 
         return Inertia::render('reservations/Show', [
-            'canSubmitPreOrder' => Gate::allows('submitPreOrder', $reservation),
-            'canManageInvitations' => Gate::allows('manageInvitations', $reservation),
+            'canEditOwnPreOrder' => ReservationCardState::acceptsPreOrder($reservation) && ($reservation->preOrder === null || $reservation->preOrder->status === 'draft'),
+            'canSubmitPreOrder' => Gate::allows('submitPreOrder', $reservation) && ReservationCardState::acceptsPreOrder($reservation),
+            'canManageInvitations' => Gate::allows('manageInvitations', $reservation) && ReservationCardState::acceptsPreOrder($reservation) && ($reservation->preOrder === null || $reservation->preOrder->status === 'draft'),
             'reservation' => fn () => $bookings->confirmation($reservation),
             'groupOrder' => Inertia::defer(fn () => $dashboard->groupOrder($reservation), rescue: true),
         ]);

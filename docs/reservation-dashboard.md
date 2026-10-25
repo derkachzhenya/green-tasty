@@ -1,5 +1,7 @@
 # Owner reservation dashboard and consolidated group pre-order
 
+Current reservations/card, owner cart, invitation, feedback, and guest preview updates are documented in [Reservations Figma states](reservations-figma-states.md). Earlier acceptance sections below describe their original implementation.
+
 Owners can finalize saved selections through the
 [Group Pre-Order Submission UI](group-preorder-submission-ui.md). The dashboard
 shows the submitted status/timestamp and retains the confirmed locked snapshot

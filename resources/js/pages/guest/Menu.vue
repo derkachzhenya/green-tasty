@@ -12,9 +12,12 @@ import { useGuestSelections } from '@/composables/useGuestSelections';
 import { bookingDate } from '@/lib/booking';
 import { sortedDishes, type MenuSort } from '@/lib/guestMenu';
 
-const props = withDefaults(defineProps<{ initiallyInvalid?: boolean }>(), {
-    initiallyInvalid: false,
-});
+const props = withDefaults(
+    defineProps<{ initiallyInvalid?: boolean; ownerReservationId?: number }>(),
+    {
+        initiallyInvalid: false,
+    },
+);
 const {
     menu,
     rows,
@@ -36,7 +39,7 @@ const {
     submit,
     identifying,
     submitting,
-} = useGuestSelections(props.initiallyInvalid);
+} = useGuestSelections(props.initiallyInvalid, props.ownerReservationId);
 const cartOpen = ref(false);
 const nameOpen = ref(false);
 const name = ref('');
@@ -52,7 +55,9 @@ const needsName = computed(() =>
         menu.value.order.editable,
     ),
 );
-const submitted = computed(() => Boolean(menu.value?.guest_state.submitted_at));
+const submitted = computed(() =>
+    Boolean(!props.ownerReservationId && menu.value?.guest_state.submitted_at),
+);
 const categories = computed(() => menu.value?.catalog ?? []);
 const activeCategory = computed(
     () =>
@@ -90,6 +95,12 @@ async function change(id: number, value: number): Promise<void> {
 async function confirm(): Promise<void> {
     if (await submit()) {
         cartOpen.value = false;
+        if (props.ownerReservationId) {
+            window.location.assign(
+                `/reservations/${props.ownerReservationId}#group-pre-order`,
+            );
+            return;
+        }
         await nextTick();
         confirmationHeading.value?.focus();
     }
@@ -123,7 +134,7 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                     <a
                         href="/"
                         aria-label="Green Tasty home"
-                        class="rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4"
+                        class="shrink-0 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4"
                         ><img
                             src="/images/green-tasty/logo.png"
                             alt="Green Tasty — Healthy Eating Restaurant"
@@ -131,9 +142,17 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                             height="40"
                             class="w-[114px]"
                     /></a>
+                    <a
+                        v-if="ownerReservationId"
+                        :href="`/reservations/${ownerReservationId}#group-pre-order`"
+                        aria-label="Back to group pre-order"
+                        class="ml-auto min-h-11 min-w-0 rounded px-2 py-2 text-xs text-primary underline focus-visible:outline-2 sm:text-sm"
+                        ><span class="hidden sm:inline">Back to </span>Group
+                        pre-order</a
+                    >
                     <button
                         v-if="menu && !submitted"
-                        class="relative grid size-11 place-items-center rounded-md focus-visible:outline-2 focus-visible:outline-ring"
+                        class="relative grid size-11 shrink-0 place-items-center rounded-md focus-visible:outline-2 focus-visible:outline-ring"
                         :disabled="needsName"
                         :aria-label="`Open cart, ${count} items`"
                         @click="cartOpen = true"
@@ -158,7 +177,13 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                     error
             /></SiteContainer>
             <SiteContainer v-else-if="!menu" class="guest-container py-16"
-                ><h1 class="mb-6 text-3xl font-medium">Your guest pre-order</h1>
+                ><h1 class="mb-6 text-3xl font-medium">
+                    {{
+                        ownerReservationId
+                            ? 'Your pre-order'
+                            : 'Your guest pre-order'
+                    }}
+                </h1>
                 <ContentState
                     v-if="loading || !error"
                     title="Loading your menu…"
@@ -235,6 +260,12 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                             This selection is confirmed and cannot be changed.
                             Contact the reservation owner if you need help.
                         </p>
+                        <Button
+                            variant="outline"
+                            class="mt-5 min-h-14 w-full"
+                            disabled
+                            >Create New Pre-Order</Button
+                        >
                     </section>
                 </SiteContainer>
             </template>

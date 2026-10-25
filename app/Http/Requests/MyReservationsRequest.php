@@ -15,6 +15,6 @@ class MyReservationsRequest extends FormRequest
     /** @return array<string, list<string>> */
     public function rules(): array
     {
-        return ['page' => ['sometimes', 'integer', 'min:1', 'max:2147483647']];
+        return ['page' => ['sometimes', 'integer', 'min:1', 'max:2147483647'], 'status' => ['sometimes', 'in:all,upcoming,in_progress,completed,canceled']];
     }
 }

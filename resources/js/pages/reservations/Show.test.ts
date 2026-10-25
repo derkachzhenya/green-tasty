@@ -193,7 +193,13 @@ describe('dashboard group submission integration', () => {
         expect(buttons('Submit Group Pre-Order')).toHaveLength(0);
         expect(navigation.reload).toHaveBeenCalledWith(
             expect.objectContaining({
-                only: ['groupOrder', 'reservation', 'canSubmitPreOrder'],
+                only: [
+                    'groupOrder',
+                    'reservation',
+                    'canSubmitPreOrder',
+                    'canManageInvitations',
+                    'canEditOwnPreOrder',
+                ],
             }),
         );
     });

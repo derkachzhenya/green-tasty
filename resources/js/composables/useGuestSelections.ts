@@ -14,7 +14,10 @@ import {
 } from '@/lib/guestSelectionApi';
 import type { GuestMenu, SelectionInput } from '@/types/guest-selection';
 
-export function useGuestSelections(initiallyInvalid: boolean) {
+export function useGuestSelections(
+    initiallyInvalid: boolean,
+    ownerReservationId?: number,
+) {
     const menu = shallowRef<GuestMenu | null>(null);
     const input = ref<SelectionInput[]>([]);
     const invalid = ref(initiallyInvalid);
@@ -314,7 +317,10 @@ export function useGuestSelections(initiallyInvalid: boolean) {
     onMounted(() => {
         // The bearer remains in memory/address bar, never in session, Inertia history or browser storage.
         path = window.location.pathname.replace(/\/$/, '');
-        if (!/^\/invitations\/[a-f0-9]{64}$/.test(path)) invalid.value = true;
+        if (ownerReservationId)
+            path = `/reservations/${ownerReservationId}/owner-pre-order`;
+        else if (!/^\/invitations\/[a-f0-9]{64}$/.test(path))
+            invalid.value = true;
         window.addEventListener('pagehide', pageHide);
         window.addEventListener('pageshow', pageShow);
         window.addEventListener('beforeunload', beforeUnload);

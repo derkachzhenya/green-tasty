@@ -11,7 +11,7 @@
         @vite(['resources/css/app.css', 'resources/js/guest.ts'])
     </head>
     <body class="font-sans antialiased">
-        <div id="guest-app" data-invalid="{{ $invalid ? 'true' : 'false' }}"></div>
+        <div id="guest-app" data-invalid="{{ $invalid ? 'true' : 'false' }}" @isset($ownerReservationId) data-owner-reservation-id="{{ $ownerReservationId }}" @endisset></div>
         <noscript>
             <p>{{ $invalid ? 'Invitation unavailable. Ask the reservation owner for a new link.' : 'Enable JavaScript to browse the menu and save your selections.' }}</p>
         </noscript>

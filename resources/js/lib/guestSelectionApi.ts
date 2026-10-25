@@ -44,14 +44,25 @@ async function request(
     body?: unknown,
     version?: number,
 ): Promise<unknown> {
+    const owner =
+        /^\/reservations\/[1-9]\d*\/owner-pre-order\/(menu|selections|submit)$/.test(
+            path,
+        );
+    const csrf = owner
+        ? document.cookie
+              .split('; ')
+              .find((cookie) => cookie.startsWith('XSRF-TOKEN='))
+              ?.slice(11)
+        : undefined;
     const response = await fetch(path, {
         method,
         headers: {
             Accept: 'application/json',
+            ...(csrf ? { 'X-XSRF-TOKEN': decodeURIComponent(csrf) } : {}),
             'Content-Type': 'application/json',
             ...(version === undefined ? {} : { 'If-Match': `"${version}"` }),
         },
-        credentials: 'omit',
+        credentials: owner ? 'same-origin' : 'omit',
         cache: 'no-store',
         redirect: 'error',
         referrerPolicy: 'no-referrer',
