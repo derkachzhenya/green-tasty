@@ -4,11 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\BookingAvailabilityRequest;
 use App\Http\Requests\StoreBookingRequest;
+use App\Http\Requests\UpdateBookingRequest;
 use App\Models\Reservation;
 use App\Models\Restaurant;
-use App\Services\BookingRules;
 use App\Services\RestaurantBookingService;
-use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
@@ -17,22 +16,6 @@ use Inertia\Response;
 
 class RestaurantBookingController extends Controller
 {
-    public function create(Restaurant $restaurant): Response
-    {
-        Gate::authorize('create', [Reservation::class, $restaurant]);
-        $today = CarbonImmutable::now(BookingRules::TIMEZONE);
-
-        return Inertia::render('bookings/Create', [
-            'restaurant' => $restaurant->only(['id', 'name', 'slug', 'address']),
-            'bookingRules' => [
-                'timezone' => BookingRules::TIMEZONE, 'duration_minutes' => BookingRules::DURATION_MINUTES,
-                'slot_minutes' => BookingRules::SLOT_MINUTES,
-                'min_date' => $today->format('Y-m-d'), 'max_date' => $today->addDays(BookingRules::ADVANCE_DAYS)->format('Y-m-d'),
-                'default_date' => $today->addDay()->format('Y-m-d'),
-            ],
-        ]);
-    }
-
     public function availability(BookingAvailabilityRequest $request, Restaurant $restaurant, RestaurantBookingService $bookings): JsonResponse
     {
         return response()->json(['tables' => $bookings->availableTables($restaurant, $request->bookingStart(), $request->integer('guest_count'))]);
@@ -49,7 +32,19 @@ class RestaurantBookingController extends Controller
     {
         Gate::authorize('view', $reservation);
         abort_unless(in_array($reservation->status, ['draft', 'confirmed', 'cancelled', 'completed'], true), 404);
+        $confirmation = $bookings->confirmation($reservation);
+        $preOrder = $reservation->preOrder;
 
-        return Inertia::render('bookings/Confirmation', ['reservation' => $bookings->confirmation($reservation)]);
+        return Inertia::render('bookings/Confirmation', ['reservation' => $confirmation,
+            'canEdit' => $reservation->status === 'confirmed' && $reservation->reserved_at->isFuture()
+                && $reservation->restaurant?->is_active === true && $reservation->table?->is_active === true
+                && ($preOrder === null || ($preOrder->status === 'draft' && $preOrder->submitted_at === null))]);
+    }
+
+    public function update(UpdateBookingRequest $request, Reservation $reservation, RestaurantBookingService $bookings): RedirectResponse
+    {
+        $bookings->update($reservation, $request->user(), $request->string('time')->toString(), $request->integer('guest_count'));
+
+        return to_route('reservations.confirmation', $reservation);
     }
 }

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BookingSearchController;
 use App\Http\Controllers\ConsolidatedPreOrderController;
 use App\Http\Controllers\GroupPreOrderSubmissionController;
 use App\Http\Controllers\GuestDishSelectionController;
@@ -16,11 +17,15 @@ use Illuminate\Support\Facades\Route;
 require __DIR__.'/auth.php';
 
 Route::get('/', [RestaurantController::class, 'index'])->name('home');
+Route::get('book', [BookingSearchController::class, 'create'])->middleware('cache.headers:private;no_store')->name('booking.create');
+Route::get('book/availability', [BookingSearchController::class, 'availability'])->middleware(['throttle:booking-search', 'cache.headers:private;no_store'])->name('booking.availability');
+Route::post('book/continue', [BookingSearchController::class, 'resume'])->middleware('throttle:booking-search')->name('booking.resume');
 Route::get('restaurants/{restaurant:slug}', [RestaurantController::class, 'show'])->name('restaurants.show');
 
 Route::middleware(['auth', 'verified', 'cache.headers:private;no_store'])->group(function () {
     Route::get('reservations/{reservation}', [ReservationDashboardController::class, 'show'])->name('reservations.show');
-    Route::get('restaurants/{restaurant:slug}/book', [RestaurantBookingController::class, 'create'])->name('restaurants.bookings.create');
+    Route::get('restaurants/{restaurant:slug}/book', [BookingSearchController::class, 'create'])->name('restaurants.bookings.create');
+    Route::patch('reservations/{reservation}/booking', [RestaurantBookingController::class, 'update'])->middleware('throttle:booking-create')->name('reservations.booking.update');
     Route::get('restaurants/{restaurant:slug}/availability', [RestaurantBookingController::class, 'availability'])->middleware('throttle:booking-availability')->name('restaurants.availability');
     Route::post('restaurants/{restaurant:slug}/book', [RestaurantBookingController::class, 'store'])->middleware('throttle:booking-create')->name('restaurants.bookings.store');
     Route::get('reservations/{reservation}/confirmation', [RestaurantBookingController::class, 'show'])->name('reservations.confirmation');

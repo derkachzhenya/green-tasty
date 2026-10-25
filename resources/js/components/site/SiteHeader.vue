@@ -1,18 +1,23 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
+import { CircleUserRound } from '@lucide/vue';
 import { computed } from 'vue';
 import { dashboard, home, login } from '@/routes';
+import { create } from '@/routes/booking';
+import { edit } from '@/routes/profile';
 import SiteContainer from './SiteContainer.vue';
 
 const page = usePage();
+const user = computed(() => page.props.auth?.user ?? null);
 const isHome = computed(() => page.component === 'restaurants/Index');
+const isBooking = computed(() => page.component.startsWith('bookings/'));
 </script>
 
 <template>
     <header class="border-b border-border bg-card">
         <SiteContainer class="site-header-container">
             <div
-                class="flex min-h-[67px] flex-wrap items-center justify-between gap-x-2 gap-y-2 py-3 md:grid md:grid-cols-3 md:gap-x-6 md:py-0"
+                class="flex min-h-[67px] flex-wrap items-center justify-between gap-x-2 gap-y-2 py-3 lg:grid lg:grid-cols-[112px_minmax(0,1fr)_112px] lg:gap-x-6 lg:py-0"
             >
                 <Link
                     :href="home()"
@@ -30,7 +35,7 @@ const isHome = computed(() => page.component === 'restaurants/Index');
 
                 <nav
                     aria-label="Main navigation"
-                    class="order-last flex w-full justify-center whitespace-nowrap md:order-none md:w-max md:justify-self-center"
+                    class="order-last flex w-full justify-center whitespace-nowrap lg:order-none lg:w-max lg:justify-self-center"
                 >
                     <Link
                         :href="home()"
@@ -40,26 +45,48 @@ const isHome = computed(() => page.component === 'restaurants/Index');
                                 ? 'border-primary text-primary'
                                 : 'border-transparent hover:text-primary'
                         "
-                        class="inline-flex min-h-11 items-center border-b-2 px-6 text-base font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring md:min-h-[67px] md:text-xl md:leading-8"
+                        class="inline-flex min-h-11 items-center border-b-2 px-2 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring sm:px-4 sm:text-base lg:min-h-[67px] lg:text-xl lg:leading-8"
                     >
                         Main page
                     </Link>
                     <Link
-                        :href="`${home().url}#locations`"
-                        class="inline-flex min-h-11 items-center rounded-sm px-6 text-base font-medium hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring md:text-xl md:leading-8"
+                        :href="create()"
+                        :aria-current="isBooking ? 'page' : undefined"
+                        :class="
+                            isBooking
+                                ? 'border-primary text-primary'
+                                : 'border-transparent'
+                        "
+                        class="inline-flex min-h-11 items-center border-b-2 px-2 text-xs font-medium hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring sm:px-4 sm:text-base lg:min-h-[67px] lg:text-xl lg:leading-8"
                     >
                         Book a Table
                     </Link>
+                    <Link
+                        v-if="user"
+                        :href="dashboard()"
+                        :aria-current="
+                            page.component === 'Dashboard' ? 'page' : undefined
+                        "
+                        :class="
+                            page.component === 'Dashboard'
+                                ? 'border-primary text-primary'
+                                : 'border-transparent'
+                        "
+                        class="inline-flex min-h-11 items-center border-b-2 px-2 text-xs font-medium hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-4 sm:px-4 sm:text-base lg:min-h-[67px] lg:text-xl"
+                        >Reservations</Link
+                    >
                 </nav>
 
                 <Link
-                    :href="page.props.auth.user ? dashboard() : login()"
-                    :aria-current="
-                        page.component === 'Dashboard' ? 'page' : undefined
-                    "
+                    :href="user ? edit() : login()"
+                    :aria-label="user ? 'Account settings' : undefined"
                     class="inline-flex min-h-11 items-center justify-center rounded-lg border border-primary px-6 text-sm font-semibold text-primary hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring md:justify-self-end lg:text-base"
                 >
-                    {{ page.props.auth.user ? 'My reservations' : 'Sign In' }}
+                    <CircleUserRound
+                        v-if="user"
+                        aria-hidden="true"
+                        class="size-6"
+                    /><span v-else>Sign In</span>
                 </Link>
             </div>
         </SiteContainer>

@@ -20,6 +20,7 @@ class RestaurantBookingService
     /** @return list<array{id: int, name: string, seats: int}> */
     public function availableTables(Restaurant $restaurant, CarbonImmutable $start, int $guests): array
     {
+        $this->rules->validateGuests($guests);
         $this->rules->validateStart($start);
 
         return array_values($restaurant->tables()
@@ -33,6 +34,8 @@ class RestaurantBookingService
 
     public function book(Restaurant $restaurant, User $owner, CarbonImmutable $start, int $guests, int $tableId): Reservation
     {
+        $this->rules->validateGuests($guests);
+
         return DB::transaction(function () use ($restaurant, $owner, $start, $guests, $tableId): Reservation {
             // Shared parent lock stabilizes active status while allowing bookings at different tables.
             $lockedRestaurant = Restaurant::query()->whereKey($restaurant->id)->sharedLock()->firstOrFail();
@@ -63,6 +66,40 @@ class RestaurantBookingService
             $reservation->guests()->create(['user_id' => $owner->id, 'name' => $owner->name]);
 
             return $reservation;
+        }, attempts: 3);
+    }
+
+    public function update(Reservation $reservation, User $owner, string $time, int $guests): Reservation
+    {
+        $this->rules->validateGuests($guests);
+
+        return DB::transaction(function () use ($reservation, $owner, $time, $guests): Reservation {
+            // Same restaurant -> table lock order as creation. The reservation parent also
+            // serializes editing with guest selections and group pre-order submission.
+            $restaurant = Restaurant::query()->whereKey($reservation->restaurant_id)->sharedLock()->firstOrFail();
+            $table = $restaurant->tables()->whereKey($reservation->restaurant_table_id)->lockForUpdate()->first();
+            $locked = Reservation::query()->whereKey($reservation->id)->lockForUpdate()->firstOrFail();
+            Gate::forUser($owner)->authorize('update', $locked);
+            $preOrder = $locked->preOrder()->lockForUpdate()->first();
+            if (! $restaurant->is_active || ! $table?->is_active || $locked->status !== 'confirmed'
+                || $locked->restaurant_id !== $restaurant->id || $locked->restaurant_table_id !== $table->id
+                || $locked->reserved_at->lessThanOrEqualTo(CarbonImmutable::now())
+                || ($preOrder !== null && ($preOrder->status !== 'draft' || $preOrder->submitted_at !== null))) {
+                throw ValidationException::withMessages(['time' => 'This reservation cannot be changed online.']);
+            }
+            if ($guests < max(1, $locked->guests()->count()) || $guests > $table->seats) {
+                throw ValidationException::withMessages(['guest_count' => 'Keep all registered participants within this table’s seating capacity.']);
+            }
+            $date = CarbonImmutable::instance($locked->reserved_at)->setTimezone(BookingRules::TIMEZONE)->format('Y-m-d');
+            $start = $this->rules->start($date, $time);
+            $conflict = $this->overlapping(Reservation::query()->where('restaurant_table_id', $table->id)->whereKeyNot($locked->id), $start)
+                ->select('id')->lockForUpdate()->first();
+            if ($conflict !== null) {
+                throw ValidationException::withMessages(['time' => 'This table was just booked. Choose another time.']);
+            }
+            $locked->update(['reserved_at' => $start, 'guest_count' => $guests]);
+
+            return $locked;
         }, attempts: 3);
     }
 

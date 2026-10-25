@@ -2,9 +2,12 @@
 
 namespace App\Http\Middleware;
 
+use Closure;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Middleware;
+use Inertia\Support\Header;
+use Symfony\Component\HttpFoundation\Response;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -16,6 +19,15 @@ class HandleInertiaRequests extends Middleware
      * @var string
      */
     protected $rootView = 'app';
+
+    public function handle(Request $request, Closure $next): Response
+    {
+        // Partial responses omit required page props and must never be prerendered.
+        Inertia::disableSsr(fn (): bool => ! config('inertia.ssr.enabled', true)
+            || $request->hasHeader(Header::PARTIAL_COMPONENT));
+
+        return parent::handle($request, $next);
+    }
 
     /**
      * Determines the current asset version.

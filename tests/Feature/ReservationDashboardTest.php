@@ -12,8 +12,13 @@ use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
+use Illuminate\Support\Facades\Http;
+use Inertia\Ssr\Gateway;
+use Inertia\Ssr\HttpGateway;
+use Inertia\Ssr\Response as SsrResponse;
 use Inertia\Testing\AssertableInertia as Assert;
 use Mockery\MockInterface;
+use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -53,6 +58,69 @@ class ReservationDashboardTest extends TestCase
                 ->where('reservation.table.name', 'Table 2')->where('reservation.guest_count', 3)
                 ->where('reservation.status', 'confirmed')->missing('reservation.owner_user_id')
                 ->missing('reservation.special_requests')->missing('groupOrder'));
+    }
+
+    public function test_full_html_ssr_receives_all_required_reservation_props(): void
+    {
+        $this->app->instance(Gateway::class, $this->partialMock(HttpGateway::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('dispatch')->once()->andReturnUsing(function (array $page): SsrResponse {
+                $this->assertSame('reservations/Show', $page['component']);
+                $this->assertArrayHasKey('reservation', $page['props']);
+                $this->assertSame($this->reservation->id, $page['props']['reservation']['id']);
+                $this->assertSame('dashboard', $page['props']['reservation']['restaurant']['slug']);
+                $this->assertSame($this->owner->id, $page['props']['auth']['user']['id']);
+                $this->assertIsBool($page['props']['canManageInvitations']);
+                $this->assertIsBool($page['props']['canSubmitPreOrder']);
+                $this->assertArrayNotHasKey('groupOrder', $page['props']);
+
+                return new SsrResponse('', '<main>SSR reservation contract verified</main>');
+            });
+        }));
+
+        $this->actingAs($this->owner)->get($this->url())->assertOk()
+            ->assertSee('SSR reservation contract verified');
+    }
+
+    #[DataProvider('htmlSsrHeaders')]
+    public function test_partial_html_responses_keep_their_props_without_invoking_ssr(array $headers): void
+    {
+        config(['inertia.ssr.enabled' => true, 'inertia.ssr.throw_on_error' => true]);
+        Http::fake();
+
+        $this->actingAs($this->owner)->get($this->url(), $headers)->assertOk()
+            ->assertDontSee('data-server-rendered="true"', false)
+            ->assertInertia(fn (Assert $page) => $page->component('reservations/Show')
+                ->has('groupOrder')->missing('reservation'));
+
+        Http::assertNothingSent();
+    }
+
+    public static function htmlSsrHeaders(): array
+    {
+        return [
+            'partial data without Inertia protocol' => [[
+                'X-Inertia-Partial-Component' => 'reservations/Show',
+                'X-Inertia-Partial-Data' => 'groupOrder',
+            ]],
+            'partial exclusion without Inertia protocol' => [[
+                'X-Inertia-Partial-Component' => 'reservations/Show',
+                'X-Inertia-Partial-Except' => 'reservation,auth,canManageInvitations,canSubmitPreOrder',
+            ]],
+        ];
+    }
+
+    public function test_unauthorized_html_requests_return_403_before_ssr(): void
+    {
+        $this->app->instance(Gateway::class, $this->partialMock(HttpGateway::class, fn (MockInterface $mock) => $mock->shouldNotReceive('dispatch')));
+        $this->actingAs(User::factory()->create())->get($this->url())->assertForbidden()
+            ->assertDontSee('GT-DASHBOARD');
+    }
+
+    public function test_nonexistent_html_reservations_return_404_before_ssr(): void
+    {
+        $this->app->instance(Gateway::class, $this->partialMock(HttpGateway::class, fn (MockInterface $mock) => $mock->shouldNotReceive('dispatch')));
+        $this->actingAs($this->owner)->get(route('reservations.show', 999999))->assertNotFound()
+            ->assertDontSee('GT-DASHBOARD');
     }
 
     public function test_owner_reads_aggregates_saved_prices_and_guest_totals_without_private_invitation_data(): void
