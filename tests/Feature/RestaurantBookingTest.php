@@ -295,7 +295,7 @@ class RestaurantBookingTest extends TestCase
         $dish = $category->items()->create(['name' => 'Bowl', 'price' => '12.50']);
         $invitation = app(GuestInvitationService::class)->create($reservation, ['name' => 'Alice']);
         $token = basename(parse_url($invitation['invitation_url'], PHP_URL_PATH));
-        app(GuestDishSelectionService::class)->replace($token, [['menu_item_id' => $dish->id, 'quantity' => 2]]);
+        app(GuestDishSelectionService::class)->replace($token, [['menu_item_id' => $dish->id, 'quantity' => 2]], 0);
         $this->assertSame('25.00', app(ConsolidatedPreOrderService::class)->summarize($reservation)['grand_total']);
         $summary = app(GroupPreOrderSubmissionService::class)->submit($reservation, $this->owner);
         $this->assertSame('submitted', $summary['status']);

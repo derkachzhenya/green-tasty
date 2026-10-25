@@ -1,5 +1,9 @@
 # Guest dish selection UI
 
+The [complete Figma guest pre-order flow](guest-preorder-figma-flow.md) supersedes
+the original save-only UI and documents individual confirmation, version checks
+and the current lifecycle. The original API/history below remains for reference.
+
 Open a newly issued invitation URL from the owner dashboard in an ordinary browser.
 No account is required. Guests browse the restaurant's active categories and
 available dishes, add dishes, adjust quantities (0–99), review their own pre-order,

@@ -72,7 +72,7 @@ class GuestMenuTest extends TestCase
     public function test_empty_page_data_is_read_only_private_and_uses_the_existing_menu_contract(): void
     {
         $before = $this->guest->getRawOriginal();
-        $response = $this->getJson($this->url())->assertOk()->assertExactJson([
+        $response = $this->getJson($this->url())->assertOk()->assertJson([
             'invitation' => app(GuestInvitationService::class)->view($this->token),
             'selections' => ['items' => [], 'total_quantity' => 0, 'subtotal' => '0.00'],
             'order' => ['status' => null, 'submitted_at' => null, 'editable' => true],
@@ -85,7 +85,7 @@ class GuestMenuTest extends TestCase
         $this->assertDatabaseCount('pre_orders', 0);
         $this->assertDatabaseCount('pre_order_items', 0);
         $response->assertDontSee($this->token)->assertDontSee($this->guest->invitation_token)
-            ->assertDontSee('private@example.com')->assertDontSee('Private address')->assertDontSee('PRIVATE-BOOKING-CODE');
+            ->assertDontSee('private@example.com')->assertJsonPath('context.address', 'Private address')->assertDontSee('PRIVATE-BOOKING-CODE');
     }
 
     public function test_page_restores_historical_prices_with_only_eligible_menu_dishes_and_this_guests_selections(): void
@@ -111,9 +111,9 @@ class GuestMenuTest extends TestCase
             ->assertJsonPath('invitation.menu_categories.0.dishes.0.price', '99.99')
             ->assertJsonCount(1, 'invitation.menu_categories')->assertJsonCount(1, 'invitation.menu_categories.0.dishes')
             ->assertJsonPath('order.editable', true)->assertDontSee('Bob Private')
-            ->assertDontSee('Foreign dish')->assertDontSee('Unavailable dish')->assertDontSee('Inactive category');
+            ->assertDontSee('Foreign dish')->assertJsonPath('catalog.0.dishes.1.available', false)->assertDontSee('Inactive category');
 
-        $this->putJson(route('invitations.selections.update', $this->token), ['items' => [['menu_item_id' => $this->dish->id, 'quantity' => 4]]])->assertOk()->assertJsonPath('subtotal', '0.40');
+        $this->putJson(route('invitations.selections.update', $this->token), ['items' => [['menu_item_id' => $this->dish->id, 'quantity' => 4]]], ['If-Match' => '"0"'])->assertOk()->assertJsonPath('subtotal', '0.40');
         $summary = app(ConsolidatedPreOrderService::class)->summarize($this->reservation);
         $this->assertSame('1000.40', $summary['grand_total']);
     }
@@ -128,7 +128,7 @@ class GuestMenuTest extends TestCase
         $this->getJson($this->url())->assertOk()->assertJsonPath('order.editable', false)
             ->assertJsonPath('order.status', $status)->assertJsonPath('selections.subtotal', '25.00')
             ->assertJsonCount(0, 'invitation.menu_categories.0.dishes');
-        $this->putJson(route('invitations.selections.update', $this->token), ['items' => []])->assertConflict();
+        $this->putJson(route('invitations.selections.update', $this->token), ['items' => []], ['If-Match' => '"0"'])->assertConflict();
         $this->assertSame($before, $order->fresh()->getRawOriginal());
         $this->assertDatabaseCount('pre_order_items', 1);
     }

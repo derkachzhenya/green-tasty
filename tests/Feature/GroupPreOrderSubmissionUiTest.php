@@ -81,8 +81,8 @@ class GroupPreOrderSubmissionUiTest extends TestCase
         $this->getJson(route('invitations.menu', $token))->assertOk()->assertJsonPath('order.editable', false)
             ->assertJsonPath('order.status', 'submitted')->assertJsonPath('order.submitted_at', $result['submitted_at'])
             ->assertJsonPath('selections.subtotal', '0.30')->assertJsonCount(1, 'selections.items')->assertDontSee('Bob');
-        $this->putJson(route('invitations.selections.update', $token), ['items' => [['menu_item_id' => $dish->id, 'quantity' => 9]]])->assertConflict();
-        $this->putJson(route('invitations.selections.update', $token), ['items' => []])->assertConflict();
+        $this->putJson(route('invitations.selections.update', $token), ['items' => [['menu_item_id' => $dish->id, 'quantity' => 9]]], ['If-Match' => '"0"'])->assertConflict();
+        $this->putJson(route('invitations.selections.update', $token), ['items' => []], ['If-Match' => '"0"'])->assertConflict();
         $this->assertGuest();
         $this->assertSame($before, $order->items()->orderBy('id')->get()->toArray());
     }

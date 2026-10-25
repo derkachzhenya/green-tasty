@@ -43,9 +43,9 @@ class GuestDishSelectionService
      * @param  list<Selection>  $selections  Validated, distinct menu IDs and positive quantities.
      * @return SelectionSummary|null Null when invitation access is no longer valid.
      */
-    public function replace(#[SensitiveParameter] string $token, array $selections): ?array
+    public function replace(#[SensitiveParameter] string $token, array $selections, int $expectedVersion): ?array
     {
-        return DB::transaction(function () use ($token, $selections): ?array {
+        return DB::transaction(function () use ($token, $selections, $expectedVersion): ?array {
             $initialGuest = $this->invitations->resolve($token);
 
             if ($initialGuest === null) {
@@ -62,12 +62,19 @@ class GuestDishSelectionService
 
             $preOrder = $reservation->preOrder()->lockForUpdate()->first();
 
-            if ($preOrder !== null && ($preOrder->status !== 'draft' || $preOrder->submitted_at !== null)) {
+            if ($guest->pre_order_submitted_at !== null || in_array($reservation->status, ['cancelled', 'completed'], true)
+                || ($preOrder !== null && ($preOrder->status !== 'draft' || $preOrder->submitted_at !== null))) {
                 throw new ConflictHttpException('The pre-order is no longer editable.');
             }
 
+            if ($guest->selection_version !== $expectedVersion) {
+                throw new ConflictHttpException('Your cart changed in another tab. Refresh before saving.');
+            }
+
             if ($selections === []) {
-                $preOrder?->items()->where('reservation_guest_id', $guest->id)->delete();
+                if ($preOrder?->items()->where('reservation_guest_id', $guest->id)->delete()) {
+                    $guest->increment('selection_version');
+                }
 
                 return $this->summary([]);
             }
@@ -94,6 +101,7 @@ class GuestDishSelectionService
             $preOrder ??= $reservation->preOrder()->create(['status' => 'draft']);
             $existing = $preOrder->items()->where('reservation_guest_id', $guest->id)
                 ->orderBy('id')->lockForUpdate()->get()->keyBy('menu_item_id');
+            $changed = $existing->count() !== count($selections);
             $preOrder->items()->where('reservation_guest_id', $guest->id)->whereNotIn('menu_item_id', $ids)->delete();
             $savedItems = [];
 
@@ -103,6 +111,7 @@ class GuestDishSelectionService
                 $item = $existing->get($dish->id);
 
                 if ($item === null) {
+                    $changed = true;
                     $item = $preOrder->items()->create([
                         'reservation_guest_id' => $guest->id,
                         'menu_item_id' => $dish->id,
@@ -110,10 +119,15 @@ class GuestDishSelectionService
                         'unit_price' => $dish->price,
                     ]);
                 } elseif ($item->quantity !== $quantity) {
+                    $changed = true;
                     $item->fill(['quantity' => $quantity])->save();
                 }
 
                 $savedItems[] = $item->setRelation('menuItem', $dish);
+            }
+
+            if ($changed) {
+                $guest->increment('selection_version');
             }
 
             return $this->summary($savedItems);

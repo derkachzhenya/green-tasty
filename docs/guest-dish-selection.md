@@ -1,5 +1,9 @@
 # Guest dish selection
 
+The [complete Figma guest pre-order flow](guest-preorder-figma-flow.md) supersedes
+the original save-only UI and documents individual confirmation, version checks
+and the current lifecycle. The original API/history below remains for reference.
+
 The [guest dish selection UI](guest-dish-selection-ui.md) now opens from invitation
 links in a browser. `GET /invitations/{token}/menu` combines the existing safe menu
 and selection DTOs with order editability for that UI; the selection APIs below
@@ -26,6 +30,11 @@ attempts per minute per IP, including invalid-token attempts.
     ]
 }
 ```
+
+Read `guest_state.version` from `GET /invitations/{token}/menu` and send a quoted
+`If-Match: "N"` header on every PUT. Missing/malformed versions return 422 and
+stale versions return 409 without modifying rows. The service also requires the
+version explicitly; unversioned legacy writes are no longer accepted.
 
 Only `items` is allowed at the root. Each item accepts only `menu_item_id` and
 `quantity`, both JSON integers. IDs must be distinct and positive; quantities must
@@ -71,8 +80,8 @@ pre-order creation across guests; the existing unique reservation index remains
 a backstop. Guest locking coordinates with invitation revocation/regeneration.
 Shared category and menu locks keep eligibility and prices stable until commit.
 Future final-submission code must coordinate with these reservation/pre-order
-locks and set status/submission fields in its transaction. Concurrent valid
-replacements are serialized; the last successful replacement wins.
+locks and set status/submission fields in its transaction. Concurrent replacements are serialized and then recheck the supplied guest
+version; stale writes fail instead of replacing newer selections.
 
 The consolidated summary service needs no changes: it reads the saved guest rows
 and their historical prices. No schema change is required. The bearer-link HTTPS

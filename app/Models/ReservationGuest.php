@@ -26,13 +26,16 @@ class ReservationGuest extends Model
         'responded_at',
     ];
 
-    /** @return array{responded_at: 'datetime', invitation_expires_at: 'immutable_datetime', invitation_revoked_at: 'immutable_datetime'} */
+    /** @return array{responded_at: 'datetime', invitation_expires_at: 'immutable_datetime', invitation_revoked_at: 'immutable_datetime', name_confirmed_at: 'immutable_datetime', pre_order_submitted_at: 'immutable_datetime', selection_version: 'integer'} */
     protected function casts(): array
     {
         return [
             'responded_at' => 'datetime',
             'invitation_expires_at' => 'immutable_datetime',
             'invitation_revoked_at' => 'immutable_datetime',
+            'name_confirmed_at' => 'immutable_datetime',
+            'pre_order_submitted_at' => 'immutable_datetime',
+            'selection_version' => 'integer',
         ];
     }
 

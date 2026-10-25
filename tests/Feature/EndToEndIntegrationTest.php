@@ -80,13 +80,13 @@ class EndToEndIntegrationTest extends TestCase
             ->assertJsonPath('invitation.guest.name', 'Alice')->assertDontSee('Bob')
             ->assertHeader('Cache-Control', 'no-store, private')->assertHeader('Referrer-Policy', 'no-referrer');
         $selection = fn (int $quantity): array => ['items' => [['menu_item_id' => $dish->id, 'quantity' => $quantity]]];
-        $this->putJson(route('invitations.selections.update', $alice), $selection(0))->assertUnprocessable();
-        $this->putJson(route('invitations.selections.update', $alice), $selection(1))->assertOk()->assertJsonPath('subtotal', '0.10');
+        $this->putJson(route('invitations.selections.update', $alice), $selection(0), ['If-Match' => '"0"'])->assertUnprocessable();
+        $this->putJson(route('invitations.selections.update', $alice), $selection(1), ['If-Match' => '"0"'])->assertOk()->assertJsonPath('subtotal', '0.10');
         $dish->update(['price' => '0.20']); // Simulate a legitimate menu price change between saves.
-        $this->putJson(route('invitations.selections.update', $alice), $selection(3))->assertOk()->assertJsonPath('subtotal', '0.30');
-        $this->putJson(route('invitations.selections.update', $bob), $selection(2))->assertOk()->assertJsonPath('subtotal', '0.40');
-        $this->putJson(route('invitations.selections.update', $bob), ['items' => []])->assertOk()->assertJsonPath('subtotal', '0.00');
-        $this->putJson(route('invitations.selections.update', $bob), $selection(2))->assertOk();
+        $this->putJson(route('invitations.selections.update', $alice), $selection(3), ['If-Match' => '"1"'])->assertOk()->assertJsonPath('subtotal', '0.30');
+        $this->putJson(route('invitations.selections.update', $bob), $selection(2), ['If-Match' => '"0"'])->assertOk()->assertJsonPath('subtotal', '0.40');
+        $this->putJson(route('invitations.selections.update', $bob), ['items' => []], ['If-Match' => '"1"'])->assertOk()->assertJsonPath('subtotal', '0.00');
+        $this->putJson(route('invitations.selections.update', $bob), $selection(2), ['If-Match' => '"2"'])->assertOk();
         $this->getJson(route('invitations.selections.show', $alice))->assertOk()->assertJsonCount(1, 'items')
             ->assertJsonPath('items.0.unit_price', '0.10')->assertJsonPath('items.0.quantity', 3)->assertJsonPath('subtotal', '0.30');
         $this->assertGuest();
@@ -106,8 +106,8 @@ class EndToEndIntegrationTest extends TestCase
         $this->post(route('logout'))->assertRedirect();
         $this->getJson(route('invitations.menu', $alice))->assertOk()->assertJsonPath('order.editable', false)
             ->assertJsonPath('order.status', 'submitted')->assertJsonPath('selections.subtotal', '0.30')->assertDontSee('Bob');
-        $this->putJson(route('invitations.selections.update', $alice), $selection(9))->assertConflict();
-        $this->putJson(route('invitations.selections.update', $bob), ['items' => []])->assertConflict();
+        $this->putJson(route('invitations.selections.update', $alice), $selection(9), ['If-Match' => '"2"'])->assertConflict();
+        $this->putJson(route('invitations.selections.update', $bob), ['items' => []], ['If-Match' => '"3"'])->assertConflict();
         $this->assertDatabaseCount('pre_orders', 1);
         $this->assertDatabaseCount('pre_order_items', 2);
     }
@@ -136,7 +136,7 @@ class EndToEndIntegrationTest extends TestCase
         $this->deleteJson(route('reservations.invitations.destroy', [$second, $invitations[0]['guest_id']]))->assertNotFound();
         $this->app['auth']->forgetGuards();
         $payload = ['items' => [['menu_item_id' => $dish->id, 'quantity' => 2]]];
-        $this->putJson(route('invitations.selections.update', $alice), $payload)->assertOk();
+        $this->putJson(route('invitations.selections.update', $alice), $payload, ['If-Match' => '"0"'])->assertOk();
         $this->getJson(route('invitations.selections.show', $bob).'?guest_id='.$invitations[0]['guest_id'])->assertOk()
             ->assertExactJson(['items' => [], 'total_quantity' => 0, 'subtotal' => '0.00']);
         $this->actingAs($owners[0]);
