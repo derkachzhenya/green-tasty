@@ -6,7 +6,7 @@ import { bookingDate } from '@/lib/booking';
 import { show } from '@/routes/reservations';
 import type { OwnedReservation } from '@/types/reservation';
 const props = defineProps<{ reservation: OwnedReservation }>();
-defineEmits<{ invite: []; feedback: [] }>();
+defineEmits<{ invite: []; feedback: []; group: [] }>();
 const phase = computed(
     () =>
         props.reservation.phase ??
@@ -151,12 +151,14 @@ const label = computed(
                     class="inline-flex min-h-11 items-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-2"
                     >Add Pre-Order</a
                 >
-                <Link
+                <button
                     v-if="reservation.can_view_group"
-                    :href="`${show(reservation.id).url}#group-pre-order`"
+                    type="button"
+                    @click="$emit('group')"
                     class="inline-flex min-h-11 items-center rounded-md border border-primary px-3 text-xs font-medium text-primary hover:bg-accent focus-visible:outline-2"
-                    >Group Pre-Order</Link
                 >
+                    Group Pre-Order
+                </button>
                 <button
                     v-if="reservation.feedback_action"
                     type="button"

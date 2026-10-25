@@ -8,6 +8,7 @@ use App\Http\Controllers\GuestInvitationController;
 use App\Http\Controllers\GuestMenuController;
 use App\Http\Controllers\GuestPreOrderController;
 use App\Http\Controllers\MyReservationsController;
+use App\Http\Controllers\OwnerGroupPreOrderController;
 use App\Http\Controllers\OwnerPreOrderController;
 use App\Http\Controllers\ReservationDashboardController;
 use App\Http\Controllers\ReservationFeedbackController;
@@ -26,6 +27,10 @@ Route::post('book/continue', [BookingSearchController::class, 'resume'])->middle
 Route::get('restaurants/{restaurant:slug}', [RestaurantController::class, 'show'])->name('restaurants.show');
 
 Route::middleware(['auth', 'verified', 'cache.headers:private;no_store'])->group(function () {
+    Route::get('reservations/{reservation}/pre-order/owner-view', [OwnerGroupPreOrderController::class, 'show'])->name('reservations.pre-order.owner-view');
+    Route::patch('reservations/{reservation}/pre-order/owner-view/items/{item}', [OwnerGroupPreOrderController::class, 'quantity'])->whereNumber('item')->middleware('throttle:guest-selections');
+    Route::delete('reservations/{reservation}/pre-order/owner-view/guests/{guest}', [OwnerGroupPreOrderController::class, 'removeGuest'])->whereNumber('guest')->middleware('throttle:invitation-management');
+    Route::post('reservations/{reservation}/pre-order/owner-view/submit', [OwnerGroupPreOrderController::class, 'submit'])->middleware('throttle:pre-order-submission');
     Route::get('reservations/{reservation}/feedback', [ReservationFeedbackController::class, 'show'])->name('reservations.feedback.show');
     Route::put('reservations/{reservation}/feedback', [ReservationFeedbackController::class, 'update'])->middleware('throttle:guest-selections')->name('reservations.feedback.update');
     Route::get('reservations/{reservation}/owner-pre-order', [OwnerPreOrderController::class, 'show'])->name('reservations.owner-pre-order');

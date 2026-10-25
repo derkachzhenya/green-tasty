@@ -41,6 +41,7 @@ const {
     submitting,
 } = useGuestSelections(props.initiallyInvalid, props.ownerReservationId);
 const cartOpen = ref(false);
+const ownerSubmitted = ref(false);
 const nameOpen = ref(false);
 const name = ref('');
 const nameError = ref('');
@@ -96,9 +97,7 @@ async function confirm(): Promise<void> {
     if (await submit()) {
         cartOpen.value = false;
         if (props.ownerReservationId) {
-            window.location.assign(
-                `/reservations/${props.ownerReservationId}#group-pre-order`,
-            );
+            ownerSubmitted.value = true;
             return;
         }
         await nextTick();
@@ -142,6 +141,21 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                             height="40"
                             class="w-[114px]"
                     /></a>
+                    <nav
+                        v-if="ownerReservationId"
+                        aria-label="Owner navigation"
+                        class="ml-auto hidden items-center gap-6 text-base font-medium lg:flex"
+                    >
+                        <a href="/" class="rounded focus-visible:outline-2"
+                            >Main page</a
+                        ><a href="/book" class="rounded focus-visible:outline-2"
+                            >Book a Table</a
+                        ><a
+                            href="/dashboard"
+                            class="rounded text-primary focus-visible:outline-2"
+                            >Reservations</a
+                        >
+                    </nav>
                     <a
                         v-if="ownerReservationId"
                         :href="`/reservations/${ownerReservationId}#group-pre-order`"
@@ -527,6 +541,23 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                     @refresh="load()"
                 />
             </template>
+            <BookingModal
+                v-if="ownerReservationId"
+                :open="ownerSubmitted"
+                title="Pre-Order Submitted"
+                description="Your own selection has been saved for this reservation."
+                @update:open="ownerSubmitted = $event"
+            >
+                <p class="my-5 text-sm leading-6">
+                    Your pre-order was saved successfully. Review the group
+                    order in Reservations and submit it to the restaurant.
+                </p>
+                <a
+                    href="/dashboard"
+                    class="inline-flex min-h-14 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground focus-visible:outline-2"
+                    >View Reservations</a
+                >
+            </BookingModal>
         </main>
     </div>
 </template>

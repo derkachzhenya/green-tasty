@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, usePage, router } from '@inertiajs/vue3';
 import { shallowRef, ref } from 'vue';
+import OwnerGroupPreOrderModal from '@/components/reservations/OwnerGroupPreOrderModal.vue';
 import ReservationInviteModal from '@/components/reservations/ReservationInviteModal.vue';
 import ReservationFeedbackModal from '@/components/reservations/ReservationFeedbackModal.vue';
 import BookingSupport from '@/components/bookings/BookingSupport.vue';
@@ -25,6 +26,7 @@ withDefaults(
     }>(),
     { activeStatus: 'all' },
 );
+const group = shallowRef<OwnedReservation | null>(null);
 const inviting = shallowRef<OwnedReservation | null>(null);
 const feedback = shallowRef<OwnedReservation | null>(null);
 const filtering = ref(false);
@@ -155,6 +157,7 @@ const page = usePage();
                                 :reservation="reservation"
                                 @invite="inviting = reservation"
                                 @feedback="feedback = reservation"
+                                @group="group = reservation"
                             />
                         </li>
                     </ul>
@@ -206,6 +209,12 @@ const page = usePage();
             </template>
         </DeferredSection>
     </SiteContainer>
+    <OwnerGroupPreOrderModal
+        v-if="group"
+        :reservation="group"
+        @close="group = null"
+        @changed="reload"
+    />
     <ReservationInviteModal
         v-if="inviting"
         :reservation="inviting"
