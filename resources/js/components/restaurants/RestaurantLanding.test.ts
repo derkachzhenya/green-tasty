@@ -442,7 +442,7 @@ describe('shared header', () => {
         expect(
             links().find((node) => textContent(node).trim() === 'Book a Table')
                 ?.props.href,
-        ).toBe('/#locations');
+        ).toBe('/book');
         expect(
             links().find((node) => textContent(node).trim() === 'Main page')
                 ?.props['aria-current'],
@@ -456,8 +456,8 @@ describe('shared header', () => {
         navigation.setUser(true);
         mounted = mountComponent(SiteHeader, {});
         expect(
-            links().find((node) => textContent(node) === 'My reservations')
-                ?.props.href,
+            links().find((node) => textContent(node) === 'Reservations')?.props
+                .href,
         ).toBe('/dashboard');
         expect(links().some((node) => node.props.href === '/login')).toBe(
             false,

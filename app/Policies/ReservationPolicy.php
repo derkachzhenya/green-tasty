@@ -23,6 +23,11 @@ class ReservationPolicy
         return $user->id === $reservation->owner_user_id;
     }
 
+    public function update(User $user, Reservation $reservation): bool
+    {
+        return $user->id === $reservation->owner_user_id;
+    }
+
     public function submitPreOrder(User $user, Reservation $reservation): bool
     {
         return $user->id === $reservation->owner_user_id;

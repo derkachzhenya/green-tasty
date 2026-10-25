@@ -10,6 +10,7 @@ import DeferredSection from '@/components/site/DeferredSection.vue';
 import SiteContainer from '@/components/site/SiteContainer.vue';
 import { Button } from '@/components/ui/button';
 import { show as restaurantShow } from '@/routes/restaurants';
+import { confirmation } from '@/routes/reservations';
 import type {
     DashboardOrder,
     ReservationDetails,
@@ -120,6 +121,11 @@ function refresh(): void {
         </div>
         <div class="space-y-10 pb-12 sm:space-y-[60px]">
             <ReservationOverview :reservation="reservation" />
+            <Link
+                :href="confirmation(reservation.id)"
+                class="inline-flex min-h-11 items-center rounded-sm text-sm text-primary underline focus-visible:outline-2 focus-visible:outline-offset-4"
+                >Confirmation and booking changes</Link
+            >
             <div
                 id="group-pre-order"
                 tabindex="-1"

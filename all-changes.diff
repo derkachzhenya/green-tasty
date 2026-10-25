@@ -1,0 +1,2049 @@
+diff --git a/app/Http/Controllers/RestaurantBookingController.php b/app/Http/Controllers/RestaurantBookingController.php
+index 829df9b..0d9eb80 100644
+--- a/app/Http/Controllers/RestaurantBookingController.php
++++ b/app/Http/Controllers/RestaurantBookingController.php
+@@ -4,11 +4,10 @@
+ 
+ use App\Http\Requests\BookingAvailabilityRequest;
+ use App\Http\Requests\StoreBookingRequest;
++use App\Http\Requests\UpdateBookingRequest;
+ use App\Models\Reservation;
+ use App\Models\Restaurant;
+-use App\Services\BookingRules;
+ use App\Services\RestaurantBookingService;
+-use Carbon\CarbonImmutable;
+ use Illuminate\Http\JsonResponse;
+ use Illuminate\Http\RedirectResponse;
+ use Illuminate\Support\Facades\Gate;
+@@ -17,22 +16,6 @@
+ 
+ class RestaurantBookingController extends Controller
+ {
+-    public function create(Restaurant $restaurant): Response
+-    {
+-        Gate::authorize('create', [Reservation::class, $restaurant]);
+-        $today = CarbonImmutable::now(BookingRules::TIMEZONE);
+-
+-        return Inertia::render('bookings/Create', [
+-            'restaurant' => $restaurant->only(['id', 'name', 'slug', 'address']),
+-            'bookingRules' => [
+-                'timezone' => BookingRules::TIMEZONE, 'duration_minutes' => BookingRules::DURATION_MINUTES,
+-                'slot_minutes' => BookingRules::SLOT_MINUTES,
+-                'min_date' => $today->format('Y-m-d'), 'max_date' => $today->addDays(BookingRules::ADVANCE_DAYS)->format('Y-m-d'),
+-                'default_date' => $today->addDay()->format('Y-m-d'),
+-            ],
+-        ]);
+-    }
+-
+     public function availability(BookingAvailabilityRequest $request, Restaurant $restaurant, RestaurantBookingService $bookings): JsonResponse
+     {
+         return response()->json(['tables' => $bookings->availableTables($restaurant, $request->bookingStart(), $request->integer('guest_count'))]);
+@@ -50,6 +33,14 @@ public function show(Reservation $reservation, RestaurantBookingService $booking
+         Gate::authorize('view', $reservation);
+         abort_unless(in_array($reservation->status, ['draft', 'confirmed', 'cancelled', 'completed'], true), 404);
+ 
+-        return Inertia::render('bookings/Confirmation', ['reservation' => $bookings->confirmation($reservation)]);
++        return Inertia::render('bookings/Confirmation', ['reservation' => $bookings->confirmation($reservation),
++            'canEdit' => $reservation->status === 'confirmed' && $reservation->reserved_at->isFuture() && $reservation->table !== null && $reservation->preOrder?->status !== 'submitted']);
++    }
++
++    public function update(UpdateBookingRequest $request, Reservation $reservation, RestaurantBookingService $bookings): RedirectResponse
++    {
++        $bookings->update($reservation, $request->user(), $request->string('time')->toString(), $request->integer('guest_count'));
++
++        return to_route('reservations.confirmation', $reservation);
+     }
+ }
+diff --git a/app/Policies/ReservationPolicy.php b/app/Policies/ReservationPolicy.php
+index af17793..1318438 100644
+--- a/app/Policies/ReservationPolicy.php
++++ b/app/Policies/ReservationPolicy.php
+@@ -23,6 +23,11 @@ public function view(User $user, Reservation $reservation): bool
+         return $user->id === $reservation->owner_user_id;
+     }
+ 
++    public function update(User $user, Reservation $reservation): bool
++    {
++        return $user->id === $reservation->owner_user_id;
++    }
++
+     public function submitPreOrder(User $user, Reservation $reservation): bool
+     {
+         return $user->id === $reservation->owner_user_id;
+diff --git a/app/Providers/AppServiceProvider.php b/app/Providers/AppServiceProvider.php
+index 140344c..6f830f1 100644
+--- a/app/Providers/AppServiceProvider.php
++++ b/app/Providers/AppServiceProvider.php
+@@ -29,6 +29,7 @@ public function boot(): void
+         $this->configureDefaults();
+ 
+         RateLimiter::for('booking-availability', fn (Request $request) => Limit::perMinute(60)->by('booking-read:'.$request->user()?->id));
++        RateLimiter::for('booking-search', fn (Request $request) => Limit::perMinute(30)->by('booking-search:'.$request->ip()));
+         RateLimiter::for('booking-create', fn (Request $request) => Limit::perMinute(10)->by('booking-write:'.$request->user()?->id));
+ 
+         RateLimiter::for('invitation-management', fn (Request $request) => Limit::perMinute(20)
+diff --git a/app/Services/RestaurantBookingService.php b/app/Services/RestaurantBookingService.php
+index d9ec751..38e6dca 100644
+--- a/app/Services/RestaurantBookingService.php
++++ b/app/Services/RestaurantBookingService.php
+@@ -66,6 +66,37 @@ public function book(Restaurant $restaurant, User $owner, CarbonImmutable $start
+         }, attempts: 3);
+     }
+ 
++    public function update(Reservation $reservation, User $owner, string $time, int $guests): Reservation
++    {
++        return DB::transaction(function () use ($reservation, $owner, $time, $guests): Reservation {
++            // Same restaurant -> table lock order as creation. The reservation parent also
++            // serializes editing with guest selections and group pre-order submission.
++            $restaurant = Restaurant::query()->whereKey($reservation->restaurant_id)->sharedLock()->firstOrFail();
++            $table = $restaurant->tables()->whereKey($reservation->restaurant_table_id)->lockForUpdate()->first();
++            $locked = Reservation::query()->whereKey($reservation->id)->lockForUpdate()->firstOrFail();
++            Gate::forUser($owner)->authorize('update', $locked);
++            $preOrder = $locked->preOrder()->lockForUpdate()->first();
++            if (! $restaurant->is_active || ! $table?->is_active || $locked->status !== 'confirmed'
++                || $locked->restaurant_id !== $restaurant->id || $locked->restaurant_table_id !== $table->id
++                || $locked->reserved_at->lessThanOrEqualTo(CarbonImmutable::now()) || $preOrder?->status === 'submitted') {
++                throw ValidationException::withMessages(['time' => 'This reservation cannot be changed online.']);
++            }
++            if ($guests < max(1, $locked->guests()->count()) || $guests > $table->seats) {
++                throw ValidationException::withMessages(['guest_count' => 'Keep all registered participants within this table’s seating capacity.']);
++            }
++            $date = CarbonImmutable::instance($locked->reserved_at)->setTimezone(BookingRules::TIMEZONE)->format('Y-m-d');
++            $start = $this->rules->start($date, $time);
++            $conflict = $this->overlapping(Reservation::query()->where('restaurant_table_id', $table->id)->whereKeyNot($locked->id), $start)
++                ->select('id')->lockForUpdate()->first();
++            if ($conflict !== null) {
++                throw ValidationException::withMessages(['time' => 'This table was just booked. Choose another time.']);
++            }
++            $locked->update(['reserved_at' => $start, 'guest_count' => $guests]);
++
++            return $locked;
++        }, attempts: 3);
++    }
++
+     /**
+      * @param  Builder<Reservation>  $query
+      * @return Builder<Reservation>
+diff --git a/resources/css/app.css b/resources/css/app.css
+index ce8b4cb..8e27075 100644
+--- a/resources/css/app.css
++++ b/resources/css/app.css
+@@ -395,3 +395,23 @@ @media (min-width: 640px) {
+         padding: 40px;
+     }
+ }
++
++.green-tasty .booking-input {
++    display: block;
++    width: 100%;
++    min-width: 0;
++    height: 44px;
++    padding-inline: 12px;
++    border: 1px solid #dadada;
++    border-radius: 8px;
++    background: #fff;
++    color: #232323;
++    font-size: 14px;
++}
++.green-tasty .booking-input:focus-visible {
++    outline: 2px solid #0b5b29;
++    outline-offset: 2px;
++}
++.green-tasty .booking-input[aria-invalid='true'] {
++    border-color: #a82319;
++}
+diff --git a/resources/js/components/restaurants/RestaurantLanding.test.ts b/resources/js/components/restaurants/RestaurantLanding.test.ts
+index b98f2d2..8e6b987 100644
+--- a/resources/js/components/restaurants/RestaurantLanding.test.ts
++++ b/resources/js/components/restaurants/RestaurantLanding.test.ts
+@@ -442,7 +442,7 @@ describe('shared header', () => {
+         expect(
+             links().find((node) => textContent(node).trim() === 'Book a Table')
+                 ?.props.href,
+-        ).toBe('/#locations');
++        ).toBe('/book');
+         expect(
+             links().find((node) => textContent(node).trim() === 'Main page')
+                 ?.props['aria-current'],
+@@ -456,8 +456,8 @@ describe('shared header', () => {
+         navigation.setUser(true);
+         mounted = mountComponent(SiteHeader, {});
+         expect(
+-            links().find((node) => textContent(node) === 'My reservations')
+-                ?.props.href,
++            links().find((node) => textContent(node) === 'Reservations')?.props
++                .href,
+         ).toBe('/dashboard');
+         expect(links().some((node) => node.props.href === '/login')).toBe(
+             false,
+diff --git a/resources/js/components/site/SiteHeader.vue b/resources/js/components/site/SiteHeader.vue
+index 4c0d127..488d35f 100644
+--- a/resources/js/components/site/SiteHeader.vue
++++ b/resources/js/components/site/SiteHeader.vue
+@@ -1,18 +1,22 @@
+ <script setup lang="ts">
+ import { Link, usePage } from '@inertiajs/vue3';
++import { CircleUserRound } from '@lucide/vue';
+ import { computed } from 'vue';
+ import { dashboard, home, login } from '@/routes';
++import { create } from '@/routes/booking';
++import { edit } from '@/routes/profile';
+ import SiteContainer from './SiteContainer.vue';
+ 
+ const page = usePage();
+ const isHome = computed(() => page.component === 'restaurants/Index');
++const isBooking = computed(() => page.component.startsWith('bookings/'));
+ </script>
+ 
+ <template>
+     <header class="border-b border-border bg-card">
+         <SiteContainer class="site-header-container">
+             <div
+-                class="flex min-h-[67px] flex-wrap items-center justify-between gap-x-2 gap-y-2 py-3 md:grid md:grid-cols-3 md:gap-x-6 md:py-0"
++                class="flex min-h-[67px] flex-wrap items-center justify-between gap-x-2 gap-y-2 py-3 lg:grid lg:grid-cols-[112px_minmax(0,1fr)_112px] lg:gap-x-6 lg:py-0"
+             >
+                 <Link
+                     :href="home()"
+@@ -30,7 +34,7 @@ const isHome = computed(() => page.component === 'restaurants/Index');
+ 
+                 <nav
+                     aria-label="Main navigation"
+-                    class="order-last flex w-full justify-center whitespace-nowrap md:order-none md:w-max md:justify-self-center"
++                    class="order-last flex w-full justify-center whitespace-nowrap lg:order-none lg:w-max lg:justify-self-center"
+                 >
+                     <Link
+                         :href="home()"
+@@ -40,26 +44,50 @@ const isHome = computed(() => page.component === 'restaurants/Index');
+                                 ? 'border-primary text-primary'
+                                 : 'border-transparent hover:text-primary'
+                         "
+-                        class="inline-flex min-h-11 items-center border-b-2 px-6 text-base font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring md:min-h-[67px] md:text-xl md:leading-8"
++                        class="inline-flex min-h-11 items-center border-b-2 px-2 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring sm:px-4 sm:text-base lg:min-h-[67px] lg:text-xl lg:leading-8"
+                     >
+                         Main page
+                     </Link>
+                     <Link
+-                        :href="`${home().url}#locations`"
+-                        class="inline-flex min-h-11 items-center rounded-sm px-6 text-base font-medium hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring md:text-xl md:leading-8"
++                        :href="create()"
++                        :aria-current="isBooking ? 'page' : undefined"
++                        :class="
++                            isBooking
++                                ? 'border-primary text-primary'
++                                : 'border-transparent'
++                        "
++                        class="inline-flex min-h-11 items-center border-b-2 px-2 text-xs font-medium hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring sm:px-4 sm:text-base lg:min-h-[67px] lg:text-xl lg:leading-8"
+                     >
+                         Book a Table
+                     </Link>
++                    <Link
++                        v-if="page.props.auth.user"
++                        :href="dashboard()"
++                        :aria-current="
++                            page.component === 'Dashboard' ? 'page' : undefined
++                        "
++                        :class="
++                            page.component === 'Dashboard'
++                                ? 'border-primary text-primary'
++                                : 'border-transparent'
++                        "
++                        class="inline-flex min-h-11 items-center border-b-2 px-2 text-xs font-medium hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-4 sm:px-4 sm:text-base lg:min-h-[67px] lg:text-xl"
++                        >Reservations</Link
++                    >
+                 </nav>
+ 
+                 <Link
+-                    :href="page.props.auth.user ? dashboard() : login()"
+-                    :aria-current="
+-                        page.component === 'Dashboard' ? 'page' : undefined
++                    :href="page.props.auth.user ? edit() : login()"
++                    :aria-label="
++                        page.props.auth.user ? 'Account settings' : undefined
+                     "
+                     class="inline-flex min-h-11 items-center justify-center rounded-lg border border-primary px-6 text-sm font-semibold text-primary hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring md:justify-self-end lg:text-base"
+                 >
+-                    {{ page.props.auth.user ? 'My reservations' : 'Sign In' }}
++                    <CircleUserRound
++                        v-if="page.props.auth.user"
++                        aria-hidden="true"
++                        class="size-6"
++                    /><span v-else>Sign In</span>
+                 </Link>
+             </div>
+         </SiteContainer>
+diff --git a/resources/js/pages/Dashboard.test.ts b/resources/js/pages/Dashboard.test.ts
+index 88f1ce0..86c9c05 100644
+--- a/resources/js/pages/Dashboard.test.ts
++++ b/resources/js/pages/Dashboard.test.ts
+@@ -211,8 +211,15 @@ describe('My reservations', () => {
+             reservations: result({ data: [], total: 0, from: null, to: null }),
+         });
+         await flush();
+-        expect(text()).toContain('No reservations yet');
+-        expect(link('Browse locations').props.href).toBe('/#locations');
++        expect(text()).toContain('No Reservations');
++        expect(link('Book a Table').props.href).toBe('/book');
++        expect(
++            findAll(mounted.root, (node) => node.tag === 'img').some((node) =>
++                decodeURIComponent(String(node.props.src)).includes(
++                    'Empty State - No reservations.png',
++                ),
++            ),
++        ).toBe(true);
+         expect(
+             links().filter((node) => textContent(node) === 'View reservation'),
+         ).toHaveLength(0);
+@@ -435,9 +442,9 @@ describe('site reservation navigation', () => {
+     it('links authenticated owners to My reservations and marks the current page', () => {
+         mounted.unmount();
+         mounted = mountComponent(SiteHeader, {});
+-        expect(link('My reservations').props.href).toBe('/dashboard');
+-        expect(link('My reservations').props['aria-current']).toBe('page');
+-        expect(link('Book a Table').props.href).toBe('/#locations');
++        expect(link('Reservations').props.href).toBe('/dashboard');
++        expect(link('Reservations').props['aria-current']).toBe('page');
++        expect(link('Book a Table').props.href).toBe('/book');
+     });
+     it('keeps the sign-in path for unauthenticated visitors', () => {
+         mounted.unmount();
+diff --git a/resources/js/pages/Dashboard.vue b/resources/js/pages/Dashboard.vue
+index a0de20c..191d7b7 100644
+--- a/resources/js/pages/Dashboard.vue
++++ b/resources/js/pages/Dashboard.vue
+@@ -1,11 +1,13 @@
+ <script setup lang="ts">
+ import { Head, Link, usePage } from '@inertiajs/vue3';
++import BookingSupport from '@/components/bookings/BookingSupport.vue';
+ import ReservationListCard from '@/components/reservations/ReservationListCard.vue';
+ import ReservationPagination from '@/components/reservations/ReservationPagination.vue';
+ import ContentState from '@/components/site/ContentState.vue';
+ import DeferredSection from '@/components/site/DeferredSection.vue';
+ import SiteContainer from '@/components/site/SiteContainer.vue';
+ import { dashboard, home } from '@/routes';
++import { create } from '@/routes/booking';
+ import { edit } from '@/routes/profile';
+ import type { MyReservationsPage } from '@/types/reservation';
+ 
+@@ -22,11 +24,12 @@ const page = usePage();
+             class="flex flex-wrap items-center justify-between gap-4 py-6"
+         >
+             <div class="min-w-0">
+-                <h1 class="text-3xl leading-10 font-medium">My reservations</h1>
+-                <p class="mt-2 text-sm wrap-anywhere">
++                <h1 class="sr-only">My reservations</h1>
++                <p class="text-[26px] leading-10 font-medium wrap-anywhere">
+                     Hello, {{ page.props.auth.user.name }}
+                 </p>
+             </div>
++            <BookingSupport greeting class="max-w-[440px]" />
+             <Link
+                 :href="edit()"
+                 class="inline-flex min-h-11 items-center rounded-sm text-sm font-medium text-primary underline focus-visible:outline-2 focus-visible:outline-offset-4"
+@@ -34,8 +37,14 @@ const page = usePage();
+             >
+         </SiteContainer>
+     </div>
+-    <SiteContainer class="space-y-8 py-8 sm:py-10">
+-        <div class="flex flex-wrap items-center justify-between gap-4">
++    <SiteContainer
++        class="space-y-8"
++        :class="reservations?.total === 0 ? 'pb-8' : 'py-8 sm:py-10'"
++    >
++        <div
++            v-if="!reservations || reservations.total > 0"
++            class="flex flex-wrap items-center justify-between gap-4"
++        >
+             <p class="max-w-xl text-sm leading-6 text-muted-foreground">
+                 View your bookings and open a reservation to manage guests and
+                 your group pre-order.
+@@ -83,16 +92,33 @@ const page = usePage();
+                         </li>
+                     </ul>
+                 </template>
+-                <ContentState
++                <section
+                     v-else-if="reservations.total === 0"
+-                    title="No reservations yet"
+-                    description="Looks like you haven’t made any reservations yet. Choose a location to book your table."
+-                    ><Link
+-                        :href="`${home().url}#locations`"
+-                        class="inline-flex min-h-11 items-center rounded-sm font-medium text-primary underline focus-visible:outline-2 focus-visible:outline-offset-4"
+-                        >Browse locations</Link
+-                    ></ContentState
++                    aria-labelledby="empty-reservations-heading"
++                    class="flex min-h-[620px] flex-col items-center pb-16 text-center"
+                 >
++                    <img
++                        src="/images/green-tasty/locations/Empty State - No reservations.png"
++                        alt="Friends enjoying a meal together at a restaurant"
++                        width="439"
++                        height="423"
++                        class="h-auto w-full max-w-[439px]"
++                    />
++                    <h2
++                        id="empty-reservations-heading"
++                        class="mt-12 text-[26px] leading-10 font-medium"
++                    >
++                        No Reservations
++                    </h2>
++                    <p class="mt-2 text-base leading-6 text-muted-foreground">
++                        Looks like you haven’t made any reservations yet.
++                    </p>
++                    <Link
++                        :href="create()"
++                        class="mt-5 inline-flex min-h-11 items-center rounded-sm font-medium underline underline-offset-8 focus-visible:outline-2 focus-visible:outline-offset-4"
++                        >Book a Table</Link
++                    >
++                </section>
+                 <ContentState
+                     v-else
+                     title="No reservations on this page"
+diff --git a/resources/js/pages/bookings/Confirmation.vue b/resources/js/pages/bookings/Confirmation.vue
+index 3b96496..ccfb2e5 100644
+--- a/resources/js/pages/bookings/Confirmation.vue
++++ b/resources/js/pages/bookings/Confirmation.vue
+@@ -1,96 +1,284 @@
+ <script setup lang="ts">
+-import { Head, Link } from '@inertiajs/vue3';
+-import { CircleCheck } from '@lucide/vue';
++import { Head, Link, useForm } from '@inertiajs/vue3';
++import { computed, ref, watch } from 'vue';
++import BookingModal from '@/components/bookings/BookingModal.vue';
++import EditBookingFields from '@/components/bookings/EditBookingFields.vue';
++import ReservationFacts from '@/components/bookings/ReservationFacts.vue';
++import InputError from '@/components/InputError.vue';
+ import SiteContainer from '@/components/site/SiteContainer.vue';
+ import { Button } from '@/components/ui/button';
+-import { show } from '@/routes/restaurants';
+-import { create } from '@/routes/restaurants/bookings';
++import { useGuestInvitations } from '@/composables/useGuestInvitations';
++import { dashboard } from '@/routes';
++import { create } from '@/routes/booking';
+ import { show as reservationShow } from '@/routes/reservations';
++import { update } from '@/routes/reservations/booking';
+ import type { BookingConfirmation } from '@/types/booking';
+ 
+-defineProps<{ reservation: BookingConfirmation }>();
++const props = defineProps<{
++    reservation: BookingConfirmation;
++    canEdit: boolean;
++}>();
++const open = ref(true);
++const editing = ref(false);
++const duration = computed(
++    () =>
++        (Date.parse(
++            `${props.reservation.end_date}T${props.reservation.end_time}:00Z`,
++        ) -
++            Date.parse(
++                `${props.reservation.date}T${props.reservation.time}:00Z`,
++            )) /
++        60000,
++);
++const form = useForm({
++    time: props.reservation.time,
++    guest_count: props.reservation.guest_count,
++    duration_minutes: duration.value,
++});
++const editError = ref('');
++const invitation = useGuestInvitations(
++    () => props.reservation.id,
++    () => {},
++);
++const {
++    name,
++    nameError,
++    error,
++    issued,
++    busy,
++    uncertain,
++    copying,
++    copyMessage,
++} = invitation;
++function generate(): void {
++    if (busy.value || uncertain.value || issued.value) return;
++    const guestName = name.value;
++    invitation.open('create');
++    name.value = guestName;
++    void invitation.submit();
++}
++function beginEdit(): void {
++    form.time = props.reservation.time;
++    form.guest_count = props.reservation.guest_count;
++    form.clearErrors();
++    editing.value = true;
++    open.value = true;
++    editError.value = '';
++}
++function save(): void {
++    if (form.processing || editError.value) return;
++    form.patch(update(props.reservation.id).url, {
++        preserveScroll: true,
++        onSuccess: () => {
++            editing.value = false;
++        },
++        onNetworkError: () => {
++            editError.value =
++                'The result could not be confirmed. Reload the saved reservation before making more changes.';
++            return false;
++        },
++        onHttpException: () => {
++            editError.value =
++                'Please reload the reservation before trying again.';
++            return false;
++        },
++    });
++}
++watch(
++    () => props.reservation.id,
++    () => {
++        invitation.clear();
++        editing.value = false;
++        open.value = true;
++    },
++);
+ </script>
+-
+ <template>
+     <Head title="Your reservation"
+         ><meta name="robots" content="noindex"
+     /></Head>
+-    <SiteContainer>
++    <SiteContainer class="py-12">
+         <section
+-            class="gt-card mx-auto my-10 max-w-2xl space-y-6 bg-card p-6 sm:my-16 sm:p-10"
+-            aria-labelledby="confirmation-heading"
++            class="mx-auto max-w-[600px] space-y-6 rounded-3xl bg-card p-6 sm:p-10"
+         >
+-            <CircleCheck
+-                v-if="reservation.status === 'confirmed'"
+-                class="size-12 text-primary"
+-                aria-hidden="true"
+-            />
+-            <h1
+-                id="confirmation-heading"
+-                class="text-3xl leading-10 font-medium"
+-            >
++            <h1 class="text-[32px] leading-10 font-medium">
+                 {{
+                     reservation.status === 'confirmed'
+                         ? 'Reservation Confirmed'
+                         : 'Reservation details'
+                 }}
+             </h1>
+-            <p class="text-sm">
+-                Reference:
+-                <span class="font-medium wrap-anywhere">{{
+-                    reservation.code
+-                }}</span>
++            <p class="text-sm wrap-anywhere">
++                Reference: {{ reservation.code }} · {{ reservation.status }}
+             </p>
+-            <dl
+-                class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-4 text-sm leading-6"
++            <ReservationFacts
++                :address="reservation.restaurant.address"
++                :table="reservation.table?.name ?? 'No longer assigned'"
++                :date="reservation.date"
++                :time="reservation.time"
++                :end-date="reservation.end_date"
++                :end-time="reservation.end_time"
++                :guests="reservation.guest_count"
++                :timezone="reservation.timezone"
++            />
++            <div class="flex flex-wrap gap-3">
++                <Button v-if="canEdit" variant="outline" @click="beginEdit"
++                    >Edit Reservation</Button
++                ><Button
++                    variant="outline"
++                    @click="
++                        editing = false;
++                        open = true;
++                    "
++                    >Show confirmation</Button
++                ><Link
++                    :href="dashboard()"
++                    class="inline-flex min-h-11 items-center underline"
++                    >My Reservations</Link
++                ><Link
++                    :href="create()"
++                    class="inline-flex min-h-11 items-center underline"
++                    >Book another table</Link
++                >
++            </div>
++        </section>
++    </SiteContainer>
++    <BookingModal
++        v-model:open="open"
++        :title="
++            editing
++                ? 'Edit Reservation'
++                : reservation.status === 'confirmed'
++                  ? 'Reservation Confirmed'
++                  : 'Reservation details'
++        "
++        description="Saved reservation details and individual guest invitations."
++        :busy="form.processing || busy"
++    >
++        <ReservationFacts
++            :address="reservation.restaurant.address"
++            :table="reservation.table?.name ?? 'No longer assigned'"
++            :date="reservation.date"
++            :time="reservation.time"
++            :end-date="reservation.end_date"
++            :end-time="reservation.end_time"
++            :guests="reservation.guest_count"
++            :timezone="reservation.timezone"
++        />
++        <template v-if="editing">
++            <p v-if="editError" role="alert" class="text-sm text-destructive">
++                {{ editError }}
++            </p>
++            <EditBookingFields
++                v-model:time="form.time"
++                v-model:guests="form.guest_count"
++                :capacity="reservation.table?.seats ?? 1"
++                :duration="duration"
++                :busy="form.processing"
++                :blocked="!!editError"
++                :errors="form.errors"
++                @save="save"
++            />
++        </template>
++        <template v-else>
++            <div
++                v-if="reservation.status === 'confirmed'"
++                class="space-y-2 border-t border-border pt-4"
+             >
+-                <dt>Status</dt>
+-                <dd class="font-medium capitalize">{{ reservation.status }}</dd>
+-                <dt>Restaurant</dt>
+-                <dd class="wrap-anywhere">{{ reservation.restaurant.name }}</dd>
+-                <dt>Location</dt>
+-                <dd class="wrap-anywhere">
+-                    {{ reservation.restaurant.address }}
+-                </dd>
+-                <dt>Table</dt>
+-                <dd class="wrap-anywhere">
+-                    {{ reservation.table?.name ?? 'No longer assigned' }}
+-                </dd>
+-                <dt>Date</dt>
+-                <dd>{{ reservation.date }}</dd>
+-                <dt>Time</dt>
+-                <dd>
+-                    {{ reservation.time }} – {{ reservation.end_time
+-                    }}<span v-if="reservation.end_date !== reservation.date">
+-                        ({{ reservation.end_date }})</span
++                <h2 class="text-sm font-medium">Invite Link</h2>
++                <template v-if="issued">
++                    <div
++                        class="flex min-w-0 items-center gap-2 rounded-lg border border-primary/20 bg-[#f0fff0] p-2"
+                     >
+-                </dd>
+-                <dt>Timezone</dt>
+-                <dd>{{ reservation.timezone }}</dd>
+-                <dt>Guests</dt>
+-                <dd>{{ reservation.guest_count }}</dd>
+-            </dl>
+-            <div class="flex flex-wrap gap-3">
+-                <Button as-child class="min-h-11"
++                        <input
++                            :value="issued.invitation_url"
++                            readonly
++                            aria-label="Guest invite link"
++                            class="min-w-0 flex-1 bg-transparent text-sm"
++                            @focus="
++                                ($event.target as HTMLInputElement).select()
++                            "
++                        /><button
++                            type="button"
++                            :disabled="copying"
++                            class="min-h-11 shrink-0 rounded-md px-2 text-sm text-primary focus-visible:outline-2"
++                            @click="invitation.copy"
++                        >
++                            Copy Link
++                        </button>
++                    </div>
++                    <p class="text-xs leading-5">
++                        This individual link is for {{ issued.name }}. Create
++                        separate invitations for other guests in your
++                        reservation.
++                    </p>
++                </template>
++                <form v-else class="space-y-2" @submit.prevent="generate">
++                    <label for="invitation-name" class="text-xs"
++                        >Guest name</label
++                    >
++                    <input
++                        id="invitation-name"
++                        v-model="name"
++                        maxlength="255"
++                        class="booking-input"
++                        :disabled="busy || uncertain"
++                        :aria-invalid="!!nameError"
++                        aria-describedby="invitation-name-error"
++                    />
++                    <InputError
++                        id="invitation-name-error"
++                        :message="nameError"
++                    />
++                    <Button
++                        type="submit"
++                        variant="outline"
++                        :disabled="busy || uncertain"
++                        class="min-h-11 w-full"
++                        >{{
++                            busy ? 'Creating invitation…' : 'Create Invite Link'
++                        }}</Button
++                    >
++                    <p class="text-xs leading-5 text-muted-foreground">
++                        Create one private link per guest for their pre-order.
++                        Links are shown once; manage or regenerate them from
++                        your reservation.
++                    </p>
++                </form>
++                <p v-if="error" role="alert" class="text-sm text-destructive">
++                    {{ error }}
++                </p>
++                <p
++                    v-if="copyMessage"
++                    role="status"
++                    class="rounded-lg bg-accent p-3 text-sm"
++                >
++                    {{
++                        copyMessage === 'Invitation link copied.'
++                            ? 'Link copied! Share it with your guest.'
++                            : copyMessage
++                    }}
++                </p>
++            </div>
++            <div class="mt-3 grid gap-3 sm:grid-cols-2">
++                <Button as-child variant="outline" class="min-h-14 bg-card"
+                     ><Link :href="reservationShow(reservation.id)"
+-                        >View reservation</Link
++                        >View Reservation</Link
+                     ></Button
+-                >
+-                <Button as-child variant="outline" class="min-h-11"
++                ><Button as-child class="min-h-14"
+                     ><Link
+-                        :href="`${show(reservation.restaurant.slug).url}#menu`"
+-                        >View menu</Link
+-                    ></Button
+-                >
+-                <Button
+-                    as-child
+-                    variant="outline"
+-                    class="min-h-11 bg-card dark:bg-card"
+-                    ><Link :href="create(reservation.restaurant.slug)"
+-                        >Book another table</Link
++                        :href="`${reservationShow(reservation.id).url}#group-pre-order`"
++                        >Make Pre-Order</Link
+                     ></Button
+                 >
+             </div>
+-        </section>
+-    </SiteContainer>
++            <Button
++                v-if="canEdit"
++                variant="outline"
++                class="min-h-11"
++                @click="beginEdit"
++                >Edit Reservation</Button
++            >
++        </template>
++    </BookingModal>
+ </template>
+diff --git a/resources/js/pages/bookings/Create.test.ts b/resources/js/pages/bookings/Create.test.ts
+index 08d4738..6793f13 100644
+--- a/resources/js/pages/bookings/Create.test.ts
++++ b/resources/js/pages/bookings/Create.test.ts
+@@ -15,31 +15,42 @@ import {
+     textContent,
+     type TestNode,
+ } from '@/test-support/renderComponent';
++import type { BookingSearchTable } from '@/types/booking';
+ import Create from './Create.vue';
+ 
+-const transport = vi.hoisted(() => ({ post: vi.fn() }));
++const transport = vi.hoisted(() => ({
++    post: vi.fn(),
++    resume: vi.fn(),
++    user: { id: 1, email_verified_at: '2026-10-01' } as {
++        id: number;
++        email_verified_at: string | null;
++    } | null,
++}));
+ type BookingForm = {
++    restaurant: string;
+     date: string;
+     time: string;
+     guest_count: number;
+     restaurant_table_id: number | null;
+     processing: boolean;
+     errors: Record<string, string>;
++    transformData?: (data: unknown) => unknown;
+ };
+ let form: BookingForm;
+ vi.mock('@inertiajs/vue3', async () => {
+     const { reactive } = await import('vue');
+     return {
+         Head: { render: () => null },
+-        Link: {
+-            setup:
+-                (
+-                    _props: unknown,
+-                    { slots }: { slots: { default: () => VNodeChild } },
+-                ) =>
+-                () =>
+-                    h('a', {}, [slots.default()]),
+-        },
++        usePage: () => ({
++            props: {
++                auth: {
++                    get user() {
++                        return transport.user;
++                    },
++                },
++            },
++        }),
++        router: { post: transport.resume },
+         useForm(data: BookingForm) {
+             const state = reactive({
+                 ...data,
+@@ -51,7 +62,13 @@ vi.mock('@inertiajs/vue3', async () => {
+                 setError(field: string, message: string) {
+                     state.errors[field] = message;
+                 },
++                transform(callback: (data: unknown) => unknown) {
++                    state.transformData = callback;
++                },
+                 post: transport.post,
++                transformData: undefined as
++                    | ((data: unknown) => unknown)
++                    | undefined,
+             });
+             form = state;
+             return state;
+@@ -69,10 +86,53 @@ vi.mock('@/components/ui/button', () => ({
+                 h('button', {}, [slots.default()]),
+     },
+ }));
+-
++vi.mock('@/components/bookings/BookingModal.vue', async () => {
++    const { defineComponent } = await import('vue');
++    return {
++        default: defineComponent({
++            props: ['open', 'title', 'description', 'busy'],
++            setup:
++                (props, { slots }) =>
++                () =>
++                    props.open
++                        ? h('section', { role: 'dialog' }, [
++                              h('h2', props.title),
++                              slots.default?.(),
++                          ])
++                        : null,
++        }),
++    };
++});
++const restaurant = {
++    id: 11,
++    slug: 'location-1',
++    name: 'Selected restaurant',
++    address: '48 Rustaveli Avenue',
++    phone: '+995 32 123 4567',
++};
++const tables: BookingSearchTable[] = [
++    {
++        id: 77,
++        name: 'Garden table',
++        seats: 4,
++        restaurant,
++        slots: [
++            { time: '12:00', available: true },
++            { time: '12:30', available: false },
++            { time: '14:00', available: true },
++        ],
++    },
++];
++const rules = {
++    timezone: 'Asia/Tbilisi',
++    duration_minutes: 120,
++    slot_minutes: 30,
++    min_date: '2026-10-23',
++    max_date: '2027-01-21',
++    default_date: '2026-10-24',
++};
+ let mounted: ReturnType<typeof mountComponent>;
+ let fetchMock: ReturnType<typeof vi.fn>;
+-const tables = [{ id: 7, name: 'Garden table', seats: 4 }];
+ function response(value: unknown = { tables }, status = 200) {
+     return new Response(JSON.stringify(value), {
+         status,
+@@ -82,46 +142,43 @@ function response(value: unknown = { tables }, status = 200) {
+ function button(label: string): TestNode {
+     const target = findAll(
+         mounted.root,
+-        (node) => node.tag === 'button' && textContent(node) === label,
++        (node) =>
++            node.tag === 'button' &&
++            (textContent(node).trim() === label ||
++                node.props['aria-label'] === label),
+     )[0];
+     if (!target) throw new Error(`Missing button: ${label}`);
+     return target;
+ }
+-function search() {
+-    return fire(
++const search = async () => {
++    await flush();
++    await fire(
+         findAll(mounted.root, (node) => node.tag === 'form')[0],
+         'onSubmit',
+     );
+-}
+-function text() {
+-    return textContent(mounted.root);
+-}
+-beforeEach(() => {
+-    // Vue's native v-model directive checks these constructors when input values change.
+-    // Focus and real DOM behavior are verified separately in the browser journey.
++    await flush();
++};
++const text = () => textContent(mounted.root);
++const slot = () => button('Garden table, 48 Rustaveli Avenue, 12:00');
++beforeEach(async () => {
+     vi.stubGlobal('Document', class {});
+     vi.stubGlobal('ShadowRoot', class {});
+-    fetchMock = vi.fn().mockResolvedValue(response());
++    fetchMock = vi.fn().mockImplementation(() => Promise.resolve(response()));
+     vi.stubGlobal('fetch', fetchMock);
++    transport.user = { id: 1, email_verified_at: '2026-10-01' };
+     transport.post.mockReset().mockImplementation(() => {
+         form.processing = true;
+     });
++    transport.resume.mockReset();
+     mounted = mountComponent(Create, {
+-        restaurant: {
+-            id: 1,
+-            slug: 'garden',
+-            name: 'Green Tasty',
+-            address: 'Test',
+-        },
+-        bookingRules: {
+-            timezone: 'Asia/Tbilisi',
+-            duration_minutes: 120,
+-            slot_minutes: 30,
+-            min_date: '2026-10-23',
+-            max_date: '2027-01-21',
+-            default_date: '2026-10-24',
+-        },
++        restaurant,
++        restaurants: [restaurant],
++        bookingRules: rules,
+     });
++    form.date = '2026-10-24';
++    form.time = '12:00';
++    form.guest_count = 2;
++    await flush();
+ });
+ afterEach(() => {
+     mounted.unmount();
+@@ -129,64 +186,98 @@ afterEach(() => {
+     vi.clearAllMocks();
+ });
+ 
+-describe('booking availability and recovery', () => {
++describe('database-backed booking search and review', () => {
++    it('uses the supplied default photo, actual addresses and real support phone without an initial booking', () => {
++        expect(
++            findAll(mounted.root, (node) => node.tag === 'img').some((node) =>
++                decodeURIComponent(String(node.props.src)).endsWith(
++                    'Restaurant Image.png',
++                ),
++            ),
++        ).toBe(true);
++        expect(text()).toContain('48 Rustaveli Avenue');
++        expect(text()).toContain('+995 32 123 4567');
++        expect(text()).not.toContain('+123 445');
++        expect(transport.post).not.toHaveBeenCalled();
++    });
+     it.each([
+         ['location-1', '48 Rustaveli Avenue'],
+         ['location-2', '14 Baratashvili Street'],
+         ['location-3', '9 Abashidze Street'],
+     ])(
+-        'retains the selected restaurant for %s through availability and submission',
++        'keeps actual restaurant %s for search, review and POST',
+         async (slug, address) => {
+-            mounted.setProps({
+-                restaurant: {
+-                    id: 90,
+-                    slug,
+-                    name: 'Selected restaurant',
+-                    address,
+-                },
+-            });
++            const chosen = { ...restaurant, slug, address, id: 90 };
++            mounted.setProps({ restaurant: chosen, restaurants: [chosen] });
+             await flush();
+-            expect(text()).toContain(`Selected restaurant · ${address}`);
+-            await search();
+-            expect(fetchMock.mock.calls[0][0]).toContain(
+-                `/restaurants/${slug}/availability?`,
++            fetchMock.mockResolvedValueOnce(
++                response({ tables: [{ ...tables[0], restaurant: chosen }] }),
+             );
+-            form.restaurant_table_id = 7;
+-            await flush();
+-            await fire(button('Confirm reservation'), 'onClick');
++            await search();
++            expect(fetchMock.mock.calls[0][0]).toContain(`restaurant=${slug}`);
++            const available = button(`Garden table, ${address}, 12:00`);
++            await fire(available, 'onClick');
++            expect(text()).toContain('Review & Confirm Reservation');
++            expect(text()).toContain(address);
++            expect(transport.post).not.toHaveBeenCalled();
++            await fire(button('Confirm'), 'onClick');
+             expect(transport.post.mock.calls[0][0]).toBe(
+                 `/restaurants/${slug}/book`,
+             );
+-            expect(form.restaurant_table_id).toBe(7);
++            expect(form.transformData?.(form)).toEqual({
++                date: '2026-10-24',
++                time: '12:00',
++                guest_count: 2,
++                restaurant_table_id: 77,
++            });
+         },
+     );
+-    it('checks availability without claiming a persisted booking and requires a table choice', async () => {
+-        expect(text()).toContain('Find your table');
++    it('shows disabled conflicts, local start/end times and creates nothing before confirm', async () => {
+         await search();
+-        expect(text()).toContain('Garden table');
+-        expect(button('Confirm reservation').props.disabled).toBe(true);
++        expect(
++            button('Garden table, 48 Rustaveli Avenue, 12:30, unavailable')
++                .props.disabled,
++        ).toBe(true);
++        await fire(slot(), 'onClick');
++        expect(text()).toContain('12:00 – 14:00');
++        expect(text()).toContain('Asia/Tbilisi');
++        expect(text()).not.toContain('Reservation Confirmed');
+         expect(transport.post).not.toHaveBeenCalled();
+-        const [url, options] = fetchMock.mock.calls[0];
+-        expect(url).toContain('/restaurants/garden/availability?');
+-        expect(url).not.toContain('restaurant_table_id');
+-        expect(options.credentials).toBe('same-origin');
+     });
+-    it('retains input and recovers after a network failure, including an empty availability result', async () => {
++    it('aggregates All Locations and removes the time filter via the empty-state action', async () => {
++        form.restaurant = '';
++        fetchMock.mockResolvedValueOnce(response({ tables: [] }));
++        await search();
++        expect(text()).toContain('No Tables Available');
++        await fire(button('Show all slots on Oct 24, 2026'), 'onClick');
++        await flush();
++        expect(fetchMock.mock.calls[1][0]).toContain('time=all');
++        expect(form.time).toBe('all');
++        expect(text()).toContain('Garden table');
++    });
++    it('retains inputs and recovers after unavailable network and rate limits', async () => {
+         fetchMock
+             .mockRejectedValueOnce(new TypeError('Offline'))
+-            .mockResolvedValueOnce(response({ tables: [] }));
++            .mockResolvedValueOnce(response({}, 429));
+         await search();
+         expect(text()).toContain('We couldn’t connect');
+         expect(form.date).toBe('2026-10-24');
+         await search();
+-        expect(text()).toContain('No tables available');
++        expect(text()).toContain('Too many searches');
+         await search();
+         expect(text()).toContain('Garden table');
+-        expect(text()).not.toContain('We couldn’t connect');
+     });
+-    it('shows server validation on the associated field and clears it on correction', async () => {
++    it('shows field validation and clears stale results when inputs change', async () => {
+         fetchMock.mockResolvedValueOnce(
+-            response({ errors: { time: ['Choose a future slot.'] } }, 422),
++            response(
++                {
++                    errors: {
++                        time: ['Choose a future slot.'],
++                        restaurant: ['Choose a location.'],
++                    },
++                },
++                422,
++            ),
+         );
+         await search();
+         expect(text()).toContain('Choose a future slot.');
+@@ -194,14 +285,18 @@ describe('booking availability and recovery', () => {
+             findAll(mounted.root, (node) => node.props.id === 'booking-time')[0]
+                 .props['aria-invalid'],
+         ).toBe(true);
+-        form.time = '13:00';
++        form.time = '14:00';
+         await flush();
+         expect(text()).not.toContain('Choose a future slot.');
+         await search();
+-        expect(text()).toContain('Garden table');
++        await fire(slot(), 'onClick');
++        form.guest_count = 3;
++        await flush();
++        expect(text()).not.toContain('Garden table');
++        expect(text()).not.toContain('Review & Confirm Reservation');
+     });
+-    it('ignores a late availability response after the booking inputs change', async () => {
+-        let resolve!: (value: Response) => void;
++    it('aborts and ignores late results after a filter change', async () => {
++        let resolve!: (response: Response) => void;
+         fetchMock.mockImplementationOnce(
+             () =>
+                 new Promise<Response>((done) => {
+@@ -210,43 +305,100 @@ describe('booking availability and recovery', () => {
+         );
+         const pending = search();
+         await flush();
+-        expect(text()).toContain('Checking live availability');
+         const signal = fetchMock.mock.calls[0][1].signal as AbortSignal;
+         form.guest_count = 6;
+         await flush();
+         expect(signal.aborted).toBe(true);
+         resolve(response());
+         await pending;
++        await flush();
+         expect(text()).not.toContain('Garden table');
+-        expect(form.restaurant_table_id).toBeNull();
+     });
+-    it('prevents duplicate confirmation while Inertia persists the reservation', async () => {
++    it('blocks duplicate confirmation and reports uncertain responses without claiming success', async () => {
+         await search();
+-        form.restaurant_table_id = 7;
+-        await flush();
+-        const confirm = button('Confirm reservation');
++        await fire(slot(), 'onClick');
++        const confirm = button('Confirm');
+         await fire(confirm, 'onClick');
+         await fire(confirm, 'onClick');
+         expect(transport.post).toHaveBeenCalledTimes(1);
+-        expect(transport.post.mock.calls[0][0]).toBe(
+-            '/restaurants/garden/book',
+-        );
+-        expect(button('Confirming reservation…').props.disabled).toBe(true);
++        const callbacks = transport.post.mock.calls[0][1];
++        expect(callbacks.onNetworkError()).toBe(false);
++        form.processing = false;
++        await flush();
++        expect(text()).toContain('Check My Reservations');
++        expect(form.restaurant_table_id).toBeNull();
+         expect(text()).not.toContain('Reservation Confirmed');
+     });
+-    it('requires checking availability again after an unconfirmed network response', async () => {
++    it.each([null, { id: 1, email_verified_at: null }])(
++        'continues through existing auth for guest/unverified state %j',
++        async (user) => {
++            transport.user = user;
++            await search();
++            await fire(slot(), 'onClick');
++            await fire(button('Sign In to Confirm'), 'onClick');
++            expect(transport.resume).toHaveBeenCalledWith(
++                '/book/continue',
++                {
++                    restaurant: 'location-1',
++                    date: '2026-10-24',
++                    time: '12:00',
++                    guest_count: 2,
++                    table: 77,
++                },
++                expect.any(Object),
++            );
++            expect(transport.post).not.toHaveBeenCalled();
++        },
++    );
++    it('blocks duplicate guest handoffs and reports failures without making a booking', async () => {
++        transport.user = null;
+         await search();
+-        form.restaurant_table_id = 7;
++        await fire(slot(), 'onClick');
++        const confirm = button('Sign In to Confirm');
++        await fire(confirm, 'onClick');
++        await fire(confirm, 'onClick');
++        expect(transport.resume).toHaveBeenCalledTimes(1);
++        const callbacks = transport.resume.mock.calls[0][2];
++        callbacks.onError();
++        callbacks.onFinish();
+         await flush();
+-        await fire(button('Confirm reservation'), 'onClick');
+-        const callbacks = transport.post.mock.calls[0][1] as {
+-            onNetworkError: () => boolean;
+-        };
+-        expect(callbacks.onNetworkError()).toBe(false);
+-        form.processing = false;
++        expect(text()).toContain('selection is no longer valid');
++        expect(text()).not.toContain('Review & Confirm Reservation');
++        expect(transport.post).not.toHaveBeenCalled();
++    });
++    it('restores a selection only after a new server availability check', async () => {
++        mounted.unmount();
++        mounted = mountComponent(Create, {
++            restaurant: null,
++            restaurants: [restaurant],
++            bookingRules: rules,
++            initialSelection: {
++                restaurant: restaurant.slug,
++                date: '2026-10-24',
++                time: '12:00',
++                guest_count: '2',
++                table: '77',
++            },
++        });
+         await flush();
+-        expect(text()).toContain('We couldn’t confirm your booking');
+-        expect(text()).not.toContain('Garden table');
+-        expect(form.restaurant_table_id).toBeNull();
++        expect(fetchMock).toHaveBeenCalled();
++        expect(text()).toContain('Review & Confirm Reservation');
++        expect(transport.post).not.toHaveBeenCalled();
++    });
++    it('edits a draft without persistence, and rechecks the selected table', async () => {
++        await search();
++        await fire(slot(), 'onClick');
++        await fire(button('Edit'), 'onClick');
++        expect(text()).toContain('Edit Reservation');
++        expect(text()).toContain('fixed 2-hour duration');
++        const editForm = findAll(
++            mounted.root,
++            (node) => node.tag === 'form',
++        )[1];
++        await fire(editForm, 'onSubmit');
++        await flush();
++        expect(fetchMock).toHaveBeenCalledTimes(2);
++        expect(text()).toContain('Review & Confirm Reservation');
++        expect(transport.post).not.toHaveBeenCalled();
+     });
+ });
+diff --git a/resources/js/pages/bookings/Create.vue b/resources/js/pages/bookings/Create.vue
+index a4760a9..b043f4e 100644
+--- a/resources/js/pages/bookings/Create.vue
++++ b/resources/js/pages/bookings/Create.vue
+@@ -1,325 +1,436 @@
+ <script setup lang="ts">
+-import { Head, Link, useForm } from '@inertiajs/vue3';
+-import { onBeforeUnmount, ref, watch } from 'vue';
++import { Head, router, useForm, usePage } from '@inertiajs/vue3';
++import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
++import BookingEmptyState from '@/components/bookings/BookingEmptyState.vue';
++import BookingModal from '@/components/bookings/BookingModal.vue';
++import BookingSearchForm from '@/components/bookings/BookingSearchForm.vue';
++import BookingSupport from '@/components/bookings/BookingSupport.vue';
++import BookingTableCard from '@/components/bookings/BookingTableCard.vue';
++import EditBookingFields from '@/components/bookings/EditBookingFields.vue';
++import ReservationFacts from '@/components/bookings/ReservationFacts.vue';
+ import InputError from '@/components/InputError.vue';
+-import ContentState from '@/components/site/ContentState.vue';
+-import SiteContainer from '@/components/site/SiteContainer.vue';
+ import { Button } from '@/components/ui/button';
+-import { availability, show } from '@/routes/restaurants';
++import { bookingDate, bookingEnd } from '@/lib/booking';
++import { availability, resume } from '@/routes/booking';
+ import { store } from '@/routes/restaurants/bookings';
+ import type {
++    BookingFilters,
+     BookingRestaurant,
+     BookingRules,
+-    BookingTable,
++    BookingSearchTable,
+ } from '@/types/booking';
+ 
+ const props = defineProps<{
+-    restaurant: BookingRestaurant;
++    restaurant: BookingRestaurant | null;
++    restaurants: BookingRestaurant[];
+     bookingRules: BookingRules;
++    initialSelection?: Record<string, unknown>;
+ }>();
++const page = usePage();
++const hint = props.initialSelection ?? {};
++const safeString = (value: unknown) => (typeof value === 'string' ? value : '');
++const initialRestaurant = props.restaurant?.slug ?? safeString(hint.restaurant);
+ const form = useForm({
+-    date: props.bookingRules.default_date,
+-    time: '12:00',
+-    guest_count: 2,
++    restaurant: initialRestaurant,
++    date: safeString(hint.date),
++    time: safeString(hint.time),
++    guest_count: Number(hint.guest_count) || 1,
+     restaurant_table_id: null as number | null,
+ });
+-const tables = ref<BookingTable[] | null>(null);
++const location = computed({
++    get: () => form.restaurant,
++    set: (value) => {
++        form.restaurant = value;
++    },
++});
++const filters = computed<BookingFilters>(() => ({
++    restaurant: location.value,
++    date: form.date,
++    time: form.time,
++    guest_count: form.guest_count,
++}));
++const selectedRestaurant = computed(() =>
++    props.restaurants.find((r) => r.slug === location.value),
++);
++const tables = ref<BookingSearchTable[] | null>(null);
+ const loading = ref(false);
+-const availabilityError = ref('');
+-const submissionError = ref('');
++const error = ref('');
++const authBusy = ref(false);
++const selected = ref<{ table: BookingSearchTable; time: string } | null>(null);
++const modal = ref<'review' | 'edit' | null>(null);
++const editTime = ref('');
++const editGuests = ref(1);
++const end = computed(() =>
++    selected.value
++        ? bookingEnd(
++              form.date,
++              selected.value.time,
++              props.bookingRules.duration_minutes,
++          )
++        : null,
++);
+ let controller: AbortController | null = null;
+ let requestId = 0;
+ 
++function clearResults(): void {
++    controller?.abort();
++    requestId++;
++    tables.value = null;
++    selected.value = null;
++    modal.value = null;
++    form.restaurant_table_id = null;
++    loading.value = false;
++    error.value = '';
++    form.clearErrors();
++}
++watch(
++    () => [form.date, form.time, form.guest_count, location.value],
++    clearResults,
++);
+ watch(
+-    () => [form.date, form.time, form.guest_count],
+-    () => {
+-        controller?.abort();
+-        requestId++;
+-        tables.value = null;
+-        form.restaurant_table_id = null;
+-        loading.value = false;
+-        availabilityError.value = '';
+-        form.clearErrors();
++    () => props.restaurant?.slug,
++    (value) => {
++        location.value = value ?? '';
++        clearResults();
+     },
+ );
+ onBeforeUnmount(() => controller?.abort());
+-
++function change(value: Partial<BookingFilters>): void {
++    if (form.processing) return;
++    if (value.restaurant !== undefined) location.value = value.restaurant;
++    if (value.date !== undefined) form.date = value.date;
++    if (value.time !== undefined) form.time = value.time;
++    if (value.guest_count !== undefined) form.guest_count = value.guest_count;
++}
+ async function findTables(): Promise<void> {
++    if (form.processing || authBusy.value) return;
+     controller?.abort();
+     controller = new AbortController();
+     const current = ++requestId;
+     loading.value = true;
+     tables.value = null;
++    selected.value = null;
+     form.restaurant_table_id = null;
+-    availabilityError.value = '';
+-    submissionError.value = '';
++    modal.value = null;
++    error.value = '';
+     form.clearErrors();
+     try {
+         const response = await fetch(
+-            availability(props.restaurant.slug, {
+-                query: {
+-                    date: form.date,
+-                    time: form.time,
+-                    guest_count: form.guest_count,
+-                },
+-            }).url,
++            availability({ query: filters.value }).url,
+             {
+                 headers: { Accept: 'application/json' },
+                 credentials: 'same-origin',
++                cache: 'no-store',
++                redirect: 'error',
+                 signal: controller.signal,
+             },
+         );
+         const data = (await response.json()) as {
+-            tables?: BookingTable[];
++            tables?: BookingSearchTable[];
+             errors?: Record<string, string[]>;
+         };
+         if (current !== requestId) return;
+         if (response.status === 422 && data.errors) {
+-            for (const field of ['date', 'time', 'guest_count'] as const) {
++            for (const field of [
++                'restaurant',
++                'date',
++                'time',
++                'guest_count',
++            ] as const) {
+                 if (data.errors[field]?.[0])
+                     form.setError(field, data.errors[field][0]);
+             }
+-        } else if (!response.ok || !data.tables) {
+-            availabilityError.value =
+-                response.status === 401
+-                    ? 'Your session expired. Please sign in again.'
++        } else if (!response.ok || !Array.isArray(data.tables)) {
++            error.value =
++                response.status === 429
++                    ? 'Too many searches. Please wait a minute and try again.'
+                     : 'We couldn’t check availability. Please try again.';
+-        } else {
+-            tables.value = data.tables;
+-        }
++        } else tables.value = data.tables;
+     } catch {
+         if (current === requestId && !controller.signal.aborted)
+-            availabilityError.value = 'We couldn’t connect. Please try again.';
++            error.value = 'We couldn’t connect. Please try again.';
+     } finally {
+         if (current === requestId) loading.value = false;
+     }
+ }
+-
++function choose(table: BookingSearchTable, time: string): void {
++    if (
++        form.processing ||
++        !table.slots.some((slot) => slot.time === time && slot.available)
++    )
++        return;
++    selected.value = { table, time };
++    form.restaurant_table_id = table.id;
++    modal.value = 'review';
++}
++function edit(): void {
++    if (!selected.value) return;
++    editTime.value = selected.value.time;
++    editGuests.value = form.guest_count;
++    modal.value = 'edit';
++}
++async function saveDraft(): Promise<void> {
++    if (!selected.value || loading.value || form.processing) return;
++    const tableId = selected.value.table.id;
++    form.time = editTime.value;
++    form.guest_count = editGuests.value;
++    // Let the input watcher invalidate the old selection before the fresh request.
++    await new Promise<void>((resolve) => queueMicrotask(resolve));
++    await findTables();
++    const table = tables.value?.find((table) => table.id === tableId);
++    if (table) choose(table, form.time);
++}
+ function book(): void {
+-    if (!form.restaurant_table_id || form.processing) return;
+-    submissionError.value = '';
+-    form.post(store(props.restaurant.slug).url, {
++    if (!selected.value || form.processing || authBusy.value) return;
++    const { table, time } = selected.value;
++    if (!page.props.auth.user || !page.props.auth.user.email_verified_at) {
++        authBusy.value = true;
++        router.post(
++            resume().url,
++            {
++                restaurant: table.restaurant.slug,
++                date: form.date,
++                time,
++                guest_count: form.guest_count,
++                table: table.id,
++            },
++            {
++                onError: () => {
++                    clearResults();
++                    error.value =
++                        'Your selection is no longer valid. Please search for a table again.';
++                },
++                onNetworkError: () => {
++                    clearResults();
++                    error.value = 'We couldn’t open sign in. Please try again.';
++                    return false;
++                },
++                onHttpException: () => {
++                    clearResults();
++                    error.value =
++                        'Your session or selection has changed. Refresh and search again.';
++                    return false;
++                },
++                onFinish: () => {
++                    authBusy.value = false;
++                },
++            },
++        );
++        return;
++    }
++    // Only supported booking fields are sent; the restaurant is bound by its real slug.
++    form.transform((data) => ({
++        date: data.date,
++        time,
++        guest_count: data.guest_count,
++        restaurant_table_id: table.id,
++    }));
++    form.post(store(table.restaurant.slug).url, {
+         preserveScroll: true,
+         onError: () => {
+             tables.value = null;
++            selected.value = null;
++            modal.value = null;
+             form.restaurant_table_id = null;
+         },
+         onNetworkError: () => {
+-            submissionError.value =
+-                'We couldn’t confirm your booking. Check availability before trying again.';
+-            tables.value = null;
+-            form.restaurant_table_id = null;
++            clearResults();
++            error.value =
++                'We couldn’t confirm your booking. Check My Reservations before trying again.';
+             return false;
+         },
+         onHttpException: () => {
+-            submissionError.value =
+-                'We couldn’t confirm your booking. Please refresh the page and try again.';
++            clearResults();
++            error.value =
++                'We couldn’t confirm your booking. Please refresh and check My Reservations.';
+             return false;
+         },
+     });
+ }
++async function showAll(): Promise<void> {
++    if (loading.value || form.processing || authBusy.value) return;
++    form.time = 'all';
++    await new Promise<void>((resolve) => queueMicrotask(resolve));
++    await findTables();
++}
++onMounted(async () => {
++    // Only restore non-secret selection hints; availability is always fetched anew.
++    if (
++        safeString(hint.date) &&
++        safeString(hint.time) &&
++        Number(hint.table) > 0
++    ) {
++        await findTables();
++        const table = tables.value?.find(
++            (table) =>
++                table.id === Number(hint.table) &&
++                table.restaurant.slug === location.value,
++        );
++        if (table) choose(table, form.time);
++    }
++});
+ </script>
+ 
+ <template>
+-    <Head :title="`Book a table — ${restaurant.name}`" />
+-    <div class="bg-accent">
+-        <SiteContainer class="min-h-[calc(100dvh-68px)]">
+-            <Link
+-                :href="show(restaurant.slug)"
+-                class="my-5 inline-flex min-h-11 items-center rounded-sm text-sm text-primary underline focus-visible:outline-2 focus-visible:outline-offset-4"
+-                >Back to restaurant</Link
+-            >
+-            <h1 class="mb-4 text-3xl leading-10 font-medium">Book a Table</h1>
+-            <p class="mb-8 text-sm leading-6">
+-                {{ restaurant.name }} · {{ restaurant.address }}
+-            </p>
++    <Head title="Book a Table" />
++    <div
++        class="booking-page mx-auto grid min-h-[calc(100dvh-68px)] max-w-[1440px] bg-background lg:grid-cols-[512px_minmax(0,1fr)]"
++    >
++        <aside
++            class="min-w-0 space-y-6 bg-accent px-4 py-8 sm:px-8 lg:px-10 lg:py-12"
++        >
++            <BookingSearchForm
++                :filters="filters"
++                :restaurants="restaurants"
++                :rules="bookingRules"
++                :errors="form.errors"
++                :busy="loading || form.processing"
++                @change="change"
++                @search="findTables"
++            />
++            <BookingSupport :phone="selectedRestaurant?.phone" />
++        </aside>
++        <section
++            class="min-w-0"
++            aria-label="Table availability"
++            :aria-busy="loading"
++        >
++            <img
++                v-if="tables === null && !loading && !error"
++                src="/images/green-tasty/locations/Restaurant Image.png"
++                alt="A restaurant table set with flowers and a reserved sign"
++                width="928"
++                height="832"
++                class="h-auto w-full object-cover lg:h-[calc(100dvh-68px)] lg:min-h-[720px]"
++            />
+             <div
+-                class="grid items-start gap-8 pb-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]"
++                v-if="
++                    loading ||
++                    error ||
++                    tables !== null ||
++                    Object.keys(form.errors).length
++                "
++                class="space-y-6 p-4 sm:p-6"
+             >
+-                <form
+-                    class="gt-card min-w-0 space-y-6 bg-card p-6 sm:p-8"
+-                    @submit.prevent="findTables"
++                <p v-if="loading" role="status">Checking live availability…</p>
++                <p
++                    v-if="error"
++                    role="alert"
++                    class="rounded-lg border border-destructive/30 bg-card p-4 text-sm text-destructive"
+                 >
+-                    <p
+-                        id="booking-rules"
+-                        class="text-sm leading-6 text-muted-foreground"
+-                    >
+-                        {{ bookingRules.duration_minutes / 60 }}-hour bookings.
+-                        All times are in {{ bookingRules.timezone }}. Guest
+-                        count includes you.
+-                    </p>
+-                    <div class="space-y-2">
+-                        <label for="booking-date" class="text-sm font-medium"
+-                            >Date</label
++                    {{ error }}
++                </p>
++                <InputError
++                    :message="form.errors.restaurant_table_id"
++                    role="alert"
++                />
++                <template v-if="tables !== null">
++                    <div role="status" class="space-y-2 text-sm">
++                        <h2 class="font-medium">
++                            {{
++                                tables.length
++                                    ? `${tables.length} tables available`
++                                    : 'No tables Available'
++                            }}
++                        </h2>
++                        <p
++                            class="text-xs leading-5 wrap-anywhere text-muted-foreground"
+                         >
+-                        <input
+-                            id="booking-date"
+-                            v-model="form.date"
+-                            type="date"
+-                            required
+-                            :min="bookingRules.min_date"
+-                            :max="bookingRules.max_date"
+-                            :disabled="form.processing"
+-                            :aria-invalid="!!form.errors.date"
+-                            aria-describedby="date-error booking-rules"
+-                            class="min-h-11 w-full min-w-0 rounded-md border border-primary/40 bg-card px-3 focus-visible:outline-2 focus-visible:outline-ring"
+-                        />
+-                        <InputError
+-                            id="date-error"
+-                            :message="form.errors.date"
+-                        />
++                            {{ selectedRestaurant?.address ?? 'All Locations' }}
++                            · {{ bookingDate(form.date) }} ·
++                            {{ form.time === 'all' ? 'All times' : form.time }}
++                            · {{ form.guest_count }} guests
++                        </p>
+                     </div>
++                    <BookingEmptyState
++                        v-if="!tables.length"
++                        :date="bookingDate(form.date)"
++                        @show-all="showAll"
++                    />
+                     <div
+-                        class="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2"
++                        v-else
++                        class="grid items-start gap-6 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2"
+                     >
+-                        <div class="space-y-2">
+-                            <label
+-                                for="booking-time"
+-                                class="text-sm font-medium"
+-                                >Time</label
+-                            >
+-                            <input
+-                                id="booking-time"
+-                                v-model="form.time"
+-                                type="time"
+-                                required
+-                                :step="bookingRules.slot_minutes * 60"
+-                                :disabled="form.processing"
+-                                :aria-invalid="!!form.errors.time"
+-                                aria-describedby="time-error booking-rules"
+-                                class="min-h-11 w-full min-w-0 rounded-md border border-primary/40 bg-card px-3 focus-visible:outline-2 focus-visible:outline-ring"
+-                            />
+-                            <InputError
+-                                id="time-error"
+-                                :message="form.errors.time"
+-                            />
+-                        </div>
+-                        <div class="space-y-2">
+-                            <label for="guest-count" class="text-sm font-medium"
+-                                >Guests</label
+-                            >
+-                            <input
+-                                id="guest-count"
+-                                v-model.number="form.guest_count"
+-                                type="number"
+-                                min="1"
+-                                max="255"
+-                                required
+-                                :disabled="form.processing"
+-                                :aria-invalid="!!form.errors.guest_count"
+-                                aria-describedby="guests-error booking-rules"
+-                                class="min-h-11 w-full min-w-0 rounded-md border border-primary/40 bg-card px-3 focus-visible:outline-2 focus-visible:outline-ring"
+-                            />
+-                            <InputError
+-                                id="guests-error"
+-                                :message="form.errors.guest_count"
+-                            />
+-                        </div>
++                        <BookingTableCard
++                            v-for="table in tables"
++                            :key="table.id"
++                            :table="table"
++                            :busy="form.processing"
++                            @select="choose(table, $event)"
++                        />
+                     </div>
++                </template>
++            </div>
++        </section>
++    </div>
++    <BookingModal
++        :open="modal !== null"
++        :title="
++            modal === 'edit'
++                ? 'Edit Reservation'
++                : 'Review & Confirm Reservation'
++        "
++        description="Review your selected restaurant, table, date, time and guests before confirming."
++        :busy="form.processing || loading || authBusy"
++        @update:open="!$event && (modal = null)"
++    >
++        <template v-if="selected && end">
++            <ReservationFacts
++                :address="selected.table.restaurant.address"
++                :table="selected.table.name"
++                :date="form.date"
++                :time="selected.time"
++                :end-date="end.date"
++                :end-time="end.time"
++                :guests="form.guest_count"
++                :timezone="bookingRules.timezone"
++            />
++            <template v-if="modal === 'review'">
++                <p
++                    class="mb-4 rounded-lg border border-primary/15 bg-[#f0fff0] p-3 text-xs leading-5"
++                >
++                    Your table is reserved only after confirmation. Availability
++                    is checked again when you confirm.
++                </p>
++                <div class="flex gap-4">
+                     <Button
+-                        type="submit"
+-                        :disabled="loading || form.processing"
+-                        class="min-h-11 w-full"
++                        variant="outline"
++                        :disabled="form.processing || authBusy"
++                        class="h-14 bg-card"
++                        @click="edit"
++                        >Edit</Button
++                    ><Button
++                        class="h-14 flex-1"
++                        :disabled="form.processing || authBusy"
++                        @click="book"
+                         >{{
+-                            loading ? 'Checking availability…' : 'Find a Table'
++                            form.processing
++                                ? 'Confirming reservation…'
++                                : page.props.auth.user?.email_verified_at
++                                  ? 'Confirm'
++                                  : 'Sign In to Confirm'
+                         }}</Button
+                     >
+-                </form>
+-                <section
+-                    aria-labelledby="available-heading"
+-                    :aria-busy="loading"
+-                    class="min-w-0 space-y-6"
+-                >
+-                    <h2
+-                        id="available-heading"
+-                        class="text-2xl leading-8 font-medium"
+-                    >
+-                        Available tables
+-                    </h2>
+-                    <p v-if="loading" role="status">
+-                        Checking live availability…
+-                    </p>
+-                    <ContentState
+-                        v-else-if="availabilityError"
+-                        error
+-                        title="Availability unavailable"
+-                        :description="availabilityError"
+-                    />
+-                    <ContentState
+-                        v-else-if="tables === null"
+-                        title="Find your table"
+-                        description="Choose a date, time and guest count, then check availability."
+-                    />
+-                    <ContentState
+-                        v-else-if="!tables.length"
+-                        title="No tables available"
+-                        description="Try a different time, date or guest count."
+-                    />
+-                    <fieldset v-else class="space-y-4">
+-                        <legend class="sr-only">
+-                            Choose an available table
+-                        </legend>
+-                        <label
+-                            v-for="table in tables"
+-                            :key="table.id"
+-                            class="flex min-h-20 cursor-pointer items-center gap-4 rounded-2xl border border-primary/40 bg-card p-6 has-checked:border-primary has-checked:bg-accent"
+-                        >
+-                            <input
+-                                v-model="form.restaurant_table_id"
+-                                type="radio"
+-                                name="restaurant_table_id"
+-                                :value="table.id"
+-                                :disabled="form.processing"
+-                                :aria-invalid="
+-                                    !!form.errors.restaurant_table_id
+-                                "
+-                                aria-describedby="table-error"
+-                                class="size-5 shrink-0 accent-primary"
+-                            />
+-                            <span class="min-w-0 wrap-anywhere"
+-                                ><span class="block font-medium">{{
+-                                    table.name
+-                                }}</span
+-                                ><span class="text-sm"
+-                                    >Up to {{ table.seats }} guests</span
+-                                ></span
+-                            >
+-                        </label>
+-                    </fieldset>
+-                    <InputError
+-                        id="table-error"
+-                        :message="form.errors.restaurant_table_id"
+-                        role="alert"
+-                    />
+-                    <p
+-                        v-if="submissionError"
+-                        role="alert"
+-                        class="text-sm text-destructive"
+-                    >
+-                        {{ submissionError }}
+-                    </p>
+-                    <template v-if="tables?.length">
+-                        <p class="text-sm leading-6 text-muted-foreground">
+-                            Availability can change. Your table is reserved only
+-                            after confirmation.
+-                        </p>
+-                        <Button
+-                            type="button"
+-                            :disabled="
+-                                !form.restaurant_table_id || form.processing
+-                            "
+-                            aria-describedby="table-error"
+-                            class="min-h-11"
+-                            @click="book"
+-                            >{{
+-                                form.processing
+-                                    ? 'Confirming reservation…'
+-                                    : 'Confirm reservation'
+-                            }}</Button
+-                        >
+-                    </template>
+-                </section>
+-            </div>
+-        </SiteContainer>
+-    </div>
++                </div>
++            </template>
++            <EditBookingFields
++                v-else
++                v-model:time="editTime"
++                v-model:guests="editGuests"
++                :capacity="selected.table.seats"
++                :duration="bookingRules.duration_minutes"
++                :busy="loading"
++                :errors="form.errors"
++                @save="saveDraft"
++            />
++        </template>
++    </BookingModal>
+ </template>
++
++<style scoped>
++@media (min-width: 1024px) and (max-width: 1279px) {
++    .booking-page {
++        grid-template-columns: 40% minmax(0, 1fr);
++    }
++}
++</style>
+diff --git a/resources/js/pages/reservations/Show.vue b/resources/js/pages/reservations/Show.vue
+index 2353ec4..69c85d4 100644
+--- a/resources/js/pages/reservations/Show.vue
++++ b/resources/js/pages/reservations/Show.vue
+@@ -10,6 +10,7 @@ import DeferredSection from '@/components/site/DeferredSection.vue';
+ import SiteContainer from '@/components/site/SiteContainer.vue';
+ import { Button } from '@/components/ui/button';
+ import { show as restaurantShow } from '@/routes/restaurants';
++import { confirmation } from '@/routes/reservations';
+ import type {
+     DashboardOrder,
+     ReservationDetails,
+@@ -120,6 +121,11 @@ function refresh(): void {
+         </div>
+         <div class="space-y-10 pb-12 sm:space-y-[60px]">
+             <ReservationOverview :reservation="reservation" />
++            <Link
++                :href="confirmation(reservation.id)"
++                class="inline-flex min-h-11 items-center rounded-sm text-sm text-primary underline focus-visible:outline-2 focus-visible:outline-offset-4"
++                >Confirmation and booking changes</Link
++            >
+             <div
+                 id="group-pre-order"
+                 tabindex="-1"
+diff --git a/resources/js/types/booking.ts b/resources/js/types/booking.ts
+index e61b199..193d22e 100644
+--- a/resources/js/types/booking.ts
++++ b/resources/js/types/booking.ts
+@@ -3,8 +3,19 @@ export type BookingRestaurant = {
+     name: string;
+     slug: string;
+     address: string;
++    phone?: string | null;
+ };
+ export type BookingTable = { id: number; name: string; seats: number };
++export type BookingSearchTable = BookingTable & {
++    restaurant: BookingRestaurant;
++    slots: { time: string; available: boolean }[];
++};
++export type BookingFilters = {
++    restaurant: string;
++    date: string;
++    time: string;
++    guest_count: number;
++};
+ export type BookingRules = {
+     timezone: string;
+     duration_minutes: number;
+@@ -12,6 +23,7 @@ export type BookingRules = {
+     min_date: string;
+     max_date: string;
+     default_date: string;
++    max_guests?: number;
+ };
+ export type BookingConfirmation = {
+     id: number;
+diff --git a/routes/web.php b/routes/web.php
+index a2a0d64..505f528 100644
+--- a/routes/web.php
++++ b/routes/web.php
+@@ -1,5 +1,6 @@
+ <?php
+ 
++use App\Http\Controllers\BookingSearchController;
+ use App\Http\Controllers\ConsolidatedPreOrderController;
+ use App\Http\Controllers\GroupPreOrderSubmissionController;
+ use App\Http\Controllers\GuestDishSelectionController;
+@@ -16,11 +17,15 @@
+ require __DIR__.'/auth.php';
+ 
+ Route::get('/', [RestaurantController::class, 'index'])->name('home');
++Route::get('book', [BookingSearchController::class, 'create'])->middleware('cache.headers:private;no_store')->name('booking.create');
++Route::get('book/availability', [BookingSearchController::class, 'availability'])->middleware(['throttle:booking-search', 'cache.headers:private;no_store'])->name('booking.availability');
++Route::post('book/continue', [BookingSearchController::class, 'resume'])->middleware('throttle:booking-search')->name('booking.resume');
+ Route::get('restaurants/{restaurant:slug}', [RestaurantController::class, 'show'])->name('restaurants.show');
+ 
+ Route::middleware(['auth', 'verified', 'cache.headers:private;no_store'])->group(function () {
+     Route::get('reservations/{reservation}', [ReservationDashboardController::class, 'show'])->name('reservations.show');
+-    Route::get('restaurants/{restaurant:slug}/book', [RestaurantBookingController::class, 'create'])->name('restaurants.bookings.create');
++    Route::get('restaurants/{restaurant:slug}/book', [BookingSearchController::class, 'create'])->name('restaurants.bookings.create');
++    Route::patch('reservations/{reservation}/booking', [RestaurantBookingController::class, 'update'])->middleware('throttle:booking-create')->name('reservations.booking.update');
+     Route::get('restaurants/{restaurant:slug}/availability', [RestaurantBookingController::class, 'availability'])->middleware('throttle:booking-availability')->name('restaurants.availability');
+     Route::post('restaurants/{restaurant:slug}/book', [RestaurantBookingController::class, 'store'])->middleware('throttle:booking-create')->name('restaurants.bookings.store');
+     Route::get('reservations/{reservation}/confirmation', [RestaurantBookingController::class, 'show'])->name('reservations.confirmation');
+diff --git a/tests/Feature/RestaurantBookingConcurrencyTest.php b/tests/Feature/RestaurantBookingConcurrencyTest.php
+index 0ac7c78..ab992f8 100644
+--- a/tests/Feature/RestaurantBookingConcurrencyTest.php
++++ b/tests/Feature/RestaurantBookingConcurrencyTest.php
+@@ -103,6 +103,34 @@ public function test_a_rolled_back_booking_does_not_reserve_the_table(): void
+         $this->assertSame($this->competitor->id, Reservation::query()->sole()->owner_user_id);
+     }
+ 
++    public function test_edit_waits_for_the_same_table_lock_and_rechecks_a_committed_conflict(): void
++    {
++        $this->actingAs($this->competitor)->postJson($this->url(), array_replace($this->payload(), ['time' => '16:00']))->assertRedirect();
++        $reservation = Reservation::query()->sole();
++        $this->holdBookingRequest(); // A competing 12:00 booking is not committed yet.
++        $this->actingAs($this->competitor);
++        $this->withoutExceptionHandling();
++        $connection = DB::connection();
++        $timeout = $connection->selectOne('SELECT @@SESSION.innodb_lock_wait_timeout AS seconds')->seconds;
++        $connection->statement('SET SESSION innodb_lock_wait_timeout = 1');
++        $payload = ['time' => '12:00', 'guest_count' => 2, 'duration_minutes' => 120];
++        try {
++            try {
++                $this->patchJson(route('reservations.booking.update', $reservation), $payload);
++                $this->fail('Editing must wait for the booking table lock.');
++            } catch (QueryException $exception) {
++                $this->assertSame(1205, $exception->errorInfo[1]);
++            }
++        } finally {
++            $connection->statement('SET SESSION innodb_lock_wait_timeout = '.(int) $timeout);
++            $this->withExceptionHandling();
++        }
++        $this->heldConnection->commit();
++        $this->patchJson(route('reservations.booking.update', $reservation), $payload)->assertUnprocessable()->assertJsonValidationErrors('time');
++        $this->assertSame('12:00', $reservation->fresh()->reserved_at->format('H:i')); // 16:00 local, unchanged.
++        $this->assertDatabaseCount('reservations', 2);
++    }
++
+     public function test_locking_current_read_sees_a_booking_committed_after_a_repeatable_read_snapshot(): void
+     {
+         $this->holdBookingRequest();
+diff --git a/tests/Feature/RestaurantBookingTest.php b/tests/Feature/RestaurantBookingTest.php
+index 161417c..a8fefe5 100644
+--- a/tests/Feature/RestaurantBookingTest.php
++++ b/tests/Feature/RestaurantBookingTest.php
+@@ -44,9 +44,9 @@ public function test_booking_form_exposes_explicit_local_rules_and_minimal_resta
+         $this->actingAs($this->owner)->get(route('restaurants.bookings.create', $this->restaurant))
+             ->assertOk()->assertHeader('Cache-Control', 'no-store, private')
+             ->assertInertia(fn (Assert $page) => $page->component('bookings/Create')
+-                ->where('restaurant', $this->restaurant->only(['id', 'name', 'slug', 'address']))
++                ->where('restaurant', $this->restaurant->only(['id', 'name', 'slug', 'address', 'phone']))
+                 ->where('bookingRules', [
+-                    'timezone' => 'Asia/Tbilisi', 'duration_minutes' => 120, 'slot_minutes' => 30,
++                    'timezone' => 'Asia/Tbilisi', 'duration_minutes' => 120, 'slot_minutes' => 30, 'max_guests' => 255,
+                     'min_date' => '2026-10-23', 'max_date' => '2027-01-21', 'default_date' => '2026-10-24',
+                 ])->missing('reservations')->missing('guests'));
+     }

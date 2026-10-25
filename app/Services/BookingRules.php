@@ -15,6 +15,15 @@ class BookingRules
 
     public const ADVANCE_DAYS = 90;
 
+    public const MAX_GUESTS = 255;
+
+    public function validateGuests(int $guests): void
+    {
+        if ($guests < 1 || $guests > self::MAX_GUESTS) {
+            throw ValidationException::withMessages(['guest_count' => 'Choose a whole number of guests between 1 and '.self::MAX_GUESTS.'.']);
+        }
+    }
+
     public function start(string $date, string $time): CarbonImmutable
     {
         try {

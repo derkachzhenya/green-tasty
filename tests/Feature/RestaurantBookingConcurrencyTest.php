@@ -103,6 +103,34 @@ class RestaurantBookingConcurrencyTest extends TestCase
         $this->assertSame($this->competitor->id, Reservation::query()->sole()->owner_user_id);
     }
 
+    public function test_edit_waits_for_the_same_table_lock_and_rechecks_a_committed_conflict(): void
+    {
+        $this->actingAs($this->competitor)->postJson($this->url(), array_replace($this->payload(), ['time' => '16:00']))->assertRedirect();
+        $reservation = Reservation::query()->sole();
+        $this->holdBookingRequest(); // A competing 12:00 booking is not committed yet.
+        $this->actingAs($this->competitor);
+        $this->withoutExceptionHandling();
+        $connection = DB::connection();
+        $timeout = $connection->selectOne('SELECT @@SESSION.innodb_lock_wait_timeout AS seconds')->seconds;
+        $connection->statement('SET SESSION innodb_lock_wait_timeout = 1');
+        $payload = ['time' => '12:00', 'guest_count' => 2, 'duration_minutes' => 120];
+        try {
+            try {
+                $this->patchJson(route('reservations.booking.update', $reservation), $payload);
+                $this->fail('Editing must wait for the booking table lock.');
+            } catch (QueryException $exception) {
+                $this->assertSame(1205, $exception->errorInfo[1]);
+            }
+        } finally {
+            $connection->statement('SET SESSION innodb_lock_wait_timeout = '.(int) $timeout);
+            $this->withExceptionHandling();
+        }
+        $this->heldConnection->commit();
+        $this->patchJson(route('reservations.booking.update', $reservation), $payload)->assertUnprocessable()->assertJsonValidationErrors('time');
+        $this->assertSame('12:00', $reservation->fresh()->reserved_at->format('H:i')); // 16:00 local, unchanged.
+        $this->assertDatabaseCount('reservations', 2);
+    }
+
     public function test_locking_current_read_sees_a_booking_committed_after_a_repeatable_read_snapshot(): void
     {
         $this->holdBookingRequest();

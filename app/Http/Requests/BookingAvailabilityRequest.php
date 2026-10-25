@@ -27,7 +27,7 @@ class BookingAvailabilityRequest extends FormRequest
         return [
             'date' => ['required', 'date_format:Y-m-d'],
             'time' => ['required', 'date_format:H:i'],
-            'guest_count' => ['required', 'integer', 'between:1,255'],
+            'guest_count' => ['required', 'integer', 'between:1,'.BookingRules::MAX_GUESTS],
         ];
     }
 

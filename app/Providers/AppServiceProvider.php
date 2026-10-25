@@ -29,6 +29,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureDefaults();
 
         RateLimiter::for('booking-availability', fn (Request $request) => Limit::perMinute(60)->by('booking-read:'.$request->user()?->id));
+        RateLimiter::for('booking-search', fn (Request $request) => Limit::perMinute(30)->by('booking-search:'.$request->ip()));
         RateLimiter::for('booking-create', fn (Request $request) => Limit::perMinute(10)->by('booking-write:'.$request->user()?->id));
 
         RateLimiter::for('invitation-management', fn (Request $request) => Limit::perMinute(20)

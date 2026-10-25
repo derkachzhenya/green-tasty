@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { Head, Link, usePage } from '@inertiajs/vue3';
+import BookingSupport from '@/components/bookings/BookingSupport.vue';
 import ReservationListCard from '@/components/reservations/ReservationListCard.vue';
 import ReservationPagination from '@/components/reservations/ReservationPagination.vue';
 import ContentState from '@/components/site/ContentState.vue';
 import DeferredSection from '@/components/site/DeferredSection.vue';
 import SiteContainer from '@/components/site/SiteContainer.vue';
 import { dashboard, home } from '@/routes';
+import { create } from '@/routes/booking';
 import { edit } from '@/routes/profile';
 import type { MyReservationsPage } from '@/types/reservation';
 
@@ -22,11 +24,12 @@ const page = usePage();
             class="flex flex-wrap items-center justify-between gap-4 py-6"
         >
             <div class="min-w-0">
-                <h1 class="text-3xl leading-10 font-medium">My reservations</h1>
-                <p class="mt-2 text-sm wrap-anywhere">
+                <h1 class="sr-only">My reservations</h1>
+                <p class="text-[26px] leading-10 font-medium wrap-anywhere">
                     Hello, {{ page.props.auth.user.name }}
                 </p>
             </div>
+            <BookingSupport greeting class="max-w-[440px]" />
             <Link
                 :href="edit()"
                 class="inline-flex min-h-11 items-center rounded-sm text-sm font-medium text-primary underline focus-visible:outline-2 focus-visible:outline-offset-4"
@@ -34,8 +37,14 @@ const page = usePage();
             >
         </SiteContainer>
     </div>
-    <SiteContainer class="space-y-8 py-8 sm:py-10">
-        <div class="flex flex-wrap items-center justify-between gap-4">
+    <SiteContainer
+        class="space-y-8"
+        :class="reservations?.total === 0 ? 'pb-8' : 'py-8 sm:py-10'"
+    >
+        <div
+            v-if="!reservations || reservations.total > 0"
+            class="flex flex-wrap items-center justify-between gap-4"
+        >
             <p class="max-w-xl text-sm leading-6 text-muted-foreground">
                 View your bookings and open a reservation to manage guests and
                 your group pre-order.
@@ -83,16 +92,33 @@ const page = usePage();
                         </li>
                     </ul>
                 </template>
-                <ContentState
+                <section
                     v-else-if="reservations.total === 0"
-                    title="No reservations yet"
-                    description="Looks like you haven’t made any reservations yet. Choose a location to book your table."
-                    ><Link
-                        :href="`${home().url}#locations`"
-                        class="inline-flex min-h-11 items-center rounded-sm font-medium text-primary underline focus-visible:outline-2 focus-visible:outline-offset-4"
-                        >Browse locations</Link
-                    ></ContentState
+                    aria-labelledby="empty-reservations-heading"
+                    class="flex min-h-[620px] flex-col items-center pb-16 text-center"
                 >
+                    <img
+                        src="/images/green-tasty/locations/Empty State - No reservations.png"
+                        alt="Friends enjoying a meal together at a restaurant"
+                        width="439"
+                        height="423"
+                        class="h-auto w-full max-w-[439px]"
+                    />
+                    <h2
+                        id="empty-reservations-heading"
+                        class="mt-12 text-[26px] leading-10 font-medium"
+                    >
+                        No Reservations
+                    </h2>
+                    <p class="mt-2 text-base leading-6 text-muted-foreground">
+                        Looks like you haven’t made any reservations yet.
+                    </p>
+                    <Link
+                        :href="create()"
+                        class="mt-5 inline-flex min-h-11 items-center rounded-sm font-medium underline underline-offset-8 focus-visible:outline-2 focus-visible:outline-offset-4"
+                        >Book a Table</Link
+                    >
+                </section>
                 <ContentState
                     v-else
                     title="No reservations on this page"

@@ -232,6 +232,7 @@
 }
 
 .green-tasty[data-slot='dialog-content'] {
+    color: var(--foreground);
     width: calc(100% - 2rem);
     max-width: 520px;
     gap: 24px;
@@ -394,4 +395,24 @@
     .auth-panel {
         padding: 40px;
     }
+}
+
+.green-tasty .booking-input {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    height: 44px;
+    padding-inline: 12px;
+    border: 1px solid #dadada;
+    border-radius: 8px;
+    background: #fff;
+    color: #232323;
+    font-size: 14px;
+}
+.green-tasty .booking-input:focus-visible {
+    outline: 2px solid #0b5b29;
+    outline-offset: 2px;
+}
+.green-tasty .booking-input[aria-invalid='true'] {
+    border-color: #a82319;
 }

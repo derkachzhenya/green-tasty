@@ -211,8 +211,15 @@ describe('My reservations', () => {
             reservations: result({ data: [], total: 0, from: null, to: null }),
         });
         await flush();
-        expect(text()).toContain('No reservations yet');
-        expect(link('Browse locations').props.href).toBe('/#locations');
+        expect(text()).toContain('No Reservations');
+        expect(link('Book a Table').props.href).toBe('/book');
+        expect(
+            findAll(mounted.root, (node) => node.tag === 'img').some((node) =>
+                decodeURIComponent(String(node.props.src)).includes(
+                    'Empty State - No reservations.png',
+                ),
+            ),
+        ).toBe(true);
         expect(
             links().filter((node) => textContent(node) === 'View reservation'),
         ).toHaveLength(0);
@@ -435,9 +442,9 @@ describe('site reservation navigation', () => {
     it('links authenticated owners to My reservations and marks the current page', () => {
         mounted.unmount();
         mounted = mountComponent(SiteHeader, {});
-        expect(link('My reservations').props.href).toBe('/dashboard');
-        expect(link('My reservations').props['aria-current']).toBe('page');
-        expect(link('Book a Table').props.href).toBe('/#locations');
+        expect(link('Reservations').props.href).toBe('/dashboard');
+        expect(link('Reservations').props['aria-current']).toBe('page');
+        expect(link('Book a Table').props.href).toBe('/book');
     });
     it('keeps the sign-in path for unauthenticated visitors', () => {
         mounted.unmount();
