@@ -26,8 +26,6 @@ defineProps<{ context: GuestContext; timezone: string }>();
             {{ context.guests === 1 ? 'person' : 'people' }}
         </dd>
         <dt class="sr-only">Timezone</dt>
-        <dd class="col-span-2 text-xs text-muted-foreground">
-            Times in {{ timezone }}
-        </dd>
+        <dd class="sr-only">Times in {{ timezone }}</dd>
     </dl>
 </template>

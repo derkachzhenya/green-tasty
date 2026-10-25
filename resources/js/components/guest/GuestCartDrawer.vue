@@ -60,9 +60,10 @@ function close(): void {
             @interact-outside.prevent="close"
         >
             <header
-                class="border-b border-border px-6 py-6 text-center sm:px-10"
+                class="border-b border-border/40 px-6 py-6 text-center sm:px-10"
             >
-                <SheetTitle class="text-2xl font-medium">Cart</SheetTitle
+                <SheetTitle class="text-[26px] leading-10 font-medium"
+                    >Cart</SheetTitle
                 ><SheetDescription class="sr-only"
                     >Your dishes for this reservation. Confirming your selection
                     leaves group submission with the reservation
@@ -71,27 +72,32 @@ function close(): void {
             </header>
             <div
                 v-if="!items.length"
-                class="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto p-6 text-center"
+                class="flex min-h-0 flex-1 flex-col items-center justify-center-safe overflow-y-auto p-6 pb-[clamp(24px,22dvh,224px)] text-center"
             >
                 <img
                     src="/images/green-tasty/icons/Illustration.png"
                     alt=""
                     width="381"
                     height="187"
-                    class="mb-6 w-[280px] max-w-full"
+                    class="mb-4 w-[381px] max-w-full shrink-0"
                 />
-                <h2 class="text-2xl font-medium">Your cart is empty</h2>
-                <p class="mt-3 text-sm leading-6 text-muted-foreground">
+                <h2 class="text-[26px] leading-9 font-medium">
+                    Your cart is empty
+                </h2>
+                <p class="mt-2 text-base leading-6 text-muted-foreground">
                     Looks like you haven’t added any dishes to your cart yet
                 </p>
                 <button
-                    class="mt-6 min-h-11 px-3 text-sm underline underline-offset-8 focus-visible:outline-2"
+                    class="mt-4 min-h-11 shrink-0 px-3 text-base underline underline-offset-8 focus-visible:outline-2"
                     @click="close"
                 >
                     Go to Menu
                 </button>
             </div>
-            <div v-else class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+            <div
+                v-else
+                class="min-h-0 flex-1 overflow-y-auto p-4 sm:px-10 sm:py-6"
+            >
                 <ul class="space-y-3">
                     <li
                         v-for="item in items"
@@ -104,7 +110,7 @@ function close(): void {
                             alt=""
                             width="96"
                             height="96"
-                            class="size-16 shrink-0 object-contain sm:size-24"
+                            class="size-16 shrink-0 self-start object-contain sm:size-24"
                         />
                         <div class="min-w-0 flex-1">
                             <div class="flex items-start justify-between gap-2">
@@ -113,7 +119,7 @@ function close(): void {
                                 </h2>
                                 <button
                                     v-if="!locked"
-                                    class="-mt-2 -mr-2 grid size-11 shrink-0 place-items-center rounded-md focus-visible:outline-2"
+                                    class="-mt-2 -mr-2 -mb-2 grid size-11 shrink-0 place-items-center rounded-md focus-visible:outline-2"
                                     :disabled="busy"
                                     :aria-label="`Remove ${item.name}`"
                                     @click="
@@ -130,7 +136,7 @@ function close(): void {
                                 No longer available. Remove before submitting.
                             </p>
                             <div
-                                class="mt-2 flex flex-wrap items-center justify-between gap-2"
+                                class="mt-1 flex flex-wrap items-center justify-between gap-2"
                             >
                                 <QuantityControl
                                     v-if="!locked"
@@ -158,7 +164,7 @@ function close(): void {
             </div>
             <footer
                 v-if="items.length || error || validation.length || locked"
-                class="max-h-[45dvh] shrink-0 overflow-y-auto border-t border-border p-4 sm:p-6"
+                class="max-h-[45dvh] shrink-0 overflow-y-auto border-t border-border/40 p-4 sm:px-10 sm:py-6"
             >
                 <p
                     v-if="error"
@@ -196,7 +202,7 @@ function close(): void {
                 </div>
                 <Button
                     v-if="items.length && !locked"
-                    class="min-h-12 w-full"
+                    class="min-h-14 w-full"
                     :disabled="busy || unavailable"
                     @click="emit('submit')"
                     >{{

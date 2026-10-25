@@ -1,12 +1,123 @@
 # Guest pre-order flow from Figma
 
-Latest status: the **Final independent review** section below supersedes earlier
-verification counts and the original optional-version compatibility behavior.
+Latest status: **Guest-screen visual refinement** below records the latest UI
+acceptance. The historical independent review still documents mandatory version
+checks and the existing backend security guarantees.
 
 Implemented on `feature/guest-preorder-figma-flow`, based on booking PR #18 at
 `4f6013a`. This continues the existing guest-selection architecture. It does not
 replace reservation booking, authentication, invitation issuance or owner-only
 group submission. No commit, push, merge or deployment is part of this task.
+
+## Guest-screen visual refinement
+
+Refined from the clean `feature/guest-preorder-figma-flow` branch at `f2c18bc`
+on 2026-10-25. The six supplied screenshots are the reference; the two menu
+screenshots describe the same menu with later change annotations, which take
+precedence. This pass changes only guest presentation, its affected Vue test and
+this document. No backend, routes, migration, authentication, shared booking
+component, homepage or consolidated-order screen was changed. Original PNG bytes
+and existing development data were left untouched. No commit/push/merge/deploy.
+
+Visual changes:
+
+- Guest-local desktop containers now use 40px gutters. The hero is 180px high at
+  tablet/desktop, with the original salad photograph, adjusted crop/opacity,
+  pale green background and 18px subheading. Header remains 68px plus its border;
+  the green reservation strip uses actual reservation facts.
+- Desktop grid uses 32px column gaps and 40px row gaps. At 1440px cards measure
+  316px wide and 312px high before selection (316px with quantity controls).
+  Images are 160px; spacing and descriptions no longer inflate the cards.
+  Descriptions remain available to assistive technology. Desktop Pre-Order
+  appears on hover or keyboard focus; touch layouts keep it visible. Sold Out
+  retains its badge/faded photograph and has no purchase button.
+- Quantity controls show a 32px outline inside a 44px interaction target. The
+  drawer retains its 640px width and right alignment, with 40px desktop side
+  padding, a taller centered title, subtle dividers and compact item rows.
+  Its original 381px basket illustration is larger and positioned higher.
+  Go to Menu remains an underlined action; submission is 56px high.
+- The invitation uses a subtle guest-only shadow and green input focus outline.
+  The name reminder is shown only after dismissing the modal, so it does not add
+  a banner behind the Figma dialog. Browse Menu is 56px high. Timezone remains
+  in the accessible description list without adding a visible extra row.
+- The confirmation starts 24px below the header, retains its original success
+  artwork and 620px card, and uses lighter dividers and a compact saved-item list.
+
+Actual Chrome verification used production assets on `127.0.0.1:8095` with a
+separate disposable SQLite database, private storage and synthetic guests. No
+browser write targeted the development database. The reference comparison and
+measurements cover 24 captures: invited, menu, menu-selected, empty-cart, cart and
+submitted, each at 1440×1013, 768×1013, 390×844 and 320×640. Both annotated menu
+references are represented by the current menu and selected-menu captures.
+Some evidence captures include the full page to show vertically scrolling content.
+
+All 24 measurements had zero horizontal overflow and zero missing images.
+Grid columns were 4/2/1/1 respectively; drawer widths were 640/640/390/320px.
+The 320px name dialog measured 288×510px and fitted inside the viewport. At
+320px the three-item cart scrolls internally (460px of content in 418px), while
+Submit remains visible at y=568–624 in the 640px viewport. Its quantity targets
+measured 44×44px. The long confirmation scrolls vertically; keyboard End exposed
+its total at y=484–508. No console warnings or errors were captured in four tabs.
+
+Browser actions verified required-name validation, Escape/reopening, category
+arrow/Home navigation, an empty category, price sorting, Sold Out without an
+order action, immediate cart persistence, reload restoration, quantity changes,
+removal, Tab/reverse-Tab containment and Escape/focus restoration. The desktop
+flow produced 46.00 → 63.00 → 44.00 → 63.00 with actual server prices. Confirmation
+received focus, remained after Escape and survived reload. Three other isolated
+guests each started with an empty private cart and confirmed 46.00.
+
+Separately, a read-only CLI check of the existing consolidated service against
+those browser-created fixtures verified four confirmed guests, 12 item rows,
+13 total units and 201.00 grand total (63.00 + 3×46.00). The group remained draft,
+awaiting its owner. This is service verification, not a new browser test of the
+owner's consolidated screen. Authorization, mandatory If-Match, stale-write
+protection, price snapshots and duplicate-submission guarantees were rechecked by
+the complete existing automated suite; no new manual adversarial HTTP audit is
+claimed in this visual pass.
+
+Final automated checks on this refinement:
+
+| Check                            | Result                                         |
+| -------------------------------- | ---------------------------------------------- |
+| Complete Sail MySQL CI           | 443 passed, 4 existing skips; 4,381 assertions |
+| Complete Vue suite               | 205 passed, 18 files                           |
+| TypeScript / PHPStan / Pint      | Passed; PHPStan zero errors                    |
+| Frontend lint / formatting       | Passed without warnings                        |
+| Production client and SSR builds | Passed                                         |
+| Diff whitespace                  | Passed                                         |
+
+The existing SQLite full-suite results in the historical review were not rerun
+in this visual pass. Browser fixture storage is SQLite; that is distinct from
+running the complete SQLite regression suite.
+
+Remaining differences: actual database dishes/prices/details replace Figma sample
+values; the exact asparagus photograph is not identified, so the Sold Out fixture
+uses its own matching avocado photograph. Hero crop, font rasterization and some
+spacing still differ; pixel-perfect identity is not claimed. The database has no
+currency/preparation-time field, so prices are decimal values and cart rows show
+actual unit prices instead of an invented ten-minute preparation promise. The
+success copy explains owner-only final group submission; unsupported Create New
+Pre-Order is still omitted. Touch targets are larger than their visible outlines.
+Mobile layouts adapt desktop references; no mobile Figma frame, physical-device
+matrix or full screen-reader/OS-theme audit was supplied/performed.
+
+Files changed in this refinement (7):
+
+- `resources/js/pages/guest/Menu.vue`
+- `resources/js/components/guest/GuestDishCard.vue`
+- `resources/js/components/guest/GuestCartDrawer.vue`
+- `resources/js/components/guest/GuestReservationDetails.vue`
+- `resources/js/components/guest/QuantityControl.vue`
+- `resources/js/pages/guest/Menu.test.ts` (Sold Out now asserts no purchase action)
+- `docs/guest-preorder-figma-flow.md`
+
+Evidence: `/private/tmp/green-tasty-guest-fidelity/` (outside Git), including
+`browser-checks.json`, `console.json`, `integration.json`, screenshots and final
+CI/build logs. Temporary preview tabs/server, fixture database, sessions, raw
+invitation links and bootstrap scripts were removed after acceptance. No secrets,
+test database, temporary fixtures or generated build artifacts are candidates
+for this change.
 
 ## Architecture and lifecycle
 

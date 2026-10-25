@@ -110,7 +110,7 @@ function categoryKey(event: KeyboardEvent, index: number): void {
 </script>
 <template>
     <div
-        class="green-tasty min-h-screen bg-background font-[Poppins,sans-serif] text-foreground"
+        class="green-tasty guest-page min-h-screen bg-background font-[Poppins,sans-serif] text-foreground"
     >
         <a
             href="#main-content"
@@ -118,7 +118,7 @@ function categoryKey(event: KeyboardEvent, index: number): void {
             >Skip to content</a
         >
         <header class="border-b border-border bg-card">
-            <SiteContainer
+            <SiteContainer class="guest-container"
                 ><div class="flex h-[68px] items-center justify-between gap-4">
                     <a
                         href="/"
@@ -148,7 +148,7 @@ function categoryKey(event: KeyboardEvent, index: number): void {
             >
         </header>
         <main id="main-content" tabindex="-1">
-            <SiteContainer v-if="invalid" class="py-16"
+            <SiteContainer v-if="invalid" class="guest-container py-16"
                 ><h1 class="mb-6 text-3xl font-medium">
                     Invitation unavailable
                 </h1>
@@ -157,7 +157,7 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                     description="The link may be invalid, expired, revoked or replaced. Ask the reservation owner for a new invitation."
                     error
             /></SiteContainer>
-            <SiteContainer v-else-if="!menu" class="py-16"
+            <SiteContainer v-else-if="!menu" class="guest-container py-16"
                 ><h1 class="mb-6 text-3xl font-medium">Your guest pre-order</h1>
                 <ContentState
                     v-if="loading || !error"
@@ -172,7 +172,7 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                 ></SiteContainer
             >
             <template v-else-if="submitted">
-                <SiteContainer class="py-6 sm:py-10">
+                <SiteContainer class="guest-container py-6">
                     <section
                         class="mx-auto max-w-[620px] rounded-3xl bg-card p-6 shadow-[0_2px_20px_#00000005] sm:p-10"
                     >
@@ -191,20 +191,22 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                             Pre-Order Submitted!
                         </h1>
                         <p
-                            class="mt-4 text-center text-sm leading-6 text-muted-foreground"
+                            class="mt-4 text-center text-sm leading-6 text-[#606060]"
                         >
                             Your selections have been added to this
                             reservation.<br />The reservation owner submits the
                             group order to the restaurant.
                         </p>
-                        <div class="my-6 border-y border-border py-6">
+                        <div class="my-6 border-y border-border/40 py-6">
                             <GuestReservationDetails
                                 :context="menu.context"
                                 :timezone="menu.timezone"
                             />
                         </div>
-                        <h2 class="mb-4 text-base font-medium">Your items</h2>
-                        <ul class="space-y-3 text-sm">
+                        <h2 class="mb-6 text-base font-medium">Your items</h2>
+                        <ul
+                            class="space-y-4 text-xs leading-5 text-muted-foreground"
+                        >
                             <li
                                 v-for="item in menu.selections.items"
                                 :key="item.menu_item_id"
@@ -238,7 +240,8 @@ function categoryKey(event: KeyboardEvent, index: number): void {
             </template>
             <template v-else>
                 <div class="bg-[#47b16c]">
-                    <SiteContainer class="py-3 text-center text-sm leading-6"
+                    <SiteContainer
+                        class="guest-container py-3 text-center text-sm leading-6"
                         ><p class="wrap-anywhere">
                             You are making a pre-order for the reservation
                             {{ menu.context.address }},
@@ -255,7 +258,7 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                         </p></SiteContainer
                     >
                 </div>
-                <SiteContainer
+                <SiteContainer class="guest-container"
                     ><nav
                         aria-label="Breadcrumb"
                         class="flex min-h-12 items-center gap-3 text-sm"
@@ -267,19 +270,22 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                         /><span aria-current="page">Menu</span>
                     </nav></SiteContainer
                 >
-                <section class="relative isolate overflow-hidden bg-[#d9e7d9]">
+                <section class="relative isolate overflow-hidden bg-[#d9e5d9]">
                     <img
                         src="/images/green-tasty/dishes/salad1.png"
                         alt=""
                         width="532"
                         height="405"
-                        class="absolute inset-y-0 right-0 -z-10 h-full w-[65%] object-cover object-center opacity-60 sm:opacity-90"
+                        class="absolute inset-y-0 right-0 -z-10 h-full w-[65%] object-cover object-center opacity-60 sm:opacity-100"
                     />
                     <div
-                        class="absolute inset-0 -z-10 bg-linear-to-r from-[#d9e7d9] via-[#d9e7d9]/80 to-transparent"
+                        class="absolute inset-0 -z-10 bg-linear-to-r from-[#d9e5d9] via-[#d9e5d9]/80 to-transparent"
                     ></div>
-                    <SiteContainer class="py-8 sm:py-12"
-                        ><p class="mb-2 text-sm font-medium text-primary">
+                    <SiteContainer
+                        class="guest-container flex min-h-[160px] flex-col justify-center py-8 sm:min-h-[180px]"
+                        ><p
+                            class="mb-2 text-base font-medium text-primary sm:text-lg"
+                        >
                             Green &amp; Tasty Restaurants
                         </p>
                         <h1
@@ -289,9 +295,9 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                         </h1></SiteContainer
                     >
                 </section>
-                <SiteContainer class="pb-12">
+                <SiteContainer class="guest-container pb-12">
                     <div
-                        v-if="needsName"
+                        v-if="needsName && !nameOpen"
                         role="status"
                         class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-accent p-3 text-sm"
                     >
@@ -301,7 +307,7 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                         >
                     </div>
                     <div
-                        class="flex flex-wrap items-center justify-between gap-4 py-6 sm:py-8"
+                        class="flex flex-wrap items-center justify-between gap-4 py-6 sm:pt-6 sm:pb-10"
                     >
                         <div
                             role="tablist"
@@ -339,7 +345,7 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                                     sort = ($event.target as HTMLSelectElement)
                                         .value as MenuSort
                                 "
-                                class="min-h-11 min-w-0 rounded-lg border border-border bg-card px-3 pr-8 focus-visible:outline-2 focus-visible:outline-primary"
+                                class="min-h-11 w-[208px] min-w-0 rounded-lg border border-border bg-card px-3 pr-8 focus-visible:outline-2 focus-visible:outline-primary"
                                 aria-label="Sort menu"
                             >
                                 <option value="popular">Popular First</option>
@@ -388,7 +394,7 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                     >
                         <div
                             v-if="dishes.length"
-                            class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4"
+                            class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 lg:gap-x-8 lg:gap-y-10"
                         >
                             <GuestDishCard
                                 v-for="dish in dishes"
@@ -436,7 +442,7 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                             ><input
                                 id="guest-name"
                                 v-model="name"
-                                class="auth-input"
+                                class="auth-input guest-name-input"
                                 placeholder="e.g. Jonson D."
                                 autocomplete="name"
                                 maxlength="255"
@@ -465,7 +471,7 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                         </div>
                         <Button
                             type="submit"
-                            class="min-h-12 w-full"
+                            class="min-h-14 w-full"
                             :disabled="identifying"
                             >{{
                                 identifying ? 'Saving name…' : 'Browse Menu'
@@ -493,3 +499,20 @@ function categoryKey(event: KeyboardEvent, index: number): void {
         </main>
     </div>
 </template>
+
+<style scoped>
+:global(.green-tasty.booking-dialog:has(#guest-name)) {
+    box-shadow: 0 2px 20px #0000000d;
+}
+.guest-name-input:focus-visible {
+    border-color: var(--primary);
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+@media (min-width: 1024px) {
+    .guest-container {
+        padding-inline: 40px;
+    }
+}
+</style>

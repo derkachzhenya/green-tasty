@@ -14,7 +14,7 @@ defineEmits<{ change: [quantity: number] }>();
 </script>
 <template>
     <article
-        class="relative flex min-w-0 flex-col rounded-3xl bg-card p-6 shadow-[0_2px_12px_#0000000a]"
+        class="group relative flex min-w-0 flex-col rounded-3xl bg-card p-6 shadow-[0_2px_12px_#0000000a]"
         :aria-label="dish.name"
     >
         <span
@@ -32,18 +32,18 @@ defineEmits<{ change: [quantity: number] }>();
                 :alt="dish.name"
                 width="224"
                 height="224"
-                class="mx-auto aspect-square w-full max-w-44 object-contain"
+                class="mx-auto aspect-square w-full max-w-40 object-contain"
             />
             <div
                 v-else
-                class="mx-auto flex aspect-square w-full max-w-44 items-center justify-center rounded-full bg-accent"
+                class="mx-auto flex aspect-square w-full max-w-40 items-center justify-center rounded-full bg-accent"
             >
                 <Utensils
                     class="size-16 text-primary/40"
                     aria-hidden="true"
                 /><span class="sr-only">Dish photograph unavailable</span>
             </div>
-            <div class="mt-4 flex items-start justify-between gap-3">
+            <div class="mt-2 flex items-start justify-between gap-3">
                 <h2 class="min-w-0 text-sm leading-6 font-medium wrap-anywhere">
                     {{ dish.name }}
                 </h2>
@@ -60,13 +60,16 @@ defineEmits<{ change: [quantity: number] }>();
                     </p>
                 </div>
             </div>
-            <p
-                v-if="dish.description"
-                class="mt-2 text-xs leading-5 text-muted-foreground"
-            >
+            <p v-if="dish.description" class="sr-only">
                 {{ dish.description }}
             </p>
-            <div class="mt-auto pt-3">
+            <div
+                class="mt-auto pt-2"
+                :class="{
+                    'lg:opacity-0 lg:group-focus-within:opacity-100 lg:group-hover:opacity-100':
+                        dish.available && !quantity && !locked,
+                }"
+            >
                 <p v-if="locked" class="text-xs text-muted-foreground">
                     Selections are locked
                 </p>
@@ -78,13 +81,14 @@ defineEmits<{ change: [quantity: number] }>();
                     @change="$emit('change', $event)"
                 />
                 <Button
-                    v-else
-                    class="min-h-11 w-full"
+                    v-else-if="dish.available"
+                    class="min-h-10 w-full lg:opacity-0 lg:group-focus-within:opacity-100 lg:group-hover:opacity-100"
                     :disabled="disabled || !dish.available"
                     :aria-label="`Add ${dish.name}`"
                     @click="$emit('change', 1)"
                     >Pre-Order</Button
                 >
+                <div v-else class="h-10" aria-hidden="true"></div>
             </div>
         </div>
     </article>
