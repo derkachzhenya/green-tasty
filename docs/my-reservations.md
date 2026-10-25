@@ -1,5 +1,7 @@
 # My Reservations
 
+Current reservations/card, owner cart, invitation, feedback, and guest preview updates are documented in [Reservations Figma states](reservations-figma-states.md). Earlier acceptance sections below describe their original implementation.
+
 Implemented on `feature/my-reservations`, created from freshly fetched
 `origin/main` at `a3397dc`. This replaces the starter dashboard and resolves the
 reservation-discovery gap identified by the integration audit. No booking,

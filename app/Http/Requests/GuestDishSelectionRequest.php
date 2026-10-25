@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Reservation;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\ValidationException;
@@ -9,6 +10,13 @@ use Illuminate\Validation\Validator;
 
 class GuestDishSelectionRequest extends FormRequest
 {
+    public function authorize(): bool
+    {
+        $reservation = $this->route('reservation');
+
+        return ! $reservation instanceof Reservation || ($this->user()?->can('view', $reservation) ?? false);
+    }
+
     /** @return array<string, list<string>> */
     public function rules(): array
     {

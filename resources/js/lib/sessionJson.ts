@@ -12,7 +12,7 @@ export class SessionRequestError extends Error {
 /** Same-origin session authentication and Laravel's encrypted XSRF cookie. */
 export async function sessionJson(
     url: string,
-    method: 'post' | 'patch' | 'delete',
+    method: 'post' | 'put' | 'patch' | 'delete',
     signal: AbortSignal,
     body?: Record<string, unknown>,
 ): Promise<unknown> {

@@ -1,5 +1,7 @@
 # Guest pre-order flow from Figma
 
+Current reservations/card, owner cart, invitation, feedback, and guest preview updates are documented in [Reservations Figma states](reservations-figma-states.md). Earlier acceptance sections below describe their original implementation.
+
 Latest status: the persistent application menu and its deployment initialization
 are documented in [menu-catalog-deployment.md](menu-catalog-deployment.md).
 The **Guest-screen visual refinement** below records the preceding UI acceptance. The historical independent review still documents mandatory version

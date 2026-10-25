@@ -19,6 +19,15 @@ import {
 import type { GuestMenu } from '@/types/guest-selection';
 import Menu from './Menu.vue';
 
+vi.mock('@/components/guest/GuestDishPreview.vue', () => ({
+    default: {
+        setup:
+            (_: unknown, { slots }: { slots: { default: () => VNodeChild } }) =>
+            () =>
+                h('div', {}, [slots.default()]),
+    },
+}));
+
 vi.mock('@/components/ui/button', () => ({
     Button: {
         setup:
@@ -428,7 +437,7 @@ describe('Figma guest pre-order flow', () => {
         await click('Submit Pre-Order');
         expect(text()).toContain('Pre-Order Submitted!');
         expect(text()).toContain('17.00');
-        expect(text()).not.toContain('Create New Pre-Order');
+        expect(button('Create New Pre-Order').props.disabled).toBeDefined();
         expect(text()).not.toContain('Submit Pre-OrderCart');
         const call = fetchMock.mock.calls.find((call) =>
             call[0].endsWith('/submit'),

@@ -1,3 +1,10 @@
+export type ReservationPhase =
+    | 'upcoming'
+    | 'in_progress'
+    | 'completed'
+    | 'canceled';
+export type ReservationCounts = Record<ReservationPhase | 'all', number>;
+
 import type { BookingConfirmation } from './booking';
 
 export type ReservationDetails = Omit<BookingConfirmation, 'status'> & {
@@ -6,6 +13,12 @@ export type ReservationDetails = Omit<BookingConfirmation, 'status'> & {
 
 export type OwnedReservation = ReservationDetails & {
     pre_order_status: string | null;
+    phase?: ReservationPhase;
+    submitted_pre_orders?: number;
+    can_invite?: boolean;
+    can_add_pre_order?: boolean;
+    can_view_group?: boolean;
+    feedback_action?: 'leave' | 'update' | null;
 };
 
 export type MyReservationsPage = {

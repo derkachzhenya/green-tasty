@@ -8,7 +8,9 @@ use App\Http\Controllers\GuestInvitationController;
 use App\Http\Controllers\GuestMenuController;
 use App\Http\Controllers\GuestPreOrderController;
 use App\Http\Controllers\MyReservationsController;
+use App\Http\Controllers\OwnerPreOrderController;
 use App\Http\Controllers\ReservationDashboardController;
+use App\Http\Controllers\ReservationFeedbackController;
 use App\Http\Controllers\RestaurantBookingController;
 use App\Http\Controllers\RestaurantController;
 use App\Http\Middleware\AuthenticateGuestInvitation;
@@ -24,6 +26,12 @@ Route::post('book/continue', [BookingSearchController::class, 'resume'])->middle
 Route::get('restaurants/{restaurant:slug}', [RestaurantController::class, 'show'])->name('restaurants.show');
 
 Route::middleware(['auth', 'verified', 'cache.headers:private;no_store'])->group(function () {
+    Route::get('reservations/{reservation}/feedback', [ReservationFeedbackController::class, 'show'])->name('reservations.feedback.show');
+    Route::put('reservations/{reservation}/feedback', [ReservationFeedbackController::class, 'update'])->middleware('throttle:guest-selections')->name('reservations.feedback.update');
+    Route::get('reservations/{reservation}/owner-pre-order', [OwnerPreOrderController::class, 'show'])->name('reservations.owner-pre-order');
+    Route::get('reservations/{reservation}/owner-pre-order/menu', [OwnerPreOrderController::class, 'menu']);
+    Route::put('reservations/{reservation}/owner-pre-order/selections', [OwnerPreOrderController::class, 'update'])->middleware('throttle:guest-selections');
+    Route::post('reservations/{reservation}/owner-pre-order/submit', [OwnerPreOrderController::class, 'submit'])->middleware('throttle:guest-selections');
     Route::get('reservations/{reservation}', [ReservationDashboardController::class, 'show'])->name('reservations.show');
     Route::get('restaurants/{restaurant:slug}/book', [BookingSearchController::class, 'create'])->name('restaurants.bookings.create');
     Route::patch('reservations/{reservation}/booking', [RestaurantBookingController::class, 'update'])->middleware('throttle:booking-create')->name('reservations.booking.update');

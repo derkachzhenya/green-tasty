@@ -22,6 +22,7 @@ const props = defineProps<{
     groupOrder?: DashboardOrder;
     canManageInvitations: boolean;
     canSubmitPreOrder: boolean;
+    canEditOwnPreOrder?: boolean;
 }>();
 const refreshing = ref(false);
 const refreshError = ref('');
@@ -59,7 +60,13 @@ watch(
 function refresh(): void {
     if (refreshing.value) return;
     router.reload({
-        only: ['groupOrder', 'reservation', 'canSubmitPreOrder'],
+        only: [
+            'groupOrder',
+            'reservation',
+            'canSubmitPreOrder',
+            'canManageInvitations',
+            'canEditOwnPreOrder',
+        ],
         onStart: () => {
             refreshing.value = true;
             refreshError.value = '';
@@ -131,6 +138,12 @@ function refresh(): void {
                 tabindex="-1"
                 class="scroll-mt-6 space-y-10 sm:space-y-[60px]"
             >
+                <a
+                    v-if="canEditOwnPreOrder"
+                    :href="`/reservations/${reservation.id}/owner-pre-order`"
+                    class="inline-flex min-h-11 items-center rounded-md border border-primary px-4 text-sm font-medium text-primary focus-visible:outline-2"
+                    >Add or edit your pre-order</a
+                >
                 <DeferredSection
                     data="groupOrder"
                     :resolved="Boolean(submittedResult)"

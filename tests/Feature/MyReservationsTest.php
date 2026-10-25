@@ -78,6 +78,7 @@ class MyReservationsTest extends TestCase
                 'table' => ['name' => 'Table 2', 'seats' => 4],
                 'date' => '2026-10-24', 'time' => '12:00', 'end_date' => '2026-10-24', 'end_time' => '14:00',
                 'timezone' => 'Asia/Tbilisi', 'pre_order_status' => 'submitted',
+                'phase' => 'completed', 'submitted_pre_orders' => 0, 'can_invite' => false, 'can_add_pre_order' => false, 'can_view_group' => false, 'feedback_action' => 'leave',
             ]])->missing('reservations.data.0.guests')->missing('reservations.data.0.owner_user_id')
                 ->missing('reservations.data.0.special_requests')->missing('reservations.data.0.pre_order')));
         $result = app(MyReservationsService::class)->forOwner($this->owner);
@@ -223,8 +224,8 @@ class MyReservationsTest extends TestCase
                 $queries = DB::getQueryLog();
                 foreach ($queries as $query) {
                     $this->assertStringStartsWith('select', strtolower($query['query']));
-                    $this->assertStringNotContainsString('reservation_guests', $query['query']);
-                    $this->assertStringNotContainsString('pre_order_items', $query['query']);
+                    $this->assertStringNotContainsString('invitation_token', $query['query']);
+                    $this->assertStringNotContainsString('special_requests', $query['query']);
                 }
 
                 return count($queries);
@@ -233,8 +234,8 @@ class MyReservationsTest extends TestCase
                 DB::flushQueryLog();
             }
         };
-        $this->assertSame(5, $queriesFor(1));
-        $this->assertSame(5, $queriesFor(5));
+        $this->assertSame(6, $queriesFor(1));
+        $this->assertSame(6, $queriesFor(5));
         $this->assertDatabaseCount('reservations', 6);
         $this->assertDatabaseCount('pre_orders', 6);
         $this->assertDatabaseCount('reservation_guests', 0);
