@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test';
+import catalog from '../../data/restaurant-menu.json';
 import type { GuestCatalogDish } from '@/types/guest-selection';
-import { dishImage, dishWeight, sortedDishes } from './guestMenu';
+import {
+    dishImage,
+    dishImageCropped,
+    dishWeight,
+    sortedDishes,
+} from './guestMenu';
 const dishes: GuestCatalogDish[] = [
     {
         id: 1,
@@ -34,6 +40,15 @@ const dishes: GuestCatalogDish[] = [
     },
 ];
 describe('guest menu filters and presentation', () => {
+    it('resolves every installable menu image, including the sold-out original', () => {
+        expect(catalog.dishes).toHaveLength(8);
+        for (const dish of catalog.dishes) {
+            expect(dishImage(dish.name)).toBe(dish.image);
+            expect(dishWeight(dish.name)).toBe(dish.weight);
+        }
+        expect(dishImageCropped('Green Asparagus Salad')).toBe(true);
+        expect(dishImageCropped('Unknown dish')).toBe(false);
+    });
     it('sorts exact prices numerically in both directions without mutating data', () => {
         expect(
             sortedDishes(dishes, 'price-asc').map((dish) => dish.id),

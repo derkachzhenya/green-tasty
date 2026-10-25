@@ -7,6 +7,7 @@ import {
     vi,
 } from 'vite-plus/test';
 import { h, type VNodeChild } from 'vue';
+import catalog from '../../../data/restaurant-menu.json';
 import {
     findAll,
     fire,
@@ -247,6 +248,27 @@ afterEach(() => {
 });
 
 describe('Figma guest pre-order flow', () => {
+    it('renders all installed catalog photographs while keeping server prices authoritative', async () => {
+        const template = server.catalog[0].dishes[0];
+        server.catalog[0].dishes = catalog.dishes.map((dish, index) => ({
+            ...template,
+            id: 100 + index,
+            name: dish.name,
+            available: dish.available,
+            price: index === 0 ? '99.99' : dish.price,
+            sort_order: index,
+            popularity: 0,
+        }));
+        await mount();
+        expect(nodes((n) => n.tag === 'article')).toHaveLength(8);
+        const sources = nodes((n) => n.tag === 'img').map((n) => n.props.src);
+        for (const dish of catalog.dishes)
+            expect(sources).toContain(dish.image);
+        expect(text()).toContain('99.99');
+        expect(
+            nodes((n) => n.props['aria-label'] === 'Add Green Asparagus Salad'),
+        ).toHaveLength(0);
+    });
     it('loads invitation data without browser storage, cookies or referrers', async () => {
         await mount();
         expect(text()).toContain('48 Rustaveli Avenue');
@@ -324,9 +346,11 @@ describe('Figma guest pre-order flow', () => {
             'Roasted Sweet Potato & Lentil Salad',
         );
     });
-    it('disables sold-out dishes and reuses the original dish images', async () => {
+    it('omits purchase actions for sold-out dishes and reuses the original dish images', async () => {
         await mount();
-        expect(button('Add Sold Out Salad').props.disabled).toBe(true);
+        expect(
+            nodes((n) => n.props['aria-label'] === 'Add Sold Out Salad'),
+        ).toHaveLength(0);
         expect(text()).toContain('Sold Out');
         expect(nodes((n) => n.tag === 'img').map((n) => n.props.src)).toContain(
             '/images/green-tasty/dishes/fresh-strawberry-mint-salad.png',

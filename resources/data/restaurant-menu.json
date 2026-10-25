@@ -1,0 +1,81 @@
+{
+    "categories": [
+        { "slug": "appetizers", "name": "Appetizers" },
+        { "slug": "main-courses", "name": "Main Courses" },
+        { "slug": "desserts", "name": "Desserts" }
+    ],
+    "dishes": [
+        {
+            "name": "Fresh Strawberry Mint Salad",
+            "category": "appetizers",
+            "price": "17.00",
+            "available": true,
+            "image": "/images/green-tasty/dishes/fresh-strawberry-mint-salad.png",
+            "weight": "430 g",
+            "crop": false
+        },
+        {
+            "name": "Green Asparagus Salad",
+            "category": "appetizers",
+            "price": "12.00",
+            "available": false,
+            "image": "/images/green-tasty/dishes/green-asparagus-salad.jpg",
+            "weight": "270 g",
+            "crop": true
+        },
+        {
+            "name": "Roasted Sweet Potato & Lentil Salad",
+            "category": "appetizers",
+            "price": "10.00",
+            "available": true,
+            "image": "/images/green-tasty/dishes/roasted-sweet-potato-lentil-salad.png",
+            "weight": "380 g",
+            "crop": false
+        },
+        {
+            "name": "Spring Salad",
+            "category": "appetizers",
+            "price": "19.00",
+            "available": true,
+            "image": "/images/green-tasty/dishes/spring-salad.png",
+            "weight": "280 g",
+            "crop": false
+        },
+        {
+            "name": "Berry Breakfast Bowl",
+            "category": "appetizers",
+            "price": "13.00",
+            "available": true,
+            "image": "/images/green-tasty/dishes/gh.png",
+            "weight": null,
+            "crop": false
+        },
+        {
+            "name": "Avocado Pine Nut Bowl",
+            "category": "appetizers",
+            "price": "17.00",
+            "available": true,
+            "image": "/images/green-tasty/dishes/gjgk.png",
+            "weight": null,
+            "crop": false
+        },
+        {
+            "name": "Avocado & Egg Toast",
+            "category": "appetizers",
+            "price": "15.00",
+            "available": true,
+            "image": "/images/green-tasty/dishes/ug.png",
+            "weight": null,
+            "crop": false
+        },
+        {
+            "name": "Citrus Cream Tart",
+            "category": "appetizers",
+            "price": "11.00",
+            "available": true,
+            "image": "/images/green-tasty/dishes/kjkj.png",
+            "weight": null,
+            "crop": false
+        }
+    ]
+}
