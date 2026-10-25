@@ -169,7 +169,7 @@ class OwnerGroupPreOrderTest extends TestCase
         $page = $this->get('/reservations/'.$this->reservation->id)->assertOk();
         $xsrf = $page->getCookie('XSRF-TOKEN', false)->getValue();
         $version = $this->version();
-        $this->change($this->ownItem,3,$version)->assertStatus(419);
-        $this->patchJson($this->url.'/items/'.$this->ownItem,['quantity' => 3],['If-Match' => $version, 'X-XSRF-TOKEN' => $xsrf])->assertOk();
+        $this->change($this->ownItem, 3, $version)->assertStatus(419);
+        $this->patchJson($this->url.'/items/'.$this->ownItem, ['quantity' => 3], ['If-Match' => $version, 'X-XSRF-TOKEN' => $xsrf])->assertOk();
     }
 }
