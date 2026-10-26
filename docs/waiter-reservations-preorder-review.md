@@ -20,30 +20,30 @@ Verified on 2026-10-26. Local branch: `feature/waiter-reservations-preorder-revi
 
 All mutation paths use transactions. Review/correction operations serialize through the reservation row. Table edits follow the existing restaurant → ordered table locks → reservation lock convention and recheck overlaps/capacity. Current versions are opaque quoted SHA-256 values derived from reservation/order/item state. `If-Match` is mandatory for updates, cancellation, decisions, review publication, and correction; wildcard, weak, missing, and stale versions cannot authorize a new write. An identical already-applied decision, published revision, or completed cancellation can return its current state as a read-only retry. A stale opposing decision or new write returns a conflict.
 
-| Endpoint | Behavior |
-| --- | --- |
-| `GET /staff/restaurants/{restaurant}/reservations` | Authorized Inertia dashboard and filtered pagination |
-| `POST /staff/restaurants/{restaurant}/reservations` | Create booking for an existing customer; 201 |
-| `PATCH /staff/restaurants/{restaurant}/reservations/{reservation}` | Versioned booking/table update |
-| `POST …/{reservation}/cancel` | Versioned cancellation; preserves historical records |
-| `GET …/{reservation}/review` | Authorized restaurant review snapshot/version |
-| `PATCH …/{reservation}/review/items/{item}` | Versioned Confirmed/Rejected decision |
-| `POST …/{reservation}/review/submit` | Publish a complete review revision once |
+| Endpoint                                                                  | Behavior                                                |
+| ------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `GET /staff/restaurants/{restaurant}/reservations`                        | Authorized Inertia dashboard and filtered pagination    |
+| `POST /staff/restaurants/{restaurant}/reservations`                       | Create booking for an existing customer; 201            |
+| `PATCH /staff/restaurants/{restaurant}/reservations/{reservation}`        | Versioned booking/table update                          |
+| `POST …/{reservation}/cancel`                                             | Versioned cancellation; preserves historical records    |
+| `GET …/{reservation}/review`                                              | Authorized restaurant review snapshot/version           |
+| `PATCH …/{reservation}/review/items/{item}`                               | Versioned Confirmed/Rejected decision                   |
+| `POST …/{reservation}/review/submit`                                      | Publish a complete review revision once                 |
 | `POST /reservations/{reservation}/restaurant-review/items/{item}/replace` | Owner-only versioned rejection replacement/resubmission |
 
 Validation failures return 422, stale/invalid state transitions return 409, unauthorized staff access returns 403, and out-of-scope/missing bound resources return 404. Unauthenticated web navigation uses the existing login flow. JSON requests use the existing CSRF/session transport; authorization/session failures never display a fabricated success. Staff responses are private/no-store and mutations use existing rate limiters.
 
 ## States, money, and role-specific timing
 
-| State | Effective behavior |
-| --- | --- |
-| Customer group not submitted | No waiter review action; existing owner/guest draft workflow remains authoritative |
-| First customer submission | Created by Customer; new lines Pending |
-| Waiter draft decisions | Persisted for staff; owner still sees Pending until publication |
-| Published review | Confirmed by Restaurant; confirmed and rejected lines remain visible/read-only |
-| Owner replaces a published rejection | Updated Pre-Order; new line Pending; unaffected published decisions retained |
-| Final review after correction | New immutable review round; both roles see the same current totals |
-| Cancelled/completed reservation | Review read-only; no customer correction or staff booking mutation |
+| State                                | Effective behavior                                                                 |
+| ------------------------------------ | ---------------------------------------------------------------------------------- |
+| Customer group not submitted         | No waiter review action; existing owner/guest draft workflow remains authoritative |
+| First customer submission            | Created by Customer; new lines Pending                                             |
+| Waiter draft decisions               | Persisted for staff; owner still sees Pending until publication                    |
+| Published review                     | Confirmed by Restaurant; confirmed and rejected lines remain visible/read-only     |
+| Owner replaces a published rejection | Updated Pre-Order; new line Pending; unaffected published decisions retained       |
+| Final review after correction        | New immutable review round; both roles see the same current totals                 |
+| Cancelled/completed reservation      | Review read-only; no customer correction or staff booking mutation                 |
 
 Money uses decimal arithmetic and saved `unit_price × quantity`, never submitted client prices. **Requested** is the total of current, non-superseded lines, including current rejected lines. **Confirmed** and **Rejected** contain published decisions; **Pending** contains unpublished lines. Superseded lines remain in history but do not contribute to current actionable totals. These separate totals make a partial rejection explicit instead of silently reducing an order.
 
@@ -65,16 +65,16 @@ Private backup, comparison reports, and screenshots are outside the repository a
 
 All checks below completed against the final implementation; PHP checks preceded the final frontend-only focus restoration adjustment, and frontend checks/builds were repeated after it.
 
-| Check | Actual result |
-| --- | --- |
-| Sail MySQL PHPUnit (`php artisan test --compact`) | **498 passed, 4 skipped**, 502 tests, 4,993 assertions |
+| Check                                                                                                  | Actual result                                           |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
+| Sail MySQL PHPUnit (`php artisan test --compact`)                                                      | **498 passed, 4 skipped**, 502 tests, 4,993 assertions  |
 | Host SQLite PHPUnit (`DB_CONNECTION=sqlite DB_DATABASE=:memory: DB_URL='' php artisan test --compact`) | **480 passed, 22 skipped**, 502 tests, 4,801 assertions |
-| Vue/Vitest (`npm run test:unit`) | **25 files, 237 tests passed** |
-| TypeScript (`npm run types:check`) | Passed |
-| PHPStan (`composer types:check`) | Passed, 0 errors |
-| Pint (`php vendor/bin/pint --test`) | Passed |
-| Formatting/lint (`npm run check` / final `check:fix`) | Passed; 157 linted files, no warnings/errors |
-| Production client + SSR (`npm run build:ssr`) | Both builds passed |
+| Vue/Vitest (`npm run test:unit`)                                                                       | **25 files, 237 tests passed**                          |
+| TypeScript (`npm run types:check`)                                                                     | Passed                                                  |
+| PHPStan (`composer types:check`)                                                                       | Passed, 0 errors                                        |
+| Pint (`php vendor/bin/pint --test`)                                                                    | Passed                                                  |
+| Formatting/lint (`npm run check` / final `check:fix`)                                                  | Passed; 157 linted files, no warnings/errors            |
+| Production client + SSR (`npm run build:ssr`)                                                          | Both builds passed                                      |
 
 Existing Fortify feature-gated tests account for the four MySQL skips. SQLite additionally skips real MySQL locking/index/collation cases; SQLite success is not evidence for MySQL locking. The new real-MySQL race test uses separate transactions/connections, holds a review decision/publication lock, verifies a competing decision/cancellation/submission waits, then verifies stale writes fail and retries leave exactly one review round. Its destructive fixture setup explicitly asserts database `testing` before truncation.
 
@@ -100,11 +100,11 @@ Verified by real UI interactions:
 Responsive page and review checks:
 
 | Viewport | Page horizontal overflow | Review width / internal client-scroll width |
-| --- | --- | --- |
-| 1440 px | None | 838 px maximum dialog |
-| 768 px | None | 736 px dialog; 734 / 734 px |
-| 390 px | None | 358 px dialog; 356 / 356 px |
-| 320 px | None | 288 px dialog; 286 / 286 px |
+| -------- | ------------------------ | ------------------------------------------- |
+| 1440 px  | None                     | 838 px maximum dialog                       |
+| 768 px   | None                     | 736 px dialog; 734 / 734 px                 |
+| 390 px   | None                     | 358 px dialog; 356 / 356 px                 |
+| 320 px   | None                     | 288 px dialog; 286 / 286 px                 |
 
 Also inspected cancellation, cancelled-card, owner-review and empty states at 320 px. This is visual/keyboard inspection, not a screen-reader audit, automated WCAG certification, or pixel-diff comparison.
 
