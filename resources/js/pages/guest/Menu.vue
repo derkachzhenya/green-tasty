@@ -20,6 +20,10 @@ const props = withDefaults(
 );
 const {
     menu,
+    cutoffLocked,
+    warning,
+    minutes,
+    cancelChanges,
     rows,
     total,
     count,
@@ -42,6 +46,7 @@ const {
 } = useGuestSelections(props.initiallyInvalid, props.ownerReservationId);
 const cartOpen = ref(false);
 const ownerSubmitted = ref(false);
+const cartTrigger = ref<HTMLButtonElement | null>(null);
 const nameOpen = ref(false);
 const name = ref('');
 const nameError = ref('');
@@ -91,7 +96,7 @@ async function change(id: number, value: number): Promise<void> {
         return;
     }
     setQuantity(id, value);
-    await save();
+    if (!props.ownerReservationId) await save();
 }
 async function confirm(): Promise<void> {
     if (await submit()) {
@@ -166,6 +171,7 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                     >
                     <button
                         v-if="menu && !submitted"
+                        ref="cartTrigger"
                         class="relative grid size-11 shrink-0 place-items-center rounded-md focus-visible:outline-2 focus-visible:outline-ring"
                         :disabled="needsName"
                         :aria-label="`Open cart, ${count} items`"
@@ -422,12 +428,23 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                         Saving cart…
                     </p>
                     <p
+                        v-if="warning"
+                        role="status"
+                        class="mb-4 rounded-lg bg-[#fff5f7] p-4 text-sm"
+                    >
+                        You have unsubmitted saved selections. Changes close in
+                        {{ minutes }} minutes. Saved dishes will be retained.
+                    </p>
+                    <p
                         v-if="locked"
                         role="status"
                         class="mb-4 rounded-lg bg-accent p-4 text-sm"
                     >
-                        This group order is read-only. You can review your saved
-                        dishes in the cart.
+                        {{
+                            cutoffLocked
+                                ? '30 minutes or less before the reservation. No pre-order changes can be applied. Saved dishes are retained.'
+                                : 'This group order is read-only. You can review your saved dishes in the cart.'
+                        }}
                     </p>
                     <div
                         v-if="activeCategory"
@@ -531,6 +548,9 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                     :busy="busy"
                     :locked="locked"
                     :dirty="dirty"
+                    :owner-edit="Boolean(ownerReservationId)"
+                    :already-submitted="Boolean(menu.guest_state.submitted_at)"
+                    @cancel="cancelChanges"
                     :unavailable="unavailable"
                     :error="error"
                     :validation="validation"
@@ -544,6 +564,7 @@ function categoryKey(event: KeyboardEvent, index: number): void {
             <BookingModal
                 v-if="ownerReservationId"
                 :open="ownerSubmitted"
+                :return-focus-target="cartTrigger"
                 title="Pre-Order Submitted"
                 description="Your own selection has been saved for this reservation."
                 @update:open="ownerSubmitted = $event"

@@ -38,6 +38,7 @@ class GroupPreOrderSubmissionService
             $alreadySubmitted = $preOrder->status === 'submitted' && $submittedAt !== null;
 
             if (! $alreadySubmitted) {
+                PreOrderTiming::ensureOpen($lockedReservation);
                 if ($preOrder->status !== 'draft' || $submittedAt !== null) {
                     throw new ConflictHttpException('The pre-order cannot be submitted from its current state.');
                 }

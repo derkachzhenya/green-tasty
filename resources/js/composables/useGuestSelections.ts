@@ -1,4 +1,12 @@
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue';
+import { usePreOrderClock } from './usePreOrderClock';
+import {
+    computed,
+    onBeforeUnmount,
+    onMounted,
+    ref,
+    shallowRef,
+    watch,
+} from 'vue';
 import {
     cents,
     decimal,
@@ -47,8 +55,14 @@ export function useGuestSelections(
             selectionKey(input.value) !==
                 selectionKey(menu.value!.selections.items),
     );
+    const { cutoffLocked, warning, minutes } = usePreOrderClock(
+        computed(() => menu.value?.timing),
+    );
     const locked = computed(
-        () => conflict.value || menu.value?.order.editable === false,
+        () =>
+            cutoffLocked.value ||
+            conflict.value ||
+            menu.value?.order.editable === false,
     );
     const busy = computed(
         () =>
@@ -61,6 +75,20 @@ export function useGuestSelections(
         rows.value.some((row) => !row.available),
     );
 
+    function restoreSaved() {
+        input.value =
+            menu.value?.selections.items.map(({ menu_item_id, quantity }) => ({
+                menu_item_id,
+                quantity,
+            })) ?? [];
+    }
+    watch(cutoffLocked, (value) => {
+        if (value && dirty.value) {
+            restoreSaved();
+            error.value =
+                'The cutoff was reached. Unsaved changes were discarded; saved selections are unchanged.';
+        }
+    });
     function clear() {
         generation++;
         controller?.abort();
@@ -256,11 +284,17 @@ export function useGuestSelections(
             locked.value ||
             invalid.value ||
             !menu.value ||
-            !input.value.length ||
+            (!input.value.length && !(ownerReservationId && dirty.value)) ||
             unavailable.value
         )
             return false;
-        if (dirty.value && !(await save())) return false;
+        if (!ownerReservationId && dirty.value && !(await save())) return false;
+        if (
+            ownerReservationId &&
+            !dirty.value &&
+            menu.value.guest_state.submitted_at
+        )
+            return false;
         submitting.value = true;
         error.value = '';
         validation.value = [];
@@ -280,7 +314,10 @@ export function useGuestSelections(
             input.value = data.selections.items.map(
                 ({ menu_item_id, quantity }) => ({ menu_item_id, quantity }),
             );
-            return data.guest_state.submitted_at !== null;
+            return (
+                data.guest_state.submitted_at !== null ||
+                Boolean(ownerReservationId && !data.selections.items.length)
+            );
         } catch (reason) {
             if (current === generation) {
                 if (
@@ -293,6 +330,7 @@ export function useGuestSelections(
                     reason.status === 409
                 ) {
                     conflict.value = true;
+                    restoreSaved();
                     error.value =
                         'Your cart or order status changed. Refresh before submitting.';
                 } else failure(reason);
@@ -301,6 +339,14 @@ export function useGuestSelections(
         } finally {
             if (current === generation) submitting.value = false;
         }
+    }
+    function cancelChanges() {
+        if (busy.value || !menu.value) return;
+        input.value = menu.value.selections.items.map(
+            ({ menu_item_id, quantity }) => ({ menu_item_id, quantity }),
+        );
+        validation.value = [];
+        error.value = '';
     }
     function beforeUnload(event: BeforeUnloadEvent) {
         if (dirty.value) {
@@ -335,6 +381,10 @@ export function useGuestSelections(
     });
     return {
         menu,
+        cutoffLocked,
+        warning,
+        minutes,
+        cancelChanges,
         rows,
         total,
         count,

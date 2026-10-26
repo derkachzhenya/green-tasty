@@ -146,7 +146,7 @@ class OwnerGroupPreOrderTest extends TestCase
         }
         $this->reservation->preOrder()->update(['status' => 'draft']);
         $this->reservation->update(['reserved_at' => now()->addMinutes(29)]);
-        $this->getJson($this->url)->assertJsonPath('editable', true); // There is no existing 30-minute cutoff.
+        $this->getJson($this->url)->assertJsonPath('editable', false); // Explicit T−30 cutoff introduced by the owner-editing task.
         $this->reservation->update(['reserved_at' => now()]);
         $this->change($this->ownItem, 3)->assertConflict();
         foreach (['completed', 'cancelled'] as $status) {

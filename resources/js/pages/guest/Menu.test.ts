@@ -254,6 +254,7 @@ afterEach(() => {
     mounted = undefined;
     vi.unstubAllGlobals();
     vi.clearAllMocks();
+    vi.useRealTimers();
 });
 
 describe('Figma guest pre-order flow', () => {
@@ -594,5 +595,120 @@ describe('Figma guest pre-order flow', () => {
         await flush();
         expect(text()).toContain('48 Rustaveli Avenue');
         expect(storage).not.toHaveBeenCalled();
+    });
+});
+
+describe('owner cart local editing', () => {
+    function ownerSnapshot() {
+        server.guest_state.submitted_at = '2026-10-25T08:00:00Z';
+        server.guest_state.version = 1;
+        server.selections = {
+            items: [
+                {
+                    menu_item_id: 10,
+                    name: 'Fresh Strawberry Mint Salad',
+                    quantity: 1,
+                    unit_price: '17.00',
+                    subtotal: '17.00',
+                },
+            ],
+            total_quantity: 1,
+            subtotal: '17.00',
+        };
+        vi.stubGlobal('document', {
+            cookie: '',
+            getElementById: vi.fn(() => ({ focus: vi.fn() })),
+        });
+    }
+    it('retains submitted selections until save and Cancel Changes restores without writes', async () => {
+        ownerSnapshot();
+        mounted = mountComponent(Menu, { ownerReservationId: 7 });
+        await flush();
+        await click('Open cart, 1 items');
+        expect(button('Submit Pre-Order').props.disabled).toBe(true);
+        await click('Increase Fresh Strawberry Mint Salad quantity');
+        expect(server.selections.subtotal).toBe('17.00');
+        expect(
+            fetchMock.mock.calls.every(
+                ([, options]) => options.method === 'GET',
+            ),
+        ).toBe(true);
+        expect(text()).toContain('34.00');
+        await click('Cancel Changes');
+        expect(text()).not.toContain('34.00');
+        expect(server.selections.subtotal).toBe('17.00');
+        expect(button('Submit Pre-Order').props.disabled).toBe(true);
+        expect(
+            fetchMock.mock.calls.every(
+                ([, options]) => options.method === 'GET',
+            ),
+        ).toBe(true);
+    });
+    it('discards only unsaved owner edits at the automatic cutoff and keeps the saved total', async () => {
+        vi.useFakeTimers({
+            toFake: ['setInterval', 'clearInterval', 'performance'],
+        });
+        ownerSnapshot();
+        server.timing = {
+            server_now: '2026-10-31T19:44:58Z',
+            warning_at: '2026-10-31T19:30:00Z',
+            locks_at: '2026-10-31T19:45:00Z',
+            locked: false,
+            unconfirmed: true,
+        };
+        mounted = mountComponent(Menu, { ownerReservationId: 7 });
+        await flush();
+        await click('Increase Fresh Strawberry Mint Salad quantity');
+        await click('Open cart, 2 items');
+        expect(text()).toContain('34.00');
+        vi.advanceTimersByTime(2000);
+        await flush();
+        expect(text()).toContain('Unsaved changes were discarded');
+        expect(text()).not.toContain('34.00');
+        expect(server.selections.subtotal).toBe('17.00');
+        expect(
+            fetchMock.mock.calls.every(
+                ([, options]) => options.method === 'GET',
+            ),
+        ).toBe(true);
+        mounted.unmount();
+        mounted = undefined;
+        vi.useRealTimers();
+    });
+    it('submits an owner draft in one versioned POST and shows success only on the saved response', async () => {
+        ownerSnapshot();
+        fetchMock.mockImplementation(
+            async (path: string, options: RequestInit) => {
+                if (options.method === 'GET') return response(server);
+                expect(path).toBe('/reservations/7/owner-pre-order/submit');
+                expect(options.method).toBe('POST');
+                expect(options.headers).toMatchObject({ 'If-Match': '"1"' });
+                expect(JSON.parse(options.body as string)).toEqual({
+                    items: [{ menu_item_id: 10, quantity: 2 }],
+                });
+                server.selections.items[0].quantity = 2;
+                server.selections.items[0].subtotal = '34.00';
+                server.selections.subtotal = '34.00';
+                server.selections.total_quantity = 2;
+                server.guest_state.version = 2;
+                return response(server);
+            },
+        );
+        mounted = mountComponent(Menu, { ownerReservationId: 7 });
+        await flush();
+        await click('Increase Fresh Strawberry Mint Salad quantity');
+        await click('Open cart, 2 items');
+        await click('Submit Pre-Order');
+        expect(text()).toContain('Pre-Order Submitted');
+        expect(
+            fetchMock.mock.calls.filter(
+                ([, options]) => options.method === 'POST',
+            ),
+        ).toHaveLength(1);
+        expect(
+            fetchMock.mock.calls.some(
+                ([, options]) => options.method === 'PUT',
+            ),
+        ).toBe(false);
     });
 });

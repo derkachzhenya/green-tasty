@@ -1,3 +1,4 @@
+import type { PreOrderTiming } from '@/composables/usePreOrderClock';
 import type { MenuDish } from './restaurant';
 
 export type GuestSelectionItem = {
@@ -29,6 +30,7 @@ export type GuestCatalogDish = MenuDish & {
     sort_order: number;
 };
 export type GuestMenu = {
+    timing?: PreOrderTiming;
     context: GuestContext;
     guest_state: {
         name_confirmed: boolean;

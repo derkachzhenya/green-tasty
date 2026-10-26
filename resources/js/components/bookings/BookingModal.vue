@@ -10,6 +10,7 @@ const props = defineProps<{
     title: string;
     description: string;
     busy?: boolean;
+    returnFocusTarget?: HTMLElement | null;
 }>();
 const emit = defineEmits<{ 'update:open': [boolean] }>();
 function closeOnEscape(): void {
@@ -23,9 +24,10 @@ function rememberFocus(): void {
             : null;
 }
 function restoreFocus(event: Event): void {
-    if (returnFocus?.isConnected) {
+    const target = props.returnFocusTarget ?? returnFocus;
+    if (target?.isConnected) {
         event.preventDefault();
-        returnFocus.focus();
+        target.focus();
     }
 }
 </script>

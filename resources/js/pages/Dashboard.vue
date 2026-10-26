@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, usePage, router } from '@inertiajs/vue3';
-import { shallowRef, ref } from 'vue';
+import { shallowRef, ref, onMounted, onBeforeUnmount } from 'vue';
 import OwnerGroupPreOrderModal from '@/components/reservations/OwnerGroupPreOrderModal.vue';
 import ReservationInviteModal from '@/components/reservations/ReservationInviteModal.vue';
 import ReservationFeedbackModal from '@/components/reservations/ReservationFeedbackModal.vue';
@@ -20,6 +20,7 @@ import type {
 
 withDefaults(
     defineProps<{
+        preOrderWarnings?: { id: number; code: string; minutes: number }[];
         reservations?: MyReservationsPage;
         reservationCounts?: ReservationCounts;
         activeStatus?: string;
@@ -39,13 +40,23 @@ const tabs = [
     { id: 'canceled', label: 'Canceled' },
 ] as const;
 function reload() {
-    router.reload({ only: ['reservations', 'reservationCounts'] });
+    router.reload({
+        only: ['reservations', 'reservationCounts', 'preOrderWarnings'],
+    });
 }
 function failed(): false {
     filterError.value = 'Unable to load reservations. Try the filter again.';
     return false;
 }
 const page = usePage();
+let warningTimer: ReturnType<typeof setInterval> | undefined;
+onMounted(() => {
+    warningTimer = setInterval(
+        () => router.reload({ only: ['preOrderWarnings'] }),
+        30000,
+    );
+});
+onBeforeUnmount(() => clearInterval(warningTimer));
 </script>
 
 <template>
@@ -64,6 +75,27 @@ const page = usePage();
             </div>
             <BookingSupport greeting class="max-w-[440px]" />
         </SiteContainer>
+    </div>
+    <div
+        v-for="notice in preOrderWarnings ?? []"
+        :key="notice.id"
+        role="status"
+        class="bg-[#fce9ef] py-3"
+    >
+        <SiteContainer class="text-sm leading-6"
+            ><p>
+                Reservation:
+                <Link
+                    :href="`/reservations/${notice.id}#group-pre-order`"
+                    class="font-medium underline"
+                    >{{ notice.code }}</Link
+                >
+            </p>
+            <p>
+                You have unsubmitted saved selections. Changes close in
+                {{ notice.minutes }} minutes. Saved dishes will be retained.
+            </p></SiteContainer
+        >
     </div>
     <SiteContainer
         class="space-y-6"

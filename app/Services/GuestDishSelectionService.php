@@ -100,6 +100,7 @@ class GuestDishSelectionService
      */
     private function replaceLocked(Reservation $reservation, ReservationGuest $guest, array $selections, int $expectedVersion, bool $ownerEdit = false): array
     {
+        PreOrderTiming::ensureOpen($reservation);
         $preOrder = $reservation->preOrder()->lockForUpdate()->first();
 
         if ((! $ownerEdit && $guest->pre_order_submitted_at !== null) || in_array($reservation->status, ['cancelled', 'completed'], true)

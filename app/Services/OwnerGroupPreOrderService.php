@@ -178,6 +178,7 @@ class OwnerGroupPreOrderService
         }
 
         return [
+            'timing' => PreOrderTiming::state($reservation),
             'reservation_id' => $reservation->id, 'version' => $this->version($reservation),
             'status' => $order?->status, 'submitted_at' => $order?->submitted_at?->toIso8601String(),
             'editable' => $editable, 'can_submit' => $editable && Gate::allows('submitPreOrder', $reservation) && $order?->status === 'draft' && $data['summary']['total_quantity'] > 0,

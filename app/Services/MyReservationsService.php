@@ -50,7 +50,7 @@ class MyReservationsService
                 'can_add_pre_order' => ReservationCardState::acceptsPreOrder($reservation)
                     && ! $reservation->getAttribute('owner_submitted')
                     && ($reservation->preOrder === null || $reservation->preOrder->status === 'draft'),
-                'can_view_group' => ReservationCardState::acceptsPreOrder($reservation)
+                'can_view_group' => ReservationCardState::phase($reservation) === 'upcoming'
                     && ($reservation->getAttribute('owner_submitted') || $reservation->preOrder?->status === 'submitted'),
                 'feedback_action' => in_array(ReservationCardState::phase($reservation), ['in_progress', 'completed'], true)
                     ? ($reservation->feedback === null ? 'leave' : 'update') : null,
@@ -64,6 +64,19 @@ class MyReservationsService
             'prev_page_url' => $reservations->previousPageUrl(),
             'next_page_url' => $reservations->nextPageUrl(),
         ];
+    }
+
+    /** @return list<array{id: int, code: string, minutes: int}> */
+    public function warnings(User $owner): array
+    {
+        Gate::forUser($owner)->authorize('viewAny', Reservation::class);
+        $now = CarbonImmutable::now();
+
+        return array_values(Reservation::query()->where('owner_user_id', $owner->id)->whereIn('status', ['draft', 'confirmed'])
+            ->where('reserved_at', '>', $now->addMinutes(30))->where('reserved_at', '<=', $now->addMinutes(45))
+            ->orderBy('reserved_at')->get()->filter(fn (Reservation $r): bool => PreOrderTiming::state($r)['unconfirmed'])
+            ->map(fn (Reservation $r): array => ['id' => $r->id, 'code' => $r->code,
+                'minutes' => (int) ceil($now->diffInSeconds($r->reserved_at->toImmutable()->subMinutes(30), false) / 60)])->values()->all());
     }
 
     /** @return array<string, int> */
