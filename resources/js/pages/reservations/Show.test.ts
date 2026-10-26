@@ -195,6 +195,7 @@ describe('dashboard group submission integration', () => {
             expect.objectContaining({
                 only: [
                     'groupOrder',
+                    'restaurantReview',
                     'reservation',
                     'canSubmitPreOrder',
                     'canManageInvitations',

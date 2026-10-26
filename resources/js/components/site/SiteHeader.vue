@@ -11,6 +11,10 @@ const page = usePage();
 const user = computed(() => page.props.auth?.user ?? null);
 const isHome = computed(() => page.component === 'restaurants/Index');
 const isBooking = computed(() => page.component.startsWith('bookings/'));
+const isStaff = computed(() => page.component.startsWith('staff/'));
+const workplaces = computed(
+    () => (page.props.staffRestaurants ?? []) as { id: number; name: string }[],
+);
 </script>
 
 <template>
@@ -35,46 +39,64 @@ const isBooking = computed(() => page.component.startsWith('bookings/'));
 
                 <nav
                     aria-label="Main navigation"
-                    class="order-last flex w-full justify-center whitespace-nowrap lg:order-none lg:w-max lg:justify-self-center"
+                    class="order-last flex w-full flex-wrap justify-center lg:order-none lg:w-full lg:justify-self-center"
                 >
-                    <Link
-                        :href="home()"
-                        :aria-current="isHome ? 'page' : undefined"
-                        :class="
-                            isHome
-                                ? 'border-primary text-primary'
-                                : 'border-transparent hover:text-primary'
-                        "
-                        class="inline-flex min-h-11 items-center border-b-2 px-2 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring sm:px-4 sm:text-base lg:min-h-[67px] lg:text-xl lg:leading-8"
-                    >
-                        Main page
-                    </Link>
-                    <Link
-                        :href="create()"
-                        :aria-current="isBooking ? 'page' : undefined"
-                        :class="
-                            isBooking
-                                ? 'border-primary text-primary'
-                                : 'border-transparent'
-                        "
-                        class="inline-flex min-h-11 items-center border-b-2 px-2 text-xs font-medium hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring sm:px-4 sm:text-base lg:min-h-[67px] lg:text-xl lg:leading-8"
-                    >
-                        Book a Table
-                    </Link>
-                    <Link
-                        v-if="user"
-                        :href="dashboard()"
-                        :aria-current="
-                            page.component === 'Dashboard' ? 'page' : undefined
-                        "
-                        :class="
-                            page.component === 'Dashboard'
-                                ? 'border-primary text-primary'
-                                : 'border-transparent'
-                        "
-                        class="inline-flex min-h-11 items-center border-b-2 px-2 text-xs font-medium hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-4 sm:px-4 sm:text-base lg:min-h-[67px] lg:text-xl"
-                        >Reservations</Link
-                    >
+                    <template v-if="isStaff">
+                        <Link
+                            v-for="place in workplaces"
+                            :key="place.id"
+                            :href="`/staff/restaurants/${place.id}/reservations`"
+                            class="inline-flex min-h-11 items-center border-b-2 border-primary px-3 text-center text-sm break-words text-primary"
+                            >Reservations · {{ place.name }}</Link
+                        >
+                        <Link
+                            :href="home()"
+                            class="inline-flex min-h-11 items-center px-3 text-sm"
+                            >Main page</Link
+                        >
+                    </template>
+                    <template v-else>
+                        <Link
+                            :href="home()"
+                            :aria-current="isHome ? 'page' : undefined"
+                            :class="
+                                isHome
+                                    ? 'border-primary text-primary'
+                                    : 'border-transparent hover:text-primary'
+                            "
+                            class="inline-flex min-h-11 items-center border-b-2 px-2 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring sm:px-4 sm:text-base lg:min-h-[67px] lg:text-xl lg:leading-8"
+                        >
+                            Main page
+                        </Link>
+                        <Link
+                            :href="create()"
+                            :aria-current="isBooking ? 'page' : undefined"
+                            :class="
+                                isBooking
+                                    ? 'border-primary text-primary'
+                                    : 'border-transparent'
+                            "
+                            class="inline-flex min-h-11 items-center border-b-2 px-2 text-xs font-medium hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring sm:px-4 sm:text-base lg:min-h-[67px] lg:text-xl lg:leading-8"
+                        >
+                            Book a Table
+                        </Link>
+                        <Link
+                            v-if="user"
+                            :href="dashboard()"
+                            :aria-current="
+                                page.component === 'Dashboard'
+                                    ? 'page'
+                                    : undefined
+                            "
+                            :class="
+                                page.component === 'Dashboard'
+                                    ? 'border-primary text-primary'
+                                    : 'border-transparent'
+                            "
+                            class="inline-flex min-h-11 items-center border-b-2 px-2 text-xs font-medium hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-4 sm:px-4 sm:text-base lg:min-h-[67px] lg:text-xl"
+                            >Reservations</Link
+                        >
+                    </template>
                 </nav>
 
                 <Link
@@ -88,6 +110,18 @@ const isBooking = computed(() => page.component.startsWith('bookings/'));
                         class="size-6"
                     /><span v-else>Sign In</span>
                 </Link>
+                <div
+                    v-if="!isStaff && workplaces.length"
+                    class="flex w-full flex-wrap justify-end gap-3 text-xs lg:col-span-3"
+                >
+                    <Link
+                        v-for="place in workplaces"
+                        :key="place.id"
+                        :href="`/staff/restaurants/${place.id}/reservations`"
+                        class="inline-flex min-h-11 items-center text-primary underline"
+                        >Waiter · {{ place.name }}</Link
+                    >
+                </div>
             </div>
         </SiteContainer>
     </header>

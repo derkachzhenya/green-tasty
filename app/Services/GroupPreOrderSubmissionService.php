@@ -66,6 +66,7 @@ class GroupPreOrderSubmissionService
             if (! $alreadySubmitted) {
                 $submittedAt = CarbonImmutable::now();
                 $preOrder->fill(['status' => 'submitted', 'submitted_at' => $submittedAt])->save();
+                app(RestaurantPreOrderReviewService::class)->event($lockedReservation, 'customer_submitted', (int) $preOrder->review_revision, 'restaurant');
             }
 
             return [

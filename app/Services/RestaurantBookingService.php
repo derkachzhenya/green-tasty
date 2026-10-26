@@ -107,7 +107,7 @@ class RestaurantBookingService
      * @param  Builder<Reservation>  $query
      * @return Builder<Reservation>
      */
-    private function overlapping(Builder $query, CarbonImmutable $start): Builder
+    public function overlapping(Builder $query, CarbonImmutable $start): Builder
     {
         return $query->whereNotIn('status', ['cancelled', 'completed'])
             ->where('reserved_at', '>', $start->subMinutes(BookingRules::DURATION_MINUTES)->utc())

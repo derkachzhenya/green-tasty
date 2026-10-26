@@ -2,6 +2,8 @@
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref, shallowRef, watch } from 'vue';
 import GroupPreOrderSubmission from '@/components/reservations/GroupPreOrderSubmission.vue';
+import OwnerRestaurantReview from '@/components/reservations/OwnerRestaurantReview.vue';
+import type { RestaurantReview } from '@/types/restaurant-review';
 import GroupPreOrderSummary from '@/components/reservations/GroupPreOrderSummary.vue';
 import GuestInvitationManager from '@/components/reservations/GuestInvitationManager.vue';
 import ReservationOverview from '@/components/reservations/ReservationOverview.vue';
@@ -20,6 +22,7 @@ import type {
 const props = defineProps<{
     reservation: ReservationDetails;
     groupOrder?: DashboardOrder;
+    restaurantReview?: RestaurantReview | null;
     canManageInvitations: boolean;
     canSubmitPreOrder: boolean;
     canEditOwnPreOrder?: boolean;
@@ -62,6 +65,7 @@ function refresh(): void {
     router.reload({
         only: [
             'groupOrder',
+            'restaurantReview',
             'reservation',
             'canSubmitPreOrder',
             'canManageInvitations',
@@ -221,6 +225,12 @@ function refresh(): void {
                                 Group pre-order submitted. Guest selections are
                                 now locked.
                             </p>
+                            <OwnerRestaurantReview
+                                v-if="restaurantReview"
+                                :review="restaurantReview"
+                                :reservation-id="reservation.id"
+                                @changed="refresh"
+                            />
                             <GroupPreOrderSummary
                                 :order="displayedOrder"
                                 :timezone="reservation.timezone"

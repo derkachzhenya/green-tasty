@@ -9,6 +9,7 @@ export type TestNode = {
     text: string;
     style: Record<string, string>;
     value: string;
+    readonly options: TestNode[];
     addEventListener: () => void;
     removeEventListener: () => void;
     focus: () => void;
@@ -25,6 +26,9 @@ function node(tag: string, text = ''): TestNode {
         parent: null,
         style: {},
         value: '',
+        get options() {
+            return this.children.filter((child) => child.tag === 'option');
+        },
         addEventListener() {},
         removeEventListener() {},
         focus() {},

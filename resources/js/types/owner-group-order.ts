@@ -1,5 +1,6 @@
 import type { PreOrderTiming } from '@/composables/usePreOrderClock';
 import type { ConsolidatedSummary, GuestSelection } from './reservation';
+import type { RestaurantReview } from './restaurant-review';
 export type OwnerGroupParticipant = {
     id: number;
     name: string;
@@ -12,6 +13,7 @@ export type OwnerGroupParticipant = {
     subtotal: string;
 };
 export type OwnerGroupOrder = {
+    restaurant_review?: RestaurantReview;
     timing?: PreOrderTiming;
     active_participants?: number;
     removed_participants?: number;
