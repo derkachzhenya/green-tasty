@@ -17,6 +17,7 @@ void createInertiaApp({
             case name.startsWith('restaurants/'):
             case name.startsWith('bookings/'):
             case name.startsWith('reservations/'):
+            case name.startsWith('staff/'):
                 return SiteLayout;
             case name === 'Welcome':
                 return null;

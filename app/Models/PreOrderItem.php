@@ -27,6 +27,8 @@ class PreOrderItem extends Model
         return [
             'quantity' => 'integer',
             'unit_price' => 'decimal:2',
+            'review_published_at' => 'immutable_datetime',
+            'superseded_at' => 'immutable_datetime',
         ];
     }
 

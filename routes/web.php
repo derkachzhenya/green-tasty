@@ -58,6 +58,7 @@ Route::post('reservations/{reservation}/pre-order/submit', [GroupPreOrderSubmiss
     ->name('reservations.pre-order.submit');
 
 require __DIR__.'/settings.php';
+require __DIR__.'/staff.php';
 
 Route::middleware(['auth', 'verified', InvitationSecurityHeaders::class, 'throttle:invitation-management'])
     ->scopeBindings()

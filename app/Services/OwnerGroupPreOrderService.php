@@ -138,9 +138,9 @@ class OwnerGroupPreOrderService
         $order = $reservation->preOrder()->first();
         $state = [
             $reservation->only(['id', 'owner_user_id', 'restaurant_id', 'reserved_at', 'guest_count', 'status', 'updated_at']),
-            $order?->only(['id', 'status', 'submitted_at', 'updated_at']),
+            $order?->only(['id', 'status', 'submitted_at', 'updated_at', 'review_revision', 'reviewed_revision', 'review_submitted_at']),
             $reservation->guests()->orderBy('id')->get(['id', 'user_id', 'name', 'selection_version', 'pre_order_submitted_at', 'invitation_revoked_at', 'invitation_expires_at', 'removed_at'])->toArray(),
-            $order?->items()->orderBy('id')->get(['id', 'reservation_guest_id', 'menu_item_id', 'quantity', 'unit_price', 'notes', 'updated_at'])->toArray(),
+            $order?->items()->orderBy('id')->get(['id', 'reservation_guest_id', 'menu_item_id', 'quantity', 'unit_price', 'notes', 'updated_at', 'restaurant_decision', 'review_published_at', 'superseded_at'])->toArray(),
         ];
 
         return '"'.hash('sha256', json_encode($state, JSON_THROW_ON_ERROR)).'"';
@@ -153,7 +153,7 @@ class OwnerGroupPreOrderService
         $order = $reservation->preOrder()->first();
         $editable = ReservationCardState::acceptsPreOrder($reservation) && ($order === null || ($order->status === 'draft' && $order->submitted_at === null));
         $guests = $reservation->guests()->active()->orderBy('id')->get();
-        $items = $order?->items()->whereRelation('guest', 'reservation_id', $reservation->id)->with('menuItem')->orderBy('id')->get();
+        $items = $order?->items()->whereNull('superseded_at')->whereRelation('guest', 'reservation_id', $reservation->id)->with('menuItem')->orderBy('id')->get();
         $participants = [];
         foreach ($guests as $guest) {
             $own = $guest->user_id === $reservation->owner_user_id;
@@ -185,6 +185,7 @@ class OwnerGroupPreOrderService
             'active_participants' => $guests->count(),
             'removed_participants' => $reservation->guests()->whereNotNull('removed_at')->count(),
             'participants' => $participants, 'summary' => $data['summary'],
+            ...($order?->status === 'submitted' && $order->submitted_at !== null ? ['restaurant_review' => app(RestaurantPreOrderReviewService::class)->ownerState($reservation)] : []),
         ];
     }
 }

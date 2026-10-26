@@ -9,6 +9,7 @@ import {
     onBeforeUnmount,
 } from 'vue';
 import GuestRemovalModal from './GuestRemovalModal.vue';
+import OwnerRestaurantReview from './OwnerRestaurantReview.vue';
 import type { OwnerGroupParticipant } from '@/types/owner-group-order';
 import {
     MapPin,
@@ -233,6 +234,16 @@ async function confirm() {
                 class="min-h-0 overflow-y-auto overscroll-contain px-4 py-5 sm:px-10"
                 :aria-busy="loading || busy"
             >
+                <OwnerRestaurantReview
+                    v-if="order?.restaurant_review"
+                    :review="order.restaurant_review"
+                    :reservation-id="reservation.id"
+                    class="mb-5"
+                    @changed="
+                        load();
+                        emit('changed');
+                    "
+                />
                 <p v-if="loading" role="status" class="py-8">
                     Loading group pre-order…
                 </p>
@@ -512,7 +523,11 @@ async function confirm() {
                 <div
                     class="mb-4 flex items-center justify-between gap-4 text-xl font-medium"
                 >
-                    <span>Grand Total</span
+                    <span>{{
+                        order?.restaurant_review
+                            ? 'Requested total (includes rejections)'
+                            : 'Grand Total'
+                    }}</span
                     ><output
                         aria-label="Group pre-order total"
                         class="text-primary tabular-nums"

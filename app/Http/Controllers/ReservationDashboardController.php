@@ -6,6 +6,7 @@ use App\Models\Reservation;
 use App\Services\ReservationCardState;
 use App\Services\ReservationDashboardService;
 use App\Services\RestaurantBookingService;
+use App\Services\RestaurantPreOrderReviewService;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -21,6 +22,7 @@ class ReservationDashboardController extends Controller
             'canEditOwnPreOrder' => ReservationCardState::acceptsPreOrder($reservation) && ($reservation->preOrder === null || $reservation->preOrder->status === 'draft'),
             'canSubmitPreOrder' => Gate::allows('submitPreOrder', $reservation) && ReservationCardState::acceptsPreOrder($reservation),
             'canManageInvitations' => Gate::allows('manageInvitations', $reservation) && ReservationCardState::acceptsPreOrder($reservation) && ($reservation->preOrder === null || $reservation->preOrder->status === 'draft'),
+            'restaurantReview' => fn () => app(RestaurantPreOrderReviewService::class)->ownerState($reservation),
             'reservation' => fn () => $bookings->confirmation($reservation),
             'groupOrder' => Inertia::defer(fn () => $dashboard->groupOrder($reservation), rescue: true),
         ]);
