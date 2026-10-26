@@ -27,9 +27,11 @@ class MyReservationsService
             ->where('owner_user_id', $owner->id)
             ->select(['id', 'restaurant_id', 'restaurant_table_id', 'owner_user_id', 'code', 'reserved_at', 'guest_count', 'status'])
             ->with(['restaurant:id,name,slug,address', 'table:id,name,seats', 'preOrder:id,reservation_id,status,submitted_at', 'feedback:id,reservation_id'])
-            ->withCount(['guests as submitted_pre_orders' => fn (Builder $q) => $q
-                ->where(fn (Builder $guest) => $guest->whereNotNull('pre_order_submitted_at')->orWhereHas('reservation.preOrder', fn (Builder $order) => $order->where('status', 'submitted')->whereNotNull('submitted_at')))
-                ->whereHas('preOrderItems', fn (Builder $items) => $items->whereHas('preOrder', fn (Builder $order) => $order->whereColumn('pre_orders.reservation_id', 'reservation_guests.reservation_id')))])
+            ->withCount(['guests as active_participants' => fn (Builder $q) => $q->whereNull('removed_at'),
+                'guests as removed_participants' => fn (Builder $q) => $q->whereNotNull('removed_at'),
+                'guests as submitted_pre_orders' => fn (Builder $q) => $q->whereNull('removed_at')
+                    ->where(fn (Builder $guest) => $guest->whereNotNull('pre_order_submitted_at')->orWhereHas('reservation.preOrder', fn (Builder $order) => $order->where('status', 'submitted')->whereNotNull('submitted_at')))
+                    ->whereHas('preOrderItems', fn (Builder $items) => $items->whereHas('preOrder', fn (Builder $order) => $order->whereColumn('pre_orders.reservation_id', 'reservation_guests.reservation_id')))])
             ->withExists(['guests as owner_submitted' => fn (Builder $q) => $q
                 ->whereColumn('user_id', 'reservations.owner_user_id')->whereNotNull('pre_order_submitted_at')])
             ->when($filter !== 'all', fn (Builder $query) => $this->filter($query, $filter))
@@ -43,6 +45,8 @@ class MyReservationsService
                 ...$this->bookings->confirmation($reservation),
                 'pre_order_status' => $reservation->preOrder?->status,
                 'phase' => ReservationCardState::phase($reservation),
+                'active_participants' => (int) $reservation->getAttribute('active_participants'),
+                'removed_participants' => (int) $reservation->getAttribute('removed_participants'),
                 'submitted_pre_orders' => (int) $reservation->getAttribute('submitted_pre_orders'),
                 'can_invite' => $reservation->guest_count > 1 && ReservationCardState::acceptsPreOrder($reservation)
                     && ($reservation->preOrder === null || $reservation->preOrder->status === 'draft')
@@ -51,7 +55,7 @@ class MyReservationsService
                     && ! $reservation->getAttribute('owner_submitted')
                     && ($reservation->preOrder === null || $reservation->preOrder->status === 'draft'),
                 'can_view_group' => ReservationCardState::phase($reservation) === 'upcoming'
-                    && ($reservation->getAttribute('owner_submitted') || $reservation->preOrder?->status === 'submitted'),
+                    && ($reservation->getAttribute('owner_submitted') || (int) $reservation->getAttribute('submitted_pre_orders') > 0 || $reservation->preOrder?->status === 'submitted'),
                 'feedback_action' => in_array(ReservationCardState::phase($reservation), ['in_progress', 'completed'], true)
                     ? ($reservation->feedback === null ? 'leave' : 'update') : null,
             ])->all()),

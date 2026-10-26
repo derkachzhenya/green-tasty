@@ -7,6 +7,9 @@ use App\Models\PreOrderItem;
 use App\Models\Reservation;
 use App\Models\Restaurant;
 use App\Models\User;
+use App\Services\GuestInvitationService;
+use App\Services\MyReservationsService;
+use App\Services\ReservationDashboardService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -171,5 +174,76 @@ class OwnerGroupPreOrderTest extends TestCase
         $version = $this->version();
         $this->change($this->ownItem, 3, $version)->assertStatus(419);
         $this->patchJson($this->url.'/items/'.$this->ownItem, ['quantity' => 3], ['If-Match' => $version, 'X-XSRF-TOKEN' => $xsrf])->assertOk();
+    }
+
+    public function test_removed_membership_is_hidden_revoked_versioned_and_cannot_be_regenerated(): void
+    {
+        $invites = app(GuestInvitationService::class);
+        $guest = $this->reservation->guests()->findOrFail($this->guestId);
+        $issued = $invites->regenerate($this->reservation, $guest);
+        $token = basename($issued['invitation_url']);
+        $old = $this->version();
+        $beforeOwner = PreOrderItem::findOrFail($this->ownItem)->toArray();
+        $result = $this->deleteJson($this->url.'/guests/'.$guest->id, [], ['If-Match' => $old])
+            ->assertOk()->assertJsonCount(2, 'participants')->assertJsonPath('active_participants', 2)
+            ->assertJsonPath('removed_participants', 1)->assertJsonPath('summary.grand_total', '34.00');
+        $this->assertNotContains($guest->id, array_column($result->json('participants'), 'id'));
+        $this->assertNotSame($old, $result->json('version'));
+        $this->assertNotNull($guest->fresh()->removed_at);
+        $this->assertNull($guest->fresh()->invitation_token);
+        $this->assertSame($beforeOwner, PreOrderItem::findOrFail($this->ownItem)->toArray());
+        $this->assertSame(4, $this->reservation->fresh()->guest_count);
+        $this->getJson('/invitations/'.$token.'/menu')->assertNotFound();
+        $this->postJson('/reservations/'.$this->reservation->id.'/invitations/'.$guest->id.'/regenerate')->assertConflict();
+        $this->assertNotNull($guest->fresh()->removed_at);
+        $this->deleteJson($this->url.'/guests/'.$guest->id, [], ['If-Match' => $result->json('version')])->assertConflict();
+        $card = app(MyReservationsService::class)->forOwner($this->owner)['data'][0];
+        $this->assertSame(2, $card['active_participants']);
+        $this->assertSame(1, $card['removed_participants']);
+        $this->assertSame(0, $card['submitted_pre_orders']);
+        $this->assertSame(4, $card['guest_count']);
+        $legacy = app(ReservationDashboardService::class)->groupOrder($this->reservation);
+        $this->assertNotContains($guest->id, array_column($legacy['participants'], 'id'));
+    }
+
+    public function test_stale_removal_cannot_erase_an_intervening_guest_update(): void
+    {
+        $old = $this->version();
+        $this->change($this->guestItem, 3, $old)->assertOk();
+        $this->deleteJson($this->url.'/guests/'.$this->guestId, [], ['If-Match' => $old])->assertConflict();
+        $this->assertNull($this->reservation->guests()->findOrFail($this->guestId)->removed_at);
+        $this->assertDatabaseHas('pre_order_items', ['id' => $this->guestItem, 'quantity' => 3]);
+    }
+
+    public function test_submitted_history_cannot_be_removed_and_remains_byte_for_byte_unchanged(): void
+    {
+        $this->postJson($this->url.'/submit', [], ['If-Match' => $this->version()])->assertOk();
+        $before = PreOrderItem::orderBy('id')->get()->toJson();
+        $stamp = $this->reservation->preOrder()->firstOrFail()->submitted_at->toIso8601String();
+        $this->deleteJson($this->url.'/guests/'.$this->guestId, [], ['If-Match' => $this->version()])->assertConflict();
+        $this->assertSame($before, PreOrderItem::orderBy('id')->get()->toJson());
+        $this->assertSame($stamp, $this->reservation->preOrder()->firstOrFail()->submitted_at->toIso8601String());
+        $this->assertNull($this->reservation->guests()->findOrFail($this->guestId)->removed_at);
+    }
+
+    public function test_owner_without_items_can_open_guest_group_then_create_only_their_own_selection(): void
+    {
+        PreOrderItem::findOrFail($this->ownItem)->delete();
+        $this->reservation->guests()->whereKey($this->guestId)->update(['pre_order_submitted_at' => now()]);
+        $this->getJson($this->url)->assertJsonPath('participants.0.is_owner', true)->assertJsonPath('participants.0.items', [])
+            ->assertJsonPath('participants.0.editable', true)->assertJsonPath('summary.grand_total', '10.00');
+        $card = app(MyReservationsService::class)->forOwner($this->owner)['data'][0];
+        $this->assertTrue($card['can_view_group']);
+        $this->assertTrue($card['can_add_pre_order']);
+        $before = PreOrderItem::findOrFail($this->guestItem)->toArray();
+        $dish = PreOrderItem::findOrFail($this->guestItem)->menu_item_id;
+        $this->postJson('/reservations/'.$this->reservation->id.'/owner-pre-order/submit',
+            ['items' => [['menu_item_id' => $dish, 'quantity' => 1]]], ['If-Match' => '"0"'])->assertOk()
+            ->assertJsonPath('selections.subtotal', '999.00');
+        $this->assertSame($before, PreOrderItem::findOrFail($this->guestItem)->toArray());
+        $this->getJson($this->url)->assertJsonPath('summary.grand_total', '1009.00');
+        $card = app(MyReservationsService::class)->forOwner($this->owner)['data'][0];
+        $this->assertSame(2, $card['submitted_pre_orders']);
+        $this->assertFalse($card['can_add_pre_order']);
     }
 }

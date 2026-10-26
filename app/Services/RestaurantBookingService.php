@@ -87,7 +87,7 @@ class RestaurantBookingService
                 || ($preOrder !== null && ($preOrder->status !== 'draft' || $preOrder->submitted_at !== null))) {
                 throw ValidationException::withMessages(['time' => 'This reservation cannot be changed online.']);
             }
-            if ($guests < max(1, $locked->guests()->count()) || $guests > $table->seats) {
+            if ($guests < max(1, $locked->guests()->active()->count()) || $guests > $table->seats) {
                 throw ValidationException::withMessages(['guest_count' => 'Keep all registered participants within this table’s seating capacity.']);
             }
             $date = CarbonImmutable::instance($locked->reserved_at)->setTimezone(BookingRules::TIMEZONE)->format('Y-m-d');

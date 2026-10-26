@@ -29,7 +29,7 @@ class ReservationDashboardService
             Gate::authorize('viewSummary', $locked);
             $preOrder = $locked->preOrder()->first();
             $summary = $this->summaries->summarize($locked);
-            $participants = $locked->guests()->select([
+            $participants = $locked->guests()->active()->select([
                 'id', 'reservation_id', 'user_id', 'name', 'status',
                 'invitation_token', 'invitation_expires_at', 'invitation_revoked_at',
             ])->orderBy('id')->get();

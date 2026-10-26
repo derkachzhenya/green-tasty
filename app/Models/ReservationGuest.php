@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Database\Factories\ReservationGuestFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -26,10 +27,11 @@ class ReservationGuest extends Model
         'responded_at',
     ];
 
-    /** @return array{responded_at: 'datetime', invitation_expires_at: 'immutable_datetime', invitation_revoked_at: 'immutable_datetime', name_confirmed_at: 'immutable_datetime', pre_order_submitted_at: 'immutable_datetime', selection_version: 'integer'} */
+    /** @return array{removed_at: 'immutable_datetime', responded_at: 'datetime', invitation_expires_at: 'immutable_datetime', invitation_revoked_at: 'immutable_datetime', name_confirmed_at: 'immutable_datetime', pre_order_submitted_at: 'immutable_datetime', selection_version: 'integer'} */
     protected function casts(): array
     {
         return [
+            'removed_at' => 'immutable_datetime',
             'responded_at' => 'datetime',
             'invitation_expires_at' => 'immutable_datetime',
             'invitation_revoked_at' => 'immutable_datetime',
@@ -37,6 +39,14 @@ class ReservationGuest extends Model
             'pre_order_submitted_at' => 'immutable_datetime',
             'selection_version' => 'integer',
         ];
+    }
+
+    /** @param Builder<static> $query
+     * @return Builder<static>
+     */
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->whereNull('removed_at');
     }
 
     /** @return BelongsTo<Reservation, $this> */

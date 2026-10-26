@@ -13,6 +13,8 @@ export type OwnerGroupParticipant = {
 };
 export type OwnerGroupOrder = {
     timing?: PreOrderTiming;
+    active_participants?: number;
+    removed_participants?: number;
     reservation_id: number;
     version: string;
     status: string | null;

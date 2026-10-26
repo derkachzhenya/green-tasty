@@ -101,6 +101,12 @@ function close(): void {
                 v-else
                 class="min-h-0 flex-1 overflow-y-auto p-4 sm:px-10 sm:py-6"
             >
+                <h3
+                    v-if="ownerEdit && items.length"
+                    class="mb-4 text-base font-medium"
+                >
+                    My Pre-Order
+                </h3>
                 <ul class="space-y-3">
                     <li
                         v-for="item in items"

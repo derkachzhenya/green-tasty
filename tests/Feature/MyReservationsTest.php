@@ -78,6 +78,7 @@ class MyReservationsTest extends TestCase
                 'table' => ['name' => 'Table 2', 'seats' => 4],
                 'date' => '2026-10-24', 'time' => '12:00', 'end_date' => '2026-10-24', 'end_time' => '14:00',
                 'timezone' => 'Asia/Tbilisi', 'pre_order_status' => 'submitted',
+                'active_participants' => 1, 'removed_participants' => 0,
                 'phase' => 'completed', 'submitted_pre_orders' => 0, 'can_invite' => false, 'can_add_pre_order' => false, 'can_view_group' => false, 'feedback_action' => 'leave',
             ]])->missing('reservations.data.0.guests')->missing('reservations.data.0.owner_user_id')
                 ->missing('reservations.data.0.special_requests')->missing('reservations.data.0.pre_order')));

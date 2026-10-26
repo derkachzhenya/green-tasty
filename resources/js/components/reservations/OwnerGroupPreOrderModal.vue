@@ -1,6 +1,15 @@
 <script setup lang="ts">
 import { usePreOrderClock } from '@/composables/usePreOrderClock';
-import { computed, ref, watch, nextTick } from 'vue';
+import {
+    computed,
+    ref,
+    shallowRef,
+    watch,
+    nextTick,
+    onBeforeUnmount,
+} from 'vue';
+import GuestRemovalModal from './GuestRemovalModal.vue';
+import type { OwnerGroupParticipant } from '@/types/owner-group-order';
 import {
     MapPin,
     CalendarDays,
@@ -9,6 +18,7 @@ import {
     Trash2,
     X,
     Bell,
+    CircleCheck,
 } from '@lucide/vue';
 import {
     Dialog,
@@ -29,7 +39,32 @@ const { order, loading, busy, stale, error, submitted, load, mutate } =
 const { cutoffLocked, warning, minutes } = usePreOrderClock(
     computed(() => order.value?.timing),
 );
-const confirming = ref<number | 'submit' | null>(null);
+const confirming = ref<'submit' | null>(null);
+const removing = shallowRef<OwnerGroupParticipant | null>(null);
+const removalTrigger = shallowRef<HTMLElement | null>(null);
+const groupClose = ref<HTMLButtonElement | null>(null);
+const scrollArea = ref<HTMLElement | null>(null);
+const removalNotice = ref(false);
+let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+onBeforeUnmount(() => clearTimeout(noticeTimer));
+function askRemoval(guest: OwnerGroupParticipant, event: Event) {
+    removalTrigger.value = event.currentTarget as HTMLElement;
+    removing.value = guest;
+}
+async function removeGuest() {
+    if (!removing.value || busy.value || stale.value || cutoffLocked.value)
+        return;
+    const top = scrollArea.value?.scrollTop ?? 0;
+    if (await mutate(`/guests/${removing.value.id}`, 'delete')) {
+        removalTrigger.value = groupClose.value;
+        removing.value = null;
+        removalNotice.value = true;
+        clearTimeout(noticeTimer);
+        noticeTimer = setTimeout(() => (removalNotice.value = false), 6000);
+        await nextTick();
+        if (scrollArea.value) scrollArea.value.scrollTop = top;
+    }
+}
 const participants = computed(() =>
     [...(order.value?.participants ?? [])].sort(
         (a, b) => Number(b.is_owner) - Number(a.is_owner),
@@ -81,14 +116,7 @@ function close() {
 }
 async function confirm() {
     if (confirming.value === null) return;
-    const action = confirming.value;
-    if (
-        await mutate(
-            action === 'submit' ? '/submit' : `/guests/${action}`,
-            action === 'submit' ? 'post' : 'delete',
-        )
-    )
-        confirming.value = null;
+    if (await mutate('/submit', 'post')) confirming.value = null;
 }
 </script>
 <template>
@@ -98,9 +126,28 @@ async function confirm() {
             class="green-tasty owner-group-dialog flex max-h-[calc(100dvh-32px)] w-[calc(100%_-_32px)] max-w-[838px] flex-col gap-0 overflow-hidden rounded-3xl bg-[#f7f7f7] p-0 font-[Poppins,sans-serif] text-foreground sm:max-w-[838px]"
             @open-auto-focus="remember"
             @close-auto-focus="restore"
-            @escape-key-down="busy && $event.preventDefault()"
+            @escape-key-down="(busy || removing) && $event.preventDefault()"
             @interact-outside="$event.preventDefault()"
         >
+            <div
+                v-if="removalNotice"
+                role="status"
+                class="absolute top-3 right-16 z-[60] flex max-w-[calc(100%-80px)] items-center gap-3 rounded-lg border border-primary/40 bg-[#e8ffea] px-4 py-3 text-sm shadow-md"
+            >
+                <CircleCheck
+                    class="size-5 shrink-0 text-primary"
+                    aria-hidden="true"
+                />
+                Guest Removed
+                <button
+                    type="button"
+                    aria-label="Dismiss guest removed notification"
+                    class="grid size-8 place-items-center rounded focus-visible:outline-2"
+                    @click="removalNotice = false"
+                >
+                    <X class="size-4" aria-hidden="true" />
+                </button>
+            </div>
             <header
                 class="relative shrink-0 border-b border-primary/15 px-4 pt-6 pb-4 sm:px-10 sm:pt-8"
             >
@@ -160,11 +207,19 @@ async function confirm() {
                     <div class="flex items-center gap-2">
                         <Users class="size-4 text-primary" aria-hidden="true" />
                         <dt class="sr-only">Guests</dt>
-                        <dd>{{ reservation.guest_count }} Guests</dd>
+                        <dd>
+                            {{ reservation.guest_count }} Guests<span
+                                v-if="order?.removed_participants"
+                                class="block text-muted-foreground"
+                                >{{ order.active_participants }} active
+                                participants · booked places unchanged</span
+                            >
+                        </dd>
                     </div>
                 </dl>
                 <button
                     type="button"
+                    ref="groupClose"
                     aria-label="Close Group Pre-Order"
                     :disabled="busy"
                     class="absolute top-2 right-2 grid size-11 place-items-center rounded-md focus-visible:outline-2"
@@ -174,6 +229,7 @@ async function confirm() {
                 </button>
             </header>
             <div
+                ref="scrollArea"
                 class="min-h-0 overflow-y-auto overscroll-contain px-4 py-5 sm:px-10"
                 :aria-busy="loading || busy"
             >
@@ -291,13 +347,17 @@ async function confirm() {
                                 class="inline-flex min-h-11 items-center rounded text-sm font-medium underline underline-offset-8 focus-visible:outline-2"
                                 :aria-disabled="busy || undefined"
                                 @click="busy && $event.preventDefault()"
-                                >Edit my Pre-Order</a
+                                >{{
+                                    participant.items.length
+                                        ? 'Edit my Pre-Order'
+                                        : 'Edit Pre-Order'
+                                }}</a
                             ><button
                                 v-if="participant.can_remove && !cutoffLocked"
                                 type="button"
                                 :disabled="busy || stale"
                                 class="min-h-11 rounded text-sm font-medium underline underline-offset-8 focus-visible:outline-2"
-                                @click="confirming = participant.id"
+                                @click="askRemoval(participant, $event)"
                             >
                                 Remove Guest<span class="sr-only">
                                     {{ participant.name }}</span
@@ -428,11 +488,8 @@ async function confirm() {
                     class="mt-4 rounded-xl border border-primary/20 bg-accent p-4"
                 >
                     <p class="text-sm leading-6">
-                        {{
-                            confirming === 'submit'
-                                ? 'Submit all saved selections? This locks changes for everyone.'
-                                : 'Remove this guest’s saved draft and revoke their invitation?'
-                        }}
+                        Submit all saved selections? This locks changes for
+                        everyone.
                     </p>
                     <div class="mt-3 flex flex-wrap gap-3">
                         <Button
@@ -447,11 +504,7 @@ async function confirm() {
                             :disabled="busy || stale"
                             @click="confirm"
                             >{{
-                                busy
-                                    ? 'Saving…'
-                                    : confirming === 'submit'
-                                      ? 'Confirm submission'
-                                      : 'Confirm guest removal'
+                                busy ? 'Saving…' : 'Confirm submission'
                             }}</Button
                         >
                     </div>
@@ -484,6 +537,16 @@ async function confirm() {
             </footer>
         </DialogContent>
     </Dialog>
+    <GuestRemovalModal
+        :guest-name="removing?.name ?? ''"
+        :open="removing !== null"
+        :busy="busy"
+        :blocked="stale || cutoffLocked"
+        :error="error"
+        :return-focus-target="removalTrigger"
+        @close="removing = null"
+        @confirm="removeGuest"
+    />
 </template>
 
 <style>
