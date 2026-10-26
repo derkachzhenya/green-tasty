@@ -11,6 +11,7 @@ use App\Services\GroupPreOrderSubmissionService;
 use App\Services\GuestDishSelectionService;
 use App\Services\GuestInvitationService;
 use App\Services\GuestPreOrderService;
+use App\Services\OwnerGroupPreOrderService;
 use Illuminate\Database\Connection;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\DatabaseTruncation;
@@ -200,6 +201,31 @@ class GroupPreOrderSubmissionConcurrencyTest extends TestCase
         }
         $this->assertNull(app(GuestInvitationService::class)->resolve($this->token)->pre_order_submitted_at);
         $this->assertSame(3, $this->preOrder->items()->sole()->quantity);
+    }
+
+    public function test_guest_removal_waits_for_selection_write_then_rejects_the_stale_version(): void
+    {
+        $this->actingAs($this->owner);
+        $service = app(OwnerGroupPreOrderService::class);
+        $version = $service->view($this->reservation, $this->owner)['version'];
+        $guest = app(GuestInvitationService::class)->resolve($this->token);
+        $this->holdOperation(fn () => app(GuestDishSelectionService::class)->replace($this->token, [
+            ['menu_item_id' => $this->dish->id, 'quantity' => 3],
+        ], 1));
+        $this->assertBlockedByRowLock(fn () => $service->removeGuest($this->reservation, $this->owner, $guest->id, $version));
+        $this->heldConnection->commit();
+        try {
+            $service->removeGuest($this->reservation, $this->owner, $guest->id, $version);
+            $this->fail('Stale removal must not erase a competing saved selection.');
+        } catch (ConflictHttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+        $this->assertNull($guest->fresh()->removed_at);
+        $this->assertSame(3, $this->preOrder->items()->sole()->quantity);
+        $result = $service->removeGuest($this->reservation, $this->owner, $guest->id, $service->view($this->reservation, $this->owner)['version']);
+        $this->assertSame('0.00', $result['summary']['grand_total']);
+        $this->assertNotNull($guest->fresh()->removed_at);
+        $this->assertNull(app(GuestInvitationService::class)->resolve($this->token));
     }
 
     private function holdOperation(callable $operation): mixed

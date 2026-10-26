@@ -12,6 +12,8 @@ export type ReservationDetails = Omit<BookingConfirmation, 'status'> & {
 };
 
 export type OwnedReservation = ReservationDetails & {
+    active_participants?: number;
+    removed_participants?: number;
     pre_order_status: string | null;
     phase?: ReservationPhase;
     submitted_pre_orders?: number;

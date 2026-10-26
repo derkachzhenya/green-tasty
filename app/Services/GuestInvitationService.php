@@ -108,7 +108,7 @@ class GuestInvitationService
 
         $query = ReservationGuest::query()
             ->where('invitation_token', hash('sha256', $token))
-            ->whereNull('invitation_revoked_at')
+            ->active()->whereNull('invitation_revoked_at')
             ->where('invitation_expires_at', '>', CarbonImmutable::now());
 
         if ($lockForUpdate) {
@@ -136,6 +136,9 @@ class GuestInvitationService
     /** @return IssuedInvitation */
     private function issue(ReservationGuest $guest, ?string $expiresAt): array
     {
+        if ($guest->removed_at !== null) {
+            throw new ConflictHttpException('This guest was removed. Create a new invitation for a new participant.');
+        }
         $token = bin2hex(random_bytes(32));
         $expiration = $expiresAt === null
             ? CarbonImmutable::now()->addDays(7)

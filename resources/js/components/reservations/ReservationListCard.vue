@@ -141,6 +141,12 @@ const label = computed(
                     <dd>
                         {{ reservation.guest_count }}
                         {{ reservation.guest_count === 1 ? 'Guest' : 'Guests' }}
+                        <span
+                            v-if="reservation.removed_participants"
+                            class="mt-1 block text-xs text-muted-foreground"
+                            >{{ reservation.active_participants }} active
+                            participants · booked places unchanged</span
+                        >
                     </dd>
                 </div>
             </dl>

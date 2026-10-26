@@ -94,7 +94,7 @@ class ReservationFigmaStatesTest extends TestCase
         $this->postJson('/invitations/'.$token.'/identity', ['name' => 'Guest'])->assertOk();
         $this->postJson('/invitations/'.$token.'/submit', $this->items(), ['If-Match' => '"0"'])->assertOk();
         $this->assertSame(1, $this->card()['submitted_pre_orders']);
-        $this->assertFalse($this->card()['can_view_group']);
+        $this->assertTrue($this->card()['can_view_group']); // The owner can review guest selections before adding their own.
         $this->postJson($this->path('/submit'), $this->items(), ['If-Match' => '"0"'])->assertOk();
         MenuItem::findOrFail($this->dishId)->update(['price' => '999.00']);
         $this->putJson($this->path('/selections'), $this->items(2), ['If-Match' => '"1"'])->assertOk()->assertJsonPath('subtotal', '34.00');
