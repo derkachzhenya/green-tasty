@@ -28,7 +28,7 @@ class ReservationCardState
 
     public static function acceptsPreOrder(Reservation $reservation): bool
     {
-        return self::phase($reservation) === 'upcoming'
+        return ! PreOrderTiming::locked($reservation) && self::phase($reservation) === 'upcoming'
             && in_array($reservation->status, ['draft', 'confirmed'], true);
     }
 }

@@ -78,6 +78,9 @@ class GuestPreOrderService
     private function ensureEditable(ReservationGuest $guest): void
     {
         $reservation = $guest->reservation;
+        if ($reservation !== null) {
+            PreOrderTiming::ensureOpen($reservation);
+        }
         $order = $reservation?->preOrder()->lockForUpdate()->first();
         if ($reservation === null || in_array($reservation->status, ['cancelled', 'completed'], true)
             || $guest->pre_order_submitted_at !== null

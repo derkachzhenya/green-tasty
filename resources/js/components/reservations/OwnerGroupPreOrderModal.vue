@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePreOrderClock } from '@/composables/usePreOrderClock';
 import { computed, ref, watch, nextTick } from 'vue';
 import {
     MapPin,
@@ -25,6 +26,9 @@ const props = defineProps<{ reservation: ReservationDetails }>();
 const emit = defineEmits<{ close: []; changed: [] }>();
 const { order, loading, busy, stale, error, submitted, load, mutate } =
     useOwnerGroupOrder(props.reservation.id, () => emit('changed'));
+const { cutoffLocked, warning, minutes } = usePreOrderClock(
+    computed(() => order.value?.timing),
+);
 const confirming = ref<number | 'submit' | null>(null);
 const participants = computed(() =>
     [...(order.value?.participants ?? [])].sort(
@@ -208,15 +212,29 @@ async function confirm() {
                 >
                 <template v-else-if="order">
                     <p
-                        v-if="!order.editable"
+                        v-if="!order.editable || cutoffLocked"
                         role="status"
                         class="mb-4 flex gap-2 rounded-lg bg-[#fff5f7] p-3 text-sm leading-6"
                     >
                         <Bell
                             class="mt-1 size-4 shrink-0"
                             aria-hidden="true"
-                        />This group pre-order is read-only. Saved quantities
-                        and prices are preserved.
+                        />{{
+                            cutoffLocked
+                                ? '30 minutes or less before the reservation. No pre-order changes can be applied. Saved dishes are retained.'
+                                : 'This group pre-order is read-only. Saved quantities and prices are preserved.'
+                        }}
+                    </p>
+                    <p
+                        v-else-if="warning"
+                        role="status"
+                        class="mb-4 flex gap-2 rounded-lg bg-[#fff5f7] p-3 text-sm leading-6"
+                    >
+                        <Bell
+                            class="mt-1 size-4 shrink-0"
+                            aria-hidden="true"
+                        />You have unsubmitted saved selections. Changes close
+                        in {{ minutes }} minutes. Saved dishes will be retained.
                     </p>
                     <p
                         v-else-if="pending.length"
@@ -265,7 +283,9 @@ async function confirm() {
                             </h2>
                             <a
                                 v-if="
-                                    participant.is_owner && participant.editable
+                                    participant.is_owner &&
+                                    participant.editable &&
+                                    !cutoffLocked
                                 "
                                 :href="`/reservations/${reservation.id}/owner-pre-order`"
                                 class="inline-flex min-h-11 items-center rounded text-sm font-medium underline underline-offset-8 focus-visible:outline-2"
@@ -273,7 +293,7 @@ async function confirm() {
                                 @click="busy && $event.preventDefault()"
                                 >Edit my Pre-Order</a
                             ><button
-                                v-if="participant.can_remove"
+                                v-if="participant.can_remove && !cutoffLocked"
                                 type="button"
                                 :disabled="busy || stale"
                                 class="min-h-11 rounded text-sm font-medium underline underline-offset-8 focus-visible:outline-2"
@@ -306,7 +326,10 @@ async function confirm() {
                             >
                                 <div class="flex items-center gap-1">
                                     <button
-                                        v-if="participant.editable"
+                                        v-if="
+                                            participant.editable &&
+                                            !cutoffLocked
+                                        "
                                         type="button"
                                         :aria-label="`Remove ${item.name} for ${participant.name}`"
                                         :disabled="busy || stale"
@@ -359,7 +382,7 @@ async function confirm() {
                                     </p>
                                 </div>
                                 <QuantityControl
-                                    v-if="participant.editable"
+                                    v-if="participant.editable && !cutoffLocked"
                                     :name="`${item.name} for ${participant.name}`"
                                     :quantity="item.quantity"
                                     :disabled="busy || stale"
@@ -399,7 +422,7 @@ async function confirm() {
                 class="max-h-[45dvh] shrink-0 overflow-y-auto border-t border-primary/15 bg-[#f7f7f7] px-4 py-4 sm:px-10 sm:pb-8"
             >
                 <div
-                    v-if="confirming !== null"
+                    v-if="confirming !== null && !cutoffLocked"
                     role="group"
                     aria-label="Confirm group action"
                     class="mt-4 rounded-xl border border-primary/20 bg-accent p-4"
@@ -444,9 +467,11 @@ async function confirm() {
                     >
                 </div>
                 <Button
+                    v-if="!cutoffLocked"
                     id="owner-group-submit"
                     class="min-h-14 w-full"
                     :disabled="
+                        cutoffLocked ||
                         !order.can_submit ||
                         busy ||
                         stale ||

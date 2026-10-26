@@ -20,7 +20,8 @@ use SensitiveParameter;
  * @phpstan-type CatalogCategory array{id: int, name: string, dishes: list<CatalogDish>}
  * @phpstan-type GuestContext array{restaurant: string, address: string, table: string, date: string, time: string, end_date: string, end_time: string, guests: int}
  * @phpstan-type GuestState array{name_confirmed: bool, submitted_at: string|null, version: int}
- * @phpstan-type GuestMenu array{context: GuestContext, guest_state: GuestState, catalog: list<CatalogCategory>,invitation: InvitationView, selections: SelectionSummary, order: array{status: string|null, submitted_at: string|null, editable: bool}, timezone: string}
+ * @phpstan-type Timing array{server_now: string, warning_at: string, locks_at: string, locked: bool, unconfirmed: bool}
+ * @phpstan-type GuestMenu array{timing: Timing, context: GuestContext, guest_state: GuestState, catalog: list<CatalogCategory>,invitation: InvitationView, selections: SelectionSummary, order: array{status: string|null, submitted_at: string|null, editable: bool}, timezone: string}
  */
 class GuestMenuService
 {
@@ -82,6 +83,7 @@ class GuestMenuService
             ->orderBy('sort_order')->orderBy('id')->get();
 
         return [
+            'timing' => PreOrderTiming::state($reservation),
             'context' => [
                 'restaurant' => $reservation->restaurant->name,
                 'address' => $reservation->restaurant->address,
@@ -117,7 +119,7 @@ class GuestMenuService
             'order' => [
                 'status' => $order?->status,
                 'submitted_at' => $order?->submitted_at?->toIso8601String(),
-                'editable' => ($owner || $guest->pre_order_submitted_at === null)
+                'editable' => ! PreOrderTiming::locked($reservation) && ($owner || $guest->pre_order_submitted_at === null)
                             && (! $owner || ReservationCardState::acceptsPreOrder($reservation))
                     && ! in_array($reservation->status, ['cancelled', 'completed'], true)
                     && ($order === null || ($order->status === 'draft' && $order->submitted_at === null)),

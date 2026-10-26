@@ -44,6 +44,26 @@ function key(value = 'Escape') {
 }
 
 describe('booking modal keyboard dismissal', () => {
+    it('returns focus to the persistent cart after its submit button has unmounted', async () => {
+        const focus = vi.fn();
+        const preventDefault = vi.fn();
+        mounted = mountComponent(BookingModal, {
+            open: true,
+            title: 'Pre-Order Submitted',
+            description: 'The owner selection was saved.',
+            returnFocusTarget: {
+                isConnected: true,
+                focus,
+            } as unknown as HTMLElement,
+        });
+        const content = findAll(
+            mounted.root,
+            (node) => node.tag === 'article',
+        )[0];
+        await fire(content, 'onCloseAutoFocus', { preventDefault });
+        expect(preventDefault).toHaveBeenCalledOnce();
+        expect(focus).toHaveBeenCalledOnce();
+    });
     it.each(['onKeydown', 'onEscapeKeyDown'])(
         'closes an idle modal through %s',
         async (handler) => {

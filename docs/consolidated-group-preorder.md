@@ -1,5 +1,7 @@
 # Consolidated group pre-order: owner flow
 
+For the subsequent T−45/T−30 rules and atomic personal-cart editing, see [Pre-order cutoff and owner editing](preorder-cutoff-and-owner-editing.md). Those rules supersede this earlier acceptance snapshot where they differ.
+
 Verified on 2026-10-26. Branch: `feature/consolidated-group-preorder-figma-owner`, based on the existing working dashboard at `3d88a70`. `origin/main` was fetched and inspected; it contains no application changes newer than the dashboard's existing base. The older `feature/consolidated-group-preorder` branch remains intact. No commit, push, merge, or deployment was performed.
 
 ## Implemented flow

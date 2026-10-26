@@ -11,6 +11,8 @@ import { dishImage, dishImageCropped } from '@/lib/guestMenu';
 import type { DraftDish } from '@/types/guest-selection';
 import QuantityControl from './QuantityControl.vue';
 const props = defineProps<{
+    ownerEdit?: boolean;
+    alreadySubmitted?: boolean;
     open: boolean;
     items: DraftDish[];
     total: string;
@@ -27,6 +29,7 @@ const emit = defineEmits<{
     change: [id: number, quantity: number];
     submit: [];
     save: [];
+    cancel: [];
     refresh: [];
 }>();
 let returnFocus: HTMLElement | null = null;
@@ -168,7 +171,13 @@ function close(): void {
                 </ul>
             </div>
             <footer
-                v-if="items.length || error || validation.length || locked"
+                v-if="
+                    items.length ||
+                    (ownerEdit && dirty) ||
+                    error ||
+                    validation.length ||
+                    locked
+                "
                 class="max-h-[45dvh] shrink-0 overflow-y-auto border-t border-border/40 p-4 sm:px-10 sm:py-6"
             >
                 <p
@@ -195,7 +204,7 @@ function close(): void {
                     Remove unavailable dishes before submitting.
                 </p>
                 <div
-                    v-if="items.length"
+                    v-if="items.length || (ownerEdit && dirty)"
                     class="mb-4 flex justify-between gap-4 text-lg font-medium"
                 >
                     <span>Grand Total</span
@@ -205,17 +214,34 @@ function close(): void {
                         >{{ total }}</output
                     >
                 </div>
-                <Button
-                    v-if="items.length && !locked"
-                    class="min-h-14 w-full"
-                    :disabled="busy || unavailable"
-                    @click="emit('submit')"
-                    >{{
-                        submitting ? 'Submitting…' : 'Submit Pre-Order'
-                    }}</Button
+                <div
+                    class="grid gap-3"
+                    :class="ownerEdit && dirty ? 'sm:grid-cols-2' : ''"
                 >
+                    <Button
+                        v-if="ownerEdit && dirty && !locked"
+                        variant="outline"
+                        class="min-h-14 w-full"
+                        :disabled="busy"
+                        @click="emit('cancel')"
+                        >Cancel Changes</Button
+                    >
+                    <Button
+                        v-if="(items.length || (ownerEdit && dirty)) && !locked"
+                        class="min-h-14 w-full"
+                        :disabled="
+                            busy ||
+                            unavailable ||
+                            (ownerEdit && alreadySubmitted && !dirty)
+                        "
+                        @click="emit('submit')"
+                        >{{
+                            submitting ? 'Submitting…' : 'Submit Pre-Order'
+                        }}</Button
+                    >
+                </div>
                 <button
-                    v-if="dirty && !busy && !locked"
+                    v-if="dirty && !ownerEdit && !busy && !locked"
                     class="mt-2 min-h-11 w-full text-sm underline"
                     @click="emit('save')"
                 >

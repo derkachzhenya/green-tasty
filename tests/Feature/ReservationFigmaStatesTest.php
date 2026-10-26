@@ -78,7 +78,8 @@ class ReservationFigmaStatesTest extends TestCase
         $this->putJson($this->path('/selections'), $this->items(3), ['If-Match' => '"0"'])->assertConflict();
         $this->postJson($this->path('/submit'), $this->items(2), ['If-Match' => '"1"'])->assertOk()->assertJsonPath('selections.subtotal', '34.00');
         $before = $this->reservation->guests()->sole()->getRawOriginal();
-        $this->postJson($this->path('/submit'), $this->items(99), ['If-Match' => '"0"'])->assertOk()->assertJsonPath('selections.total_quantity', 2);
+        $this->postJson($this->path('/submit'), $this->items(99), ['If-Match' => '"0"'])->assertConflict();
+        $this->postJson($this->path('/submit'), $this->items(2), ['If-Match' => '"1"'])->assertOk()->assertJsonPath('selections.total_quantity', 2);
         $this->assertSame($before, $this->reservation->guests()->sole()->getRawOriginal());
         $this->assertSame(1, $this->card()['submitted_pre_orders']);
         $this->assertFalse($this->card()['can_add_pre_order']);

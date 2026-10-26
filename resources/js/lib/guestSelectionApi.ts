@@ -147,6 +147,7 @@ export function guestMenu(value: unknown): GuestMenu {
     if (typeof order.editable !== 'boolean')
         throw new Error('Invalid guest response.');
     return {
+        ...(data.timing ? { timing: data.timing as GuestMenu['timing'] } : {}),
         context: {
             restaurant: string(context.restaurant),
             address: string(context.address),

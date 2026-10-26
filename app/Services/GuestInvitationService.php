@@ -49,7 +49,9 @@ class GuestInvitationService
     public function revoke(Reservation $reservation, ReservationGuest $guest): void
     {
         DB::transaction(function () use ($reservation, $guest): void {
-            $lockedGuest = $reservation->guests()->whereKey($guest->id)->lockForUpdate()->firstOrFail();
+            $lockedReservation = Reservation::query()->whereKey($reservation->id)->lockForUpdate()->firstOrFail();
+            PreOrderTiming::ensureOpen($lockedReservation);
+            $lockedGuest = $lockedReservation->guests()->whereKey($guest->id)->lockForUpdate()->firstOrFail();
             $lockedGuest->invitation_token = null;
             $lockedGuest->invitation_revoked_at = CarbonImmutable::now();
             $lockedGuest->save();
