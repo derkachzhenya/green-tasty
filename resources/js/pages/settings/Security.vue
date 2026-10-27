@@ -6,7 +6,6 @@ import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { edit } from '@/routes/security';
 
 // oxfmt-ignore
 type Props = {
@@ -14,23 +13,10 @@ type Props = {
 } ;
 
 const props = defineProps<Props>();
-
-defineOptions({
-    layout: {
-        breadcrumbs: [
-            {
-                title: 'Security settings',
-                href: edit(),
-            },
-        ],
-    },
-});
 </script>
 
 <template>
     <Head title="Security settings" />
-
-    <h1 class="sr-only">Security settings</h1>
 
     <div class="space-y-6">
         <Heading

@@ -8,18 +8,6 @@ import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { edit } from '@/routes/profile';
-
-defineOptions({
-    layout: {
-        breadcrumbs: [
-            {
-                title: 'Profile settings',
-                href: edit(),
-            },
-        ],
-    },
-});
 
 const page = usePage();
 const user = computed(() => page.props.auth.user);
@@ -27,8 +15,6 @@ const user = computed(() => page.props.auth.user);
 
 <template>
     <Head title="Profile settings" />
-
-    <h1 class="sr-only">Profile settings</h1>
 
     <div class="flex flex-col space-y-6">
         <Heading

@@ -39,6 +39,7 @@ export type WaiterReservation = {
     date: string;
     time: string;
     end_time: string;
+    duration_minutes?: number;
     guest_count: number;
     active_participants: number;
     table_id: number | null;

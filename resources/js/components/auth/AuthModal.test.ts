@@ -339,12 +339,12 @@ describe('authentication modal flows', () => {
         fetchMock.mockResolvedValueOnce(
             response({
                 next: 'authenticated',
-                redirect: 'https://green-tasty.test/dashboard',
+                redirect: 'https://green-tasty.test/reservations',
             }),
         );
         await submit();
         expect(navigation.clearHistory).toHaveBeenCalledOnce();
-        expect(navigation.visit).toHaveBeenCalledWith('/dashboard', {
+        expect(navigation.visit).toHaveBeenCalledWith('/reservations', {
             replace: true,
         });
     });

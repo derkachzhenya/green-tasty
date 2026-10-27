@@ -18,25 +18,27 @@ class RestaurantBookingService
     public function __construct(private BookingRules $rules) {}
 
     /** @return list<array{id: int, name: string, seats: int}> */
-    public function availableTables(Restaurant $restaurant, CarbonImmutable $start, int $guests): array
+    public function availableTables(Restaurant $restaurant, CarbonImmutable $start, int $guests, int $duration = BookingRules::DURATION_MINUTES): array
     {
         $this->rules->validateGuests($guests);
+        $this->rules->validateDuration($duration);
         $this->rules->validateStart($start);
 
         return array_values($restaurant->tables()
             ->select(['id', 'name', 'seats'])
             ->where('is_active', true)->where('seats', '>=', $guests)
             ->whereHas('restaurant', fn (Builder $query) => $query->where('is_active', true))
-            ->whereDoesntHave('reservations', fn (Builder $query) => $this->overlapping($query, $start))
+            ->whereDoesntHave('reservations', fn (Builder $query) => $this->overlapping($query, $start, $duration))
             ->orderBy('seats')->orderBy('id')->get()
             ->map(fn (RestaurantTable $table): array => ['id' => $table->id, 'name' => $table->name, 'seats' => $table->seats])->all());
     }
 
-    public function book(Restaurant $restaurant, User $owner, CarbonImmutable $start, int $guests, int $tableId): Reservation
+    public function book(Restaurant $restaurant, User $owner, CarbonImmutable $start, int $guests, int $tableId, int $duration = BookingRules::DURATION_MINUTES): Reservation
     {
         $this->rules->validateGuests($guests);
+        $this->rules->validateDuration($duration);
 
-        return DB::transaction(function () use ($restaurant, $owner, $start, $guests, $tableId): Reservation {
+        return DB::transaction(function () use ($restaurant, $owner, $start, $guests, $tableId, $duration): Reservation {
             // Shared parent lock stabilizes active status while allowing bookings at different tables.
             $lockedRestaurant = Restaurant::query()->whereKey($restaurant->id)->sharedLock()->firstOrFail();
             Gate::forUser($owner)->authorize('create', [Reservation::class, $lockedRestaurant]);
@@ -49,7 +51,7 @@ class RestaurantBookingService
             // The request may have waited for a competing transaction; validate against the current clock.
             $this->rules->validateStart($start);
             // A locking current read avoids stale repeatable-read snapshots after waiting for the table.
-            $conflict = $this->overlapping(Reservation::query()->where('restaurant_table_id', $table->id), $start)->select('id')->lockForUpdate()->first();
+            $conflict = $this->overlapping(Reservation::query()->where('restaurant_table_id', $table->id), $start, $duration)->select('id')->lockForUpdate()->first();
 
             if ($conflict !== null) {
                 throw ValidationException::withMessages(['restaurant_table_id' => 'This table was just booked. Please check availability again.']);
@@ -60,6 +62,7 @@ class RestaurantBookingService
                 'owner_user_id' => $owner->id,
                 'code' => 'GT-'.Str::upper((string) Str::ulid()),
                 'reserved_at' => $start->utc(),
+                'duration_minutes' => $duration,
                 'guest_count' => $guests,
                 'status' => 'confirmed',
             ]);
@@ -69,11 +72,14 @@ class RestaurantBookingService
         }, attempts: 3);
     }
 
-    public function update(Reservation $reservation, User $owner, string $time, int $guests): Reservation
+    public function update(Reservation $reservation, User $owner, string $time, int $guests, ?int $duration = null): Reservation
     {
         $this->rules->validateGuests($guests);
+        if ($duration !== null) {
+            $this->rules->validateDuration($duration);
+        }
 
-        return DB::transaction(function () use ($reservation, $owner, $time, $guests): Reservation {
+        return DB::transaction(function () use ($reservation, $owner, $time, $guests, $duration): Reservation {
             // Same restaurant -> table lock order as creation. The reservation parent also
             // serializes editing with guest selections and group pre-order submission.
             $restaurant = Restaurant::query()->whereKey($reservation->restaurant_id)->sharedLock()->firstOrFail();
@@ -92,12 +98,13 @@ class RestaurantBookingService
             }
             $date = CarbonImmutable::instance($locked->reserved_at)->setTimezone(BookingRules::TIMEZONE)->format('Y-m-d');
             $start = $this->rules->start($date, $time);
-            $conflict = $this->overlapping(Reservation::query()->where('restaurant_table_id', $table->id)->whereKeyNot($locked->id), $start)
+            $duration ??= $locked->duration_minutes;
+            $conflict = $this->overlapping(Reservation::query()->where('restaurant_table_id', $table->id)->whereKeyNot($locked->id), $start, $duration)
                 ->select('id')->lockForUpdate()->first();
             if ($conflict !== null) {
                 throw ValidationException::withMessages(['time' => 'This table was just booked. Choose another time.']);
             }
-            $locked->update(['reserved_at' => $start, 'guest_count' => $guests]);
+            $locked->update(['reserved_at' => $start, 'guest_count' => $guests, 'duration_minutes' => $duration]);
 
             return $locked;
         }, attempts: 3);
@@ -107,11 +114,14 @@ class RestaurantBookingService
      * @param  Builder<Reservation>  $query
      * @return Builder<Reservation>
      */
-    public function overlapping(Builder $query, CarbonImmutable $start): Builder
+    public function overlapping(Builder $query, CarbonImmutable $start, int $duration = BookingRules::DURATION_MINUTES): Builder
     {
+        $this->rules->validateDuration($duration);
+
         return $query->whereNotIn('status', ['cancelled', 'completed'])
-            ->where('reserved_at', '>', $start->subMinutes(BookingRules::DURATION_MINUTES)->utc())
-            ->where('reserved_at', '<', $start->addMinutes(BookingRules::DURATION_MINUTES)->utc());
+            ->where('reserved_at', '>', $start->subMinutes(BookingRules::MAX_DURATION_MINUTES)->utc())
+            ->where('reserved_at', '<', $start->addMinutes($duration)->utc())
+            ->endingAfter($start);
     }
 
     /** @return array<string, mixed> */
@@ -119,7 +129,7 @@ class RestaurantBookingService
     {
         $reservation->loadMissing(['restaurant', 'table']);
         $start = CarbonImmutable::instance($reservation->reserved_at)->setTimezone(BookingRules::TIMEZONE);
-        $end = $start->addMinutes(BookingRules::DURATION_MINUTES);
+        $end = $reservation->endsAt()->setTimezone(BookingRules::TIMEZONE);
 
         return [
             'id' => $reservation->id, 'code' => $reservation->code, 'status' => $reservation->status,

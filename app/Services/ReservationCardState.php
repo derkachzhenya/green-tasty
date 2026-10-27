@@ -15,7 +15,7 @@ class ReservationCardState
         if ($reservation->status === 'confirmed') {
             $start = $reservation->reserved_at->toImmutable();
             $now = CarbonImmutable::now();
-            if ($start->addMinutes(BookingRules::DURATION_MINUTES)->lessThanOrEqualTo($now)) {
+            if ($reservation->endsAt()->lessThanOrEqualTo($now)) {
                 return 'completed';
             }
             if ($start->lessThanOrEqualTo($now)) {

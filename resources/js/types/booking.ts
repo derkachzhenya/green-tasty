@@ -15,10 +15,12 @@ export type BookingFilters = {
     date: string;
     time: string;
     guest_count: number;
+    duration_minutes?: number;
 };
 export type BookingRules = {
     timezone: string;
     duration_minutes: number;
+    allowed_durations?: number[];
     slot_minutes: number;
     min_date: string;
     max_date: string;

@@ -49,7 +49,7 @@ Implemented desktop geometry targets a 1440px frame, 512px left panel, 40px pane
 
 Intentional differences to preserve current business rules:
 
-- Fixed **2-hour** reservations, **30-minute** starts and **90-day** advance window. Figma's 1.5/2.5/3-hour options are unavailable; the duration control explains the fixed value.
+- Reservations support **1.5 / 2 / 2.5 / 3 hours**, defaulting to 2 hours, with **30-minute** starts and a **90-day** advance window. The duration migration preserves existing intervals; see the [duration verification report](qa-2026-10-27/booking-duration-ru.md).
 - No opening hours exist in the current model. Show All therefore includes all 48 daily half-hour starts, including disabled past/occupied slots, instead of inventing the screenshot's 10:00–21:30 opening hours.
 - Backend guest limit remains 255 with real per-table capacity enforcement. The counter is not arbitrarily capped at four. Group support uses an actual selected restaurant phone when present; otherwise it asks visitors to contact their restaurant without displaying Figma's fictitious phone number.
 - There is no implemented 30-minute cancellation policy or cancellation endpoint. Review explains confirmation timing rather than promising that policy.

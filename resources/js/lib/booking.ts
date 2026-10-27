@@ -1,6 +1,8 @@
 import catalog from '../../data/homepage.json';
 import type { BookingRestaurant } from '@/types/booking';
 
+export const bookingDurations = [90, 120, 150, 180] as const;
+
 export function bookingGuestError(guests: number, max = 255): string {
     return Number.isInteger(guests) && guests >= 1 && guests <= max
         ? ''

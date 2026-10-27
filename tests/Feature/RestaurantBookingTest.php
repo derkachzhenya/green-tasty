@@ -46,7 +46,7 @@ class RestaurantBookingTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->component('bookings/Create')
                 ->where('restaurant', $this->restaurant->only(['id', 'name', 'slug', 'address', 'phone']))
                 ->where('bookingRules', [
-                    'timezone' => 'Asia/Tbilisi', 'duration_minutes' => 120, 'slot_minutes' => 30, 'max_guests' => 255,
+                    'timezone' => 'Asia/Tbilisi', 'duration_minutes' => 120, 'allowed_durations' => [90, 120, 150, 180], 'slot_minutes' => 30, 'max_guests' => 255,
                     'min_date' => '2026-10-23', 'max_date' => '2027-01-21', 'default_date' => '2026-10-24',
                 ])->missing('reservations')->missing('guests'));
     }

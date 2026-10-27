@@ -169,7 +169,54 @@ class RestaurantBookingConcurrencyTest extends TestCase
         $this->assertDatabaseCount('reservation_guests', 1);
     }
 
-    private function holdBookingRequest(): void
+    public function test_a_three_hour_booking_blocks_a_competing_late_start_after_the_lock_is_released(): void
+    {
+        $this->holdBookingRequest(['duration_minutes' => 180]);
+        $this->worker = new Process([
+            PHP_BINARY, base_path('tests/Support/booking-request.php'),
+            (string) $this->competitor->id, $this->restaurant->slug,
+            json_encode(array_replace($this->payload(), ['time' => '14:30', 'duration_minutes' => 90]), JSON_THROW_ON_ERROR),
+        ], base_path(), ['APP_ENV' => 'testing', 'DB_DATABASE' => 'testing', 'DB_URL' => '', 'CACHE_STORE' => 'array', 'SESSION_DRIVER' => 'array']);
+        $this->worker->setTimeout(15);
+        $this->worker->start();
+        $this->assertTrue($this->worker->waitUntil(fn ($type, $output) => str_contains($output, 'attempting-table-lock')));
+        $this->assertTrue($this->worker->isRunning());
+        $this->heldConnection->commit();
+        $this->worker->wait();
+        $this->assertTrue($this->worker->isSuccessful(), $this->worker->getErrorOutput());
+        $this->assertStringContainsString('response-status:422', $this->worker->getOutput());
+        $this->assertDatabaseCount('reservations', 1);
+        $this->assertSame(180, Reservation::query()->sole()->duration_minutes);
+    }
+
+    public function test_duration_extension_waits_for_and_rejects_a_concurrently_committed_next_booking(): void
+    {
+        $this->actingAs($this->competitor)->postJson($this->url(), array_replace($this->payload(), ['time' => '14:00', 'duration_minutes' => 90]))->assertRedirect();
+        $reservation = Reservation::query()->sole();
+        $this->holdBookingRequest(['time' => '16:00', 'duration_minutes' => 90]);
+        $this->actingAs($this->competitor)->withoutExceptionHandling();
+        $connection = DB::connection();
+        $timeout = $connection->selectOne('SELECT @@SESSION.innodb_lock_wait_timeout AS seconds')->seconds;
+        $connection->statement('SET SESSION innodb_lock_wait_timeout = 1');
+        $payload = ['time' => '14:00', 'guest_count' => 2, 'duration_minutes' => 180];
+        try {
+            try {
+                $this->patchJson(route('reservations.booking.update', $reservation), $payload);
+                $this->fail('Duration changes must acquire the same table lock as booking creation.');
+            } catch (QueryException $exception) {
+                $this->assertSame(1205, $exception->errorInfo[1]);
+            }
+        } finally {
+            $connection->statement('SET SESSION innodb_lock_wait_timeout = '.(int) $timeout);
+            $this->withExceptionHandling();
+        }
+        $this->heldConnection->commit();
+        $this->patchJson(route('reservations.booking.update', $reservation), $payload)->assertUnprocessable()->assertJsonValidationErrors('time');
+        $this->assertSame(90, $reservation->fresh()->duration_minutes);
+        $this->assertDatabaseCount('reservations', 2);
+    }
+
+    private function holdBookingRequest(array $changes = []): void
     {
         $default = config('database.default');
         config(['database.connections.booking_race' => config('database.connections.'.$default)]);
@@ -177,7 +224,7 @@ class RestaurantBookingConcurrencyTest extends TestCase
         $this->heldConnection->beginTransaction();
         try {
             config(['database.default' => 'booking_race']);
-            $this->actingAs($this->owner)->postJson($this->url(), $this->payload())->assertRedirect();
+            $this->actingAs($this->owner)->postJson($this->url(), array_replace($this->payload(), $changes))->assertRedirect();
         } finally {
             config(['database.default' => $default]);
         }

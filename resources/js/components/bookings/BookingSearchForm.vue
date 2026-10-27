@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
-import { bookingTimes } from '@/lib/booking';
+import { bookingDurations, bookingTimes } from '@/lib/booking';
 import type {
     BookingFilters,
     BookingRestaurant,
@@ -113,12 +113,45 @@ const emit = defineEmits<{ change: [Partial<BookingFilters>]; search: [] }>();
                 <InputError id="guests-error" :message="errors.guest_count" />
             </div>
         </div>
+        <div class="space-y-1">
+            <label for="booking-duration" class="text-sm"
+                >How long would you like to stay?</label
+            >
+            <select
+                id="booking-duration"
+                :value="filters.duration_minutes ?? rules.duration_minutes"
+                :disabled="busy"
+                class="booking-input"
+                :aria-invalid="!!errors.duration_minutes"
+                aria-describedby="duration-error"
+                @change="
+                    emit('change', {
+                        duration_minutes: Number(
+                            ($event.target as HTMLSelectElement).value,
+                        ),
+                    })
+                "
+            >
+                <option
+                    v-for="minutes in rules.allowed_durations ??
+                    bookingDurations"
+                    :key="minutes"
+                    :value="minutes"
+                >
+                    {{ minutes / 60 }} hours
+                </option>
+            </select>
+            <InputError
+                id="duration-error"
+                :message="errors.duration_minutes"
+            />
+        </div>
         <Button type="submit" :disabled="busy" class="h-14 w-full text-base">{{
             busy ? 'Checking availability…' : 'Find a Table'
         }}</Button>
         <p id="booking-rules" class="text-xs leading-5 text-muted-foreground">
-            {{ rules.duration_minutes / 60 }}-hour bookings ·
-            {{ rules.timezone }}. Guest count includes you.
+            {{ (filters.duration_minutes ?? rules.duration_minutes) / 60 }}-hour
+            bookings · {{ rules.timezone }}. Guest count includes you.
         </p>
     </form>
 </template>

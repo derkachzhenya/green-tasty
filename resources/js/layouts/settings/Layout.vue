@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import Heading from '@/components/Heading.vue';
+import SiteContainer from '@/components/site/SiteContainer.vue';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
@@ -29,11 +29,15 @@ const { isCurrentOrParentUrl } = useCurrentUrl();
 </script>
 
 <template>
-    <div class="px-4 py-6">
-        <Heading
-            title="Settings"
-            description="Manage your profile and account settings"
-        />
+    <SiteContainer class="py-8 sm:py-12">
+        <header class="mb-8 space-y-2">
+            <h1 class="text-2xl leading-10 font-medium sm:text-[32px]">
+                Account settings
+            </h1>
+            <p class="text-sm leading-6 text-muted-foreground">
+                Manage your profile, security and appearance.
+            </p>
+        </header>
 
         <div class="flex flex-col lg:flex-row lg:space-x-12">
             <aside class="w-full max-w-xl lg:w-48">
@@ -47,11 +51,22 @@ const { isCurrentOrParentUrl } = useCurrentUrl();
                         variant="ghost"
                         :class="[
                             'w-full justify-start',
-                            { 'bg-muted': isCurrentOrParentUrl(item.href) },
+                            {
+                                'bg-accent text-primary': isCurrentOrParentUrl(
+                                    item.href,
+                                ),
+                            },
                         ]"
                         as-child
                     >
-                        <Link :href="item.href">
+                        <Link
+                            :href="item.href"
+                            :aria-current="
+                                isCurrentOrParentUrl(item.href)
+                                    ? 'page'
+                                    : undefined
+                            "
+                        >
                             <component :is="item.icon" class="h-4 w-4" />
                             {{ item.title }}
                         </Link>
@@ -61,11 +76,11 @@ const { isCurrentOrParentUrl } = useCurrentUrl();
 
             <Separator class="my-6 lg:hidden" />
 
-            <div class="flex-1 md:max-w-2xl">
-                <section class="max-w-xl space-y-12">
+            <div class="gt-card min-w-0 flex-1 bg-card p-6 sm:p-8">
+                <section class="max-w-2xl space-y-12">
                     <slot />
                 </section>
             </div>
         </div>
-    </div>
+    </SiteContainer>
 </template>

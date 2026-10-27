@@ -31,6 +31,7 @@ type BookingForm = {
     date: string;
     time: string;
     guest_count: number;
+    duration_minutes: number;
     restaurant_table_id: number | null;
     processing: boolean;
     errors: Record<string, string>;
@@ -228,6 +229,7 @@ describe('database-backed booking search and review', () => {
                 date: '2026-10-24',
                 time: '12:00',
                 guest_count: 2,
+                duration_minutes: 120,
                 restaurant_table_id: 77,
             });
         },
@@ -360,6 +362,7 @@ describe('database-backed booking search and review', () => {
                     date: '2026-10-24',
                     time: '12:00',
                     guest_count: 2,
+                    duration_minutes: 120,
                     table: 77,
                 },
                 expect.any(Object),
@@ -407,7 +410,12 @@ describe('database-backed booking search and review', () => {
         await fire(slot(), 'onClick');
         await fire(button('Edit'), 'onClick');
         expect(text()).toContain('Edit Reservation');
-        expect(text()).toContain('fixed 2-hour duration');
+        const duration = findAll(
+            mounted.root,
+            (node) => node.props.id === 'edit-duration',
+        )[0];
+        expect(duration.props.disabled).toBe(false);
+        await fire(duration, 'onChange', { target: { value: '180' } });
         const editForm = findAll(
             mounted.root,
             (node) => node.tag === 'form',
@@ -416,6 +424,12 @@ describe('database-backed booking search and review', () => {
         await flush();
         expect(fetchMock).toHaveBeenCalledTimes(2);
         expect(text()).toContain('Review & Confirm Reservation');
+        expect(text()).toContain('12:00 – 15:00');
+        expect(fetchMock.mock.calls[1][0]).toContain('duration_minutes=180');
         expect(transport.post).not.toHaveBeenCalled();
+        await fire(button('Confirm'), 'onClick');
+        expect(form.transformData?.(form)).toMatchObject({
+            duration_minutes: 180,
+        });
     });
 });

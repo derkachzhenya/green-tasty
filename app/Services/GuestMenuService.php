@@ -75,7 +75,7 @@ class GuestMenuService
         $order = $reservation->preOrder()->first();
         $reservation->load(['restaurant', 'table']);
         $start = $reservation->reserved_at->toImmutable()->setTimezone(BookingRules::TIMEZONE);
-        $end = $start->addMinutes(BookingRules::DURATION_MINUTES);
+        $end = $reservation->endsAt()->setTimezone(BookingRules::TIMEZONE);
         $catalog = $reservation->restaurant->menuCategories()->where('is_active', true)
             ->with(['items' => fn ($query) => $query->withSum([
                 'preOrderItems as ordered_quantity' => fn (Builder $query) => $query->whereHas('preOrder', fn (Builder $query) => $query->where('status', 'submitted')),

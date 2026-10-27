@@ -23,11 +23,11 @@ class WaiterReservationService
         Gate::forUser($staff)->authorize('staff', $restaurant);
         $date = $filters['date'] ?? CarbonImmutable::now(BookingRules::TIMEZONE)->format('Y-m-d');
         $start = CarbonImmutable::parse($date, BookingRules::TIMEZONE)->startOfDay()->utc();
-        $query = $restaurant->reservations()->where('reserved_at', '>=', $start)->where('reserved_at', '<', $start->addDay())
+        $query = $restaurant->reservations()->where('reserved_at', '>', $start->subMinutes(BookingRules::MAX_DURATION_MINUTES))->where('reserved_at', '<', $start->addDay())->endingAfter($start)
             ->with(['owner', 'preOrder', 'restaurant', 'table'])->withCount(['guests as active_participants' => fn ($q) => $q->whereNull('removed_at')]);
         if (! empty($filters['time'])) {
             $instant = CarbonImmutable::parse($date.' '.$filters['time'], BookingRules::TIMEZONE)->utc();
-            $query->where('reserved_at', '<=', $instant)->where('reserved_at', '>', $instant->subMinutes(BookingRules::DURATION_MINUTES));
+            $query->where('reserved_at', '<=', $instant)->endingAfter($instant);
         }
         if (! empty($filters['table'])) {
             $query->where('restaurant_table_id', $filters['table']);
@@ -51,6 +51,7 @@ class WaiterReservationService
         $submitted = $order?->status === 'submitted' && $order->submitted_at !== null;
 
         return [...$this->bookings->confirmation($reservation), 'owner_name' => $reservation->owner?->name,
+            'duration_minutes' => $reservation->duration_minutes,
             'table_id' => $reservation->restaurant_table_id, 'active_participants' => $reservation->guests()->active()->count(),
             'phase' => $phase, 'version' => $this->reviews->version($reservation),
             'pre_orders' => $reservation->guests()->active()->whereHas('preOrderItems', fn ($q) => $q->where('pre_order_id', $order?->id)->whereNull('superseded_at'))
@@ -105,17 +106,19 @@ class WaiterReservationService
                 throw ValidationException::withMessages(['table_id' => 'Keep every active participant within an available table capacity.']);
             }
             $start = CarbonImmutable::parse($data['date'].' '.$data['time'], BookingRules::TIMEZONE)->utc();
+            $duration = (int) ($data['duration_minutes'] ?? $locked->duration_minutes);
+            $this->rules->validateDuration($duration);
             if ($phase === 'in_progress') {
-                if (! $start->equalTo($locked->reserved_at)) {
-                    throw new ConflictHttpException('An in-progress reservation can change table or party size, but not its start time.');
+                if (! $start->equalTo($locked->reserved_at) || $duration !== $locked->duration_minutes) {
+                    throw new ConflictHttpException('An in-progress reservation can change table or party size, but not its time interval.');
                 }
             } else {
                 $start = $this->rules->start($data['date'], $data['time']);
             }
-            if ($this->bookings->overlapping(Reservation::query()->where('restaurant_table_id', $table->id)->whereKeyNot($locked->id), $start)->lockForUpdate()->exists()) {
+            if ($this->bookings->overlapping(Reservation::query()->where('restaurant_table_id', $table->id)->whereKeyNot($locked->id), $start, $duration)->lockForUpdate()->exists()) {
                 throw ValidationException::withMessages(['table_id' => 'The table is occupied during this reservation.']);
             }
-            $locked->update(['restaurant_table_id' => $table->id, 'reserved_at' => $start, 'guest_count' => $data['guest_count']]);
+            $locked->update(['restaurant_table_id' => $table->id, 'reserved_at' => $start, 'guest_count' => $data['guest_count'], 'duration_minutes' => $duration]);
 
             return $this->card($locked);
         }, attempts: 3);
@@ -133,6 +136,6 @@ class WaiterReservationService
         }
         $start = $this->rules->start($data['date'], $data['time']);
 
-        return $this->card($this->bookings->book($restaurant, $owner, $start, (int) $data['guest_count'], (int) $data['table_id']));
+        return $this->card($this->bookings->book($restaurant, $owner, $start, (int) $data['guest_count'], (int) $data['table_id'], (int) ($data['duration_minutes'] ?? BookingRules::DURATION_MINUTES)));
     }
 }

@@ -11,8 +11,14 @@ import {
     DialogClose,
 } from 'reka-ui';
 import { figmaDishPreview } from '@/lib/figma-demo';
+import { formatMenuPrice } from '@/lib/homepage';
 
-defineProps<{ name: string; image: string }>();
+defineProps<{
+    name: string;
+    image: string;
+    price?: string;
+    weight?: string | null;
+}>();
 </script>
 
 <template>
@@ -22,7 +28,7 @@ defineProps<{ name: string; image: string }>();
             <DialogTrigger as-child>
                 <button
                     type="button"
-                    :aria-label="`View ${name} — Figma demo`"
+                    :aria-label="`View ${name}`"
                     class="absolute inset-0 h-full w-full rounded-3xl hover:ring-1 hover:ring-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
                 />
             </DialogTrigger>
@@ -30,7 +36,7 @@ defineProps<{ name: string; image: string }>();
         <DialogPortal>
             <DialogOverlay class="fixed inset-0 z-50 bg-black/40" />
             <DialogContent
-                class="dish-preview fixed top-1/2 left-1/2 z-50 w-[calc(100%-32px)] max-w-[838px] -translate-x-1/2 -translate-y-1/2 rounded-3xl bg-white text-foreground focus:outline-none"
+                class="green-tasty dish-preview fixed top-1/2 left-1/2 z-50 w-[calc(100%-32px)] max-w-[838px] -translate-x-1/2 -translate-y-1/2 rounded-3xl bg-white font-[Poppins,sans-serif] text-foreground focus:outline-none"
             >
                 <img
                     :src="
@@ -59,9 +65,17 @@ defineProps<{ name: string; image: string }>();
                                 <li
                                     v-for="line in figmaDishPreview.strawberry
                                         .nutrition"
-                                    :key="line"
+                                    :key="line[0].label"
+                                    class="flex flex-wrap gap-x-3"
                                 >
-                                    {{ line }}
+                                    <span
+                                        v-for="field in line"
+                                        :key="field.label"
+                                        ><strong class="font-semibold"
+                                            >{{ field.label }}:</strong
+                                        >
+                                        {{ field.value }}</span
+                                    >
                                 </li>
                             </ul>
                         </template>
@@ -75,19 +89,20 @@ defineProps<{ name: string; image: string }>();
                         <p>
                             <span
                                 class="text-xl leading-8 font-semibold text-primary"
-                                >{{
-                                    name === figmaDishPreview.strawberry.name
-                                        ? figmaDishPreview.strawberry.price
-                                        : figmaDishPreview.cardPrice
-                                }}</span
+                                >{{ formatMenuPrice(price) }}</span
                             ><span class="text-sm text-muted-foreground">
-                                /430g</span
+                                {{
+                                    weight
+                                        ? `/ ${weight}`
+                                        : '· Weight not specified'
+                                }}</span
                             >
                         </p>
                     </div>
-                    <DialogDescription class="sr-only"
-                        >Figma demo: illustrative price, weight and nutrition.
-                        This preview cannot be ordered.</DialogDescription
+                    <DialogDescription
+                        class="text-xs leading-5 text-muted-foreground"
+                        >Starting price across locations. Choose a location’s
+                        menu to check availability and price.</DialogDescription
                     >
                 </div>
                 <DialogClose

@@ -156,7 +156,7 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                         ><a href="/book" class="rounded focus-visible:outline-2"
                             >Book a Table</a
                         ><a
-                            href="/dashboard"
+                            href="/reservations"
                             class="rounded text-primary focus-visible:outline-2"
                             >Reservations</a
                         >
@@ -574,7 +574,7 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                     order in Reservations and submit it to the restaurant.
                 </p>
                 <a
-                    href="/dashboard"
+                    href="/reservations"
                     class="inline-flex min-h-14 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground focus-visible:outline-2"
                     >View Reservations</a
                 >

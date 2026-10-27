@@ -56,7 +56,7 @@
             "price": "17.00",
             "available": true,
             "image": "/images/green-tasty/dishes/gjgk.png",
-            "weight": null,
+            "weight": "430 g",
             "crop": false
         },
         {

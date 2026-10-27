@@ -177,7 +177,7 @@ class BookingFigmaFlowTest extends TestCase
         $reservation = $this->booking();
         app(RestaurantBookingService::class)->book($this->restaurant, $this->owner, CarbonImmutable::parse('2026-10-24 11:00:00', 'UTC'), 2, $this->table->id);
         $this->edit($reservation)->assertUnprocessable()->assertJsonValidationErrors('time');
-        $this->edit($reservation, ['duration_minutes' => 90])->assertUnprocessable()->assertJsonValidationErrors('duration_minutes');
+        $this->edit($reservation, ['duration_minutes' => 105])->assertUnprocessable()->assertJsonValidationErrors('duration_minutes');
         $this->edit($reservation, ['restaurant_id' => 99])->assertUnprocessable()->assertJsonValidationErrors('restaurant_id');
         $this->edit($reservation, ['restaurant_table_id' => 99])->assertUnprocessable()->assertJsonValidationErrors('restaurant_table_id');
         $this->edit($reservation, ['guest_count' => 5])->assertUnprocessable()->assertJsonValidationErrors('guest_count');

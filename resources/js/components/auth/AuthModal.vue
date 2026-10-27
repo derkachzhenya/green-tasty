@@ -276,7 +276,7 @@ async function send(resend = false) {
         if (result.next === 'authenticated') {
             wipeSecrets();
             router.clearHistory();
-            router.visit(result.redirect ?? '/dashboard', { replace: true });
+            router.visit(result.redirect ?? '/reservations', { replace: true });
             return;
         }
         busy.value = false;

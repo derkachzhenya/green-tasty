@@ -205,7 +205,7 @@ describe('persisted booking confirmation', () => {
             links.some(
                 (node) =>
                     textContent(node).trim() === 'Make Pre-Order' &&
-                    node.props.href === '/reservations/29#group-pre-order',
+                    node.props.href === '/reservations/29/owner-pre-order',
             ),
         ).toBe(true);
         expect(fetchMock).not.toHaveBeenCalled();
@@ -255,19 +255,24 @@ describe('persisted booking confirmation', () => {
         await fire(button('Edit Reservation'), 'onClick');
         form.time = '22:00';
         form.guest_count = 3;
+        const duration = findAll(
+            mounted.root,
+            (node) => node.props.id === 'edit-duration',
+        )[0];
+        await fire(duration, 'onChange', { target: { value: '180' } });
         const editForm = findAll(
             mounted.root,
             (node) => node.tag === 'form',
         )[0];
         await fire(editForm, 'onSubmit');
         await fire(editForm, 'onSubmit');
-        expect(form.duration_minutes).toBe(120);
+        expect(form.duration_minutes).toBe(180);
         expect(transport.patch).toHaveBeenCalledTimes(1);
         expect(transport.patch.mock.calls[0][0]).toBe(
             '/reservations/29/booking',
         );
         expect(text()).toContain('Saving changes…');
-        expect(text()).not.toContain('1.5 hours');
+        expect(text()).toContain('1.5 hours');
     });
     it('keeps edit errors and requires reload after an uncertain result', async () => {
         await fire(button('Edit Reservation'), 'onClick');
@@ -342,5 +347,13 @@ describe('persisted booking confirmation', () => {
         expect(text()).not.toContain('Create Invite Link');
         expect(text()).not.toContain('Edit Reservation');
         expect(text()).toContain('Reservation details');
+        expect(text()).not.toContain('Make Pre-Order');
+        expect(
+            findAll(mounted.root, (node) => node.tag === 'a').some(
+                (node) =>
+                    textContent(node).trim() === 'View Pre-Order' &&
+                    node.props.href === '/reservations/29#group-pre-order',
+            ),
+        ).toBe(true);
     });
 });

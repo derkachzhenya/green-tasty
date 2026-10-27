@@ -13,8 +13,8 @@ class GreenTastyDemoAddressSeeder extends Seeder
 {
     public function run(): void
     {
-        if (! app()->environment(['demo', 'staging']) || config('demo.align_restaurant_addresses') !== true) {
-            throw new RuntimeException('Demo address alignment requires a dedicated demo/staging environment and GREEN_TASTY_DEMO_ADDRESS_ALIGNMENT=true.');
+        if (! app()->environment(['local', 'demo', 'staging']) || config('demo.align_restaurant_addresses') !== true) {
+            throw new RuntimeException('Demo address alignment requires a local/demo/staging environment and GREEN_TASTY_DEMO_ADDRESS_ALIGNMENT=true.');
         }
 
         /** @var array{locations: list<array{demoSlug: string, address: string}>} $catalog */

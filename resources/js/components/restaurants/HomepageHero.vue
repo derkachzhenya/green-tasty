@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import SiteContainer from '@/components/site/SiteContainer.vue';
+import { Link } from '@inertiajs/vue3';
+import { create } from '@/routes/booking';
 import { Button } from '@/components/ui/button';
 </script>
 
@@ -28,7 +30,7 @@ import { Button } from '@/components/ui/button';
                     </div>
                     <div class="flex flex-wrap gap-4">
                         <Button as-child class="hero-button">
-                            <a href="#locations">Book a table</a>
+                            <Link :href="create()">Book a table</Link>
                         </Button>
                         <Button
                             as-child

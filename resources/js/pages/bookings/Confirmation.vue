@@ -61,6 +61,7 @@ function generate(): void {
 function beginEdit(): void {
     form.time = props.reservation.time;
     form.guest_count = props.reservation.guest_count;
+    form.duration_minutes = duration.value;
     form.clearErrors();
     editing.value = true;
     open.value = true;
@@ -187,8 +188,8 @@ watch(
             <EditBookingFields
                 v-model:time="form.time"
                 v-model:guests="form.guest_count"
+                v-model:duration="form.duration_minutes"
                 :capacity="reservation.table?.seats ?? 1"
-                :duration="duration"
                 :busy="form.processing"
                 :blocked="!!editError"
                 :errors="form.errors"
@@ -281,9 +282,14 @@ watch(
                         >View Reservation</Link
                     ></Button
                 ><Button as-child class="min-h-14"
+                    ><a
+                        v-if="canEdit"
+                        :href="`/reservations/${reservation.id}/owner-pre-order`"
+                        >Make Pre-Order</a
                     ><Link
+                        v-else
                         :href="`${reservationShow(reservation.id).url}#group-pre-order`"
-                        >Make Pre-Order</Link
+                        >View Pre-Order</Link
                     ></Button
                 >
             </div>

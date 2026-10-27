@@ -107,13 +107,13 @@ export function useGuestInvitations(
                 [401, 403, 419].includes(failure.status)
             ) {
                 error.value =
-                    'Your session or permission has changed. Sign in and reload the dashboard.';
+                    'Your session or permission has changed. Sign in and reload the reservation.';
             } else if (
                 failure instanceof InvitationApiError &&
                 failure.status === 404
             ) {
                 error.value =
-                    'This guest or reservation is unavailable. Reload the dashboard.';
+                    'This guest or reservation is unavailable. Reload the reservation.';
             } else if (
                 failure instanceof InvitationApiError &&
                 failure.status === 429
@@ -123,7 +123,7 @@ export function useGuestInvitations(
             } else {
                 uncertain.value = true;
                 error.value =
-                    'The result could not be confirmed. Close this dialog and refresh the dashboard before trying again.';
+                    'The result could not be confirmed. Close this dialog and refresh the reservation before trying again.';
             }
         } finally {
             if (current === sequence) busy.value = false;

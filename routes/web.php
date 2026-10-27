@@ -45,9 +45,13 @@ Route::middleware(['auth', 'verified', 'cache.headers:private;no_store'])->group
     Route::get('reservations/{reservation}/confirmation', [RestaurantBookingController::class, 'show'])->name('reservations.confirmation');
 });
 
-Route::get('dashboard', MyReservationsController::class)
+Route::get('reservations', MyReservationsController::class)
     ->middleware(['auth', 'verified', 'cache.headers:private;no_store'])
     ->name('dashboard');
+
+Route::get('dashboard', MyReservationsController::class)
+    ->middleware(['auth', 'verified', 'cache.headers:private;no_store'])
+    ->name('account.dashboard');
 
 Route::get('reservations/{reservation}/pre-order/summary', [ConsolidatedPreOrderController::class, 'show'])
     ->middleware(['auth', 'verified'])

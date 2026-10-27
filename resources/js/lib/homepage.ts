@@ -1,7 +1,24 @@
 import catalog from '../../data/homepage.json';
+import menuCatalog from '../../data/restaurant-menu.json';
 import type { RestaurantListing } from '@/types/restaurant';
 
 export const homepageDishes = catalog.dishes;
+
+export function dishPresentation(name: string, livePrice?: string) {
+    const dish = menuCatalog.dishes.find(
+        (item) => normalized(item.name) === normalized(name),
+    );
+    return {
+        price: livePrice ?? dish?.price,
+        weight: dish?.weight ?? null,
+    };
+}
+
+export function formatMenuPrice(price?: string): string {
+    return price === undefined
+        ? 'Price unavailable'
+        : `$${price.replace(/\.00$/, '')}`;
+}
 
 export type HomepageLocation = {
     restaurant: RestaurantListing;
@@ -19,7 +36,7 @@ export function homepageLocations(
     const used = new Set<number>();
     const locations: HomepageLocation[] = [];
 
-    for (const reference of catalog.locations) {
+    for (const [index, reference] of catalog.locations.entries()) {
         const exact = restaurants.find(
             (restaurant) =>
                 !used.has(restaurant.id) &&
@@ -41,7 +58,14 @@ export function homepageLocations(
             address: restaurant.address,
             image: reference.image,
             referenceAddress: reference.address,
-            demoLabel: exact ? null : `Demo: ${restaurant.address}`,
+            demoLabel:
+                restaurant.slug === reference.demoSlug &&
+                restaurant.name === `Green Tasty - Location ${index + 1}` &&
+                [reference.address, `Demo Address ${index + 1}`].includes(
+                    restaurant.address,
+                )
+                    ? 'Demo location'
+                    : null,
         });
     }
 

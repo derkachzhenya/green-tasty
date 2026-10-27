@@ -1,16 +1,23 @@
 <script setup lang="ts">
 import DishPreview from '@/components/restaurants/DishPreview.vue';
-import { figmaDishPreview } from '@/lib/figma-demo';
-defineProps<{
+import { computed } from 'vue';
+import { dishPresentation, formatMenuPrice } from '@/lib/homepage';
+const props = defineProps<{
     name: string;
     image: string;
     price?: string;
     loading?: boolean;
 }>();
+const presentation = computed(() => dishPresentation(props.name, props.price));
 </script>
 
 <template>
-    <DishPreview :name="name" :image="image">
+    <DishPreview
+        :name="name"
+        :image="image"
+        :price="presentation.price"
+        :weight="presentation.weight"
+    >
         <article
             class="gt-card flex h-full flex-col items-center gap-4 bg-card p-6"
         >
@@ -30,24 +37,25 @@ defineProps<{
                 <h3 class="text-base leading-6 font-medium wrap-anywhere">
                     {{ name }}
                 </h3>
-                <div class="w-12 shrink-0 text-right tabular-nums">
-                    <template v-if="price !== undefined">
+                <div class="shrink-0 text-right tabular-nums">
+                    <template v-if="!loading">
                         <p class="text-base leading-6 font-medium text-primary">
-                            {{ price }}
+                            {{ formatMenuPrice(presentation.price) }}
                         </p>
-                        <p class="text-xs leading-4 text-muted-foreground">
-                            from
+                        <p
+                            :aria-label="
+                                presentation.weight
+                                    ? undefined
+                                    : 'Weight not specified'
+                            "
+                            class="text-xs leading-4 text-muted-foreground"
+                        >
+                            {{ presentation.weight ?? 'Weight —' }}
                         </p>
                     </template>
                     <template v-else>
                         <p class="text-base leading-6 font-medium text-primary">
-                            <span v-if="loading" class="sr-only"
-                                >Loading price</span
-                            ><span class="sr-only">Figma demo price: </span
-                            >{{ figmaDishPreview.cardPrice }}
-                        </p>
-                        <p class="text-xs leading-4 text-muted-foreground">
-                            {{ figmaDishPreview.weight }}
+                            Loading price…
                         </p>
                     </template>
                 </div>

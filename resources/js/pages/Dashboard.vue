@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, usePage, router } from '@inertiajs/vue3';
-import { shallowRef, ref, onMounted, onBeforeUnmount } from 'vue';
+import { computed, shallowRef, ref, onMounted, onBeforeUnmount } from 'vue';
 import OwnerGroupPreOrderModal from '@/components/reservations/OwnerGroupPreOrderModal.vue';
 import ReservationInviteModal from '@/components/reservations/ReservationInviteModal.vue';
 import ReservationFeedbackModal from '@/components/reservations/ReservationFeedbackModal.vue';
@@ -10,7 +10,8 @@ import ReservationPagination from '@/components/reservations/ReservationPaginati
 import ContentState from '@/components/site/ContentState.vue';
 import DeferredSection from '@/components/site/DeferredSection.vue';
 import SiteContainer from '@/components/site/SiteContainer.vue';
-import { dashboard, home } from '@/routes';
+import { dashboard as reservationsIndex, home } from '@/routes';
+import { dashboard } from '@/routes/account';
 import { create } from '@/routes/booking';
 import type {
     MyReservationsPage,
@@ -18,14 +19,21 @@ import type {
     ReservationCounts,
 } from '@/types/reservation';
 
-withDefaults(
+const props = withDefaults(
     defineProps<{
         preOrderWarnings?: { id: number; code: string; minutes: number }[];
         reservations?: MyReservationsPage;
         reservationCounts?: ReservationCounts;
         activeStatus?: string;
+        dashboardPage?: boolean;
     }>(),
-    { activeStatus: 'all' },
+    { activeStatus: 'all', dashboardPage: false },
+);
+const pageTitle = computed(() =>
+    props.dashboardPage ? 'Dashboard' : 'My reservations',
+);
+const listRoute = computed(() =>
+    props.dashboardPage ? dashboard : reservationsIndex,
 );
 const group = shallowRef<OwnedReservation | null>(null);
 const inviting = shallowRef<OwnedReservation | null>(null);
@@ -60,16 +68,18 @@ onBeforeUnmount(() => clearInterval(warningTimer));
 </script>
 
 <template>
-    <Head title="My reservations"
-        ><meta name="robots" content="noindex"
-    /></Head>
+    <Head :title="pageTitle"><meta name="robots" content="noindex" /></Head>
     <div class="bg-accent">
         <SiteContainer
             class="flex flex-wrap items-center justify-between gap-4 py-3"
         >
             <div class="min-w-0">
-                <h1 class="sr-only">My reservations</h1>
-                <p class="text-[26px] leading-10 font-medium wrap-anywhere">
+                <h1 class="text-[26px] leading-10 font-medium">
+                    {{ pageTitle }}
+                </h1>
+                <p
+                    class="text-sm leading-6 wrap-anywhere text-muted-foreground"
+                >
                     Hello, {{ page.props.auth.user.name }}
                 </p>
             </div>
@@ -102,6 +112,7 @@ onBeforeUnmount(() => clearInterval(warningTimer));
         :class="reservations?.total === 0 ? 'pb-8' : 'py-6'"
     >
         <nav
+            v-if="reservationCounts?.all !== 0"
             aria-label="Reservation status"
             :aria-busy="filtering"
             class="flex flex-wrap border-b border-border"
@@ -110,7 +121,7 @@ onBeforeUnmount(() => clearInterval(warningTimer));
                 v-for="tab in tabs"
                 :key="tab.id"
                 :href="
-                    dashboard(
+                    listRoute(
                         tab.id === 'all'
                             ? undefined
                             : { query: { status: tab.id } },
@@ -232,7 +243,7 @@ onBeforeUnmount(() => clearInterval(warningTimer));
                     "
                     description="Choose All to see your reservations."
                     ><Link
-                        :href="dashboard()"
+                        :href="listRoute()"
                         class="inline-flex min-h-11 items-center rounded-sm font-medium text-primary underline focus-visible:outline-2 focus-visible:outline-offset-4"
                         >Back to first page</Link
                     ></ContentState

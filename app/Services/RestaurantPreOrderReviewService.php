@@ -209,7 +209,7 @@ class RestaurantPreOrderReviewService
     {
         $order = $reservation->preOrder()->first();
 
-        return '"'.hash('sha256', json_encode([$reservation->only(['id', 'status', 'restaurant_table_id', 'reserved_at', 'guest_count', 'updated_at']),
+        return '"'.hash('sha256', json_encode([$reservation->only(['id', 'status', 'restaurant_table_id', 'reserved_at', 'duration_minutes', 'guest_count', 'updated_at']),
             $order?->getAttributes(), $order?->items()->orderBy('id')->get()->toArray()], JSON_THROW_ON_ERROR)).'"';
     }
 

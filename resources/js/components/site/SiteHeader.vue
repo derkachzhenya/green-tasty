@@ -2,16 +2,26 @@
 import { Link, usePage } from '@inertiajs/vue3';
 import { CircleUserRound } from '@lucide/vue';
 import { computed } from 'vue';
+import UserMenuContent from '@/components/UserMenuContent.vue';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { dashboard, home, login } from '@/routes';
 import { create } from '@/routes/booking';
-import { edit } from '@/routes/profile';
 import SiteContainer from './SiteContainer.vue';
 
 const page = usePage();
 const user = computed(() => page.props.auth?.user ?? null);
-const isHome = computed(() => page.component === 'restaurants/Index');
+const isHome = computed(() => page.component.startsWith('restaurants/'));
 const isBooking = computed(() => page.component.startsWith('bookings/'));
 const isStaff = computed(() => page.component.startsWith('staff/'));
+const isReservations = computed(
+    () =>
+        (page.component === 'Dashboard' && !page.props.dashboardPage) ||
+        page.component.startsWith('reservations/'),
+);
 const workplaces = computed(
     () => (page.props.staffRestaurants ?? []) as { id: number; name: string }[],
 );
@@ -83,13 +93,9 @@ const workplaces = computed(
                         <Link
                             v-if="user"
                             :href="dashboard()"
-                            :aria-current="
-                                page.component === 'Dashboard'
-                                    ? 'page'
-                                    : undefined
-                            "
+                            :aria-current="isReservations ? 'page' : undefined"
                             :class="
-                                page.component === 'Dashboard'
+                                isReservations
                                     ? 'border-primary text-primary'
                                     : 'border-transparent'
                             "
@@ -100,16 +106,38 @@ const workplaces = computed(
                 </nav>
 
                 <Link
-                    :href="user ? edit() : login()"
-                    :aria-label="user ? 'Account settings' : undefined"
+                    v-if="!user"
+                    :href="login()"
                     class="inline-flex min-h-11 items-center justify-center rounded-lg border border-primary px-6 text-sm font-semibold text-primary hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring md:justify-self-end lg:text-base"
                 >
-                    <CircleUserRound
-                        v-if="user"
-                        aria-hidden="true"
-                        class="size-6"
-                    /><span v-else>Sign In</span>
+                    Sign In
                 </Link>
+                <DropdownMenu v-else>
+                    <DropdownMenuTrigger as-child>
+                        <button
+                            type="button"
+                            aria-label="Account menu"
+                            class="inline-flex min-h-11 items-center justify-center rounded-lg border border-primary px-6 text-primary hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring md:justify-self-end"
+                            :class="
+                                page.component.startsWith('settings/') ||
+                                page.props.dashboardPage
+                                    ? 'bg-accent'
+                                    : ''
+                            "
+                        >
+                            <CircleUserRound
+                                aria-hidden="true"
+                                class="size-6"
+                            />
+                        </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                        align="end"
+                        class="green-tasty w-64 bg-card font-[Poppins,sans-serif] text-foreground"
+                    >
+                        <UserMenuContent :user="user" />
+                    </DropdownMenuContent>
+                </DropdownMenu>
                 <div
                     v-if="!isStaff && workplaces.length"
                     class="flex w-full flex-wrap justify-end gap-3 text-xs lg:col-span-3"

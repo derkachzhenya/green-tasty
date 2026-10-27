@@ -59,13 +59,14 @@ class DemoRestaurantIdentityTest extends TestCase
 
         $once = Restaurant::query()->orderBy('id')->get()->map->getRawOriginal()->all();
         $this->travel(1)->minutes();
+        $this->align('local');
         $this->align('staging');
         $this->assertSame($once, Restaurant::query()->orderBy('id')->get()->map->getRawOriginal()->all());
         $this->assertSame($before, $this->snapshot());
     }
 
     #[DataProvider('unsafeEnvironments')]
-    public function test_alignment_is_disabled_by_default_and_cannot_run_in_production_or_local(string $environment, bool $enabled): void
+    public function test_alignment_is_disabled_by_default_and_cannot_run_in_production(string $environment, bool $enabled): void
     {
         $before = Restaurant::query()->orderBy('id')->get()->map->getRawOriginal()->all();
         $caught = null;
@@ -75,13 +76,13 @@ class DemoRestaurantIdentityTest extends TestCase
             $caught = $exception;
         }
         $this->assertNotNull($caught);
-        $this->assertStringContainsString('dedicated demo/staging', $caught->getMessage());
+        $this->assertStringContainsString('local/demo/staging', $caught->getMessage());
         $this->assertSame($before, Restaurant::query()->orderBy('id')->get()->map->getRawOriginal()->all());
     }
 
     public static function unsafeEnvironments(): array
     {
-        return [['production', true], ['local', true], ['demo', false], ['staging', false]];
+        return [['production', true], ['local', false], ['demo', false], ['staging', false]];
     }
 
     #[DataProvider('modifiedFixtures')]

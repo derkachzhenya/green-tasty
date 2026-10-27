@@ -35,6 +35,8 @@ const form = useForm({
     date: safeString(hint.date),
     time: safeString(hint.time),
     guest_count: Number(hint.guest_count) || 1,
+    duration_minutes:
+        Number(hint.duration_minutes) || props.bookingRules.duration_minutes,
     restaurant_table_id: null as number | null,
 });
 const location = computed({
@@ -48,6 +50,7 @@ const filters = computed<BookingFilters>(() => ({
     date: form.date,
     time: form.time,
     guest_count: form.guest_count,
+    duration_minutes: form.duration_minutes,
 }));
 const selectedRestaurant = computed(() =>
     props.restaurants.find((r) => r.slug === location.value),
@@ -60,13 +63,10 @@ const selected = ref<{ table: BookingSearchTable; time: string } | null>(null);
 const modal = ref<'review' | 'edit' | null>(null);
 const editTime = ref('');
 const editGuests = ref(1);
+const editDuration = ref(props.bookingRules.duration_minutes);
 const end = computed(() =>
     selected.value
-        ? bookingEnd(
-              form.date,
-              selected.value.time,
-              props.bookingRules.duration_minutes,
-          )
+        ? bookingEnd(form.date, selected.value.time, form.duration_minutes)
         : null,
 );
 let controller: AbortController | null = null;
@@ -84,7 +84,13 @@ function clearResults(): void {
     form.clearErrors();
 }
 watch(
-    () => [form.date, form.time, form.guest_count, location.value],
+    () => [
+        form.date,
+        form.time,
+        form.guest_count,
+        form.duration_minutes,
+        location.value,
+    ],
     clearResults,
 );
 watch(
@@ -101,6 +107,8 @@ function change(value: Partial<BookingFilters>): void {
     if (value.date !== undefined) form.date = value.date;
     if (value.time !== undefined) form.time = value.time;
     if (value.guest_count !== undefined) form.guest_count = value.guest_count;
+    if (value.duration_minutes !== undefined)
+        form.duration_minutes = value.duration_minutes;
 }
 async function findTables(): Promise<void> {
     if (form.processing || authBusy.value) return;
@@ -148,6 +156,7 @@ async function findTables(): Promise<void> {
                 'date',
                 'time',
                 'guest_count',
+                'duration_minutes',
             ] as const) {
                 if (data.errors[field]?.[0])
                     form.setError(field, data.errors[field][0]);
@@ -179,6 +188,7 @@ function edit(): void {
     if (!selected.value) return;
     editTime.value = selected.value.time;
     editGuests.value = form.guest_count;
+    editDuration.value = form.duration_minutes;
     modal.value = 'edit';
 }
 async function saveDraft(): Promise<void> {
@@ -198,6 +208,7 @@ async function saveDraft(): Promise<void> {
     const tableId = selected.value.table.id;
     form.time = editTime.value;
     form.guest_count = editGuests.value;
+    form.duration_minutes = editDuration.value;
     // Let the input watcher invalidate the old selection before the fresh request.
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     await findTables();
@@ -216,6 +227,7 @@ function book(): void {
                 date: form.date,
                 time,
                 guest_count: form.guest_count,
+                duration_minutes: form.duration_minutes,
                 table: table.id,
             },
             {
@@ -247,6 +259,7 @@ function book(): void {
         date: data.date,
         time,
         guest_count: data.guest_count,
+        duration_minutes: data.duration_minutes,
         restaurant_table_id: table.id,
     }));
     form.post(store(table.restaurant.slug).url, {
@@ -354,7 +367,7 @@ onMounted(async () => {
                             {{
                                 tables.length
                                     ? `${tables.length} tables available`
-                                    : 'No tables Available'
+                                    : 'No tables available'
                             }}
                         </h2>
                         <p
@@ -363,7 +376,8 @@ onMounted(async () => {
                             {{ selectedRestaurant?.address ?? 'All Locations' }}
                             · {{ bookingDate(form.date) }} ·
                             {{ form.time === 'all' ? 'All times' : form.time }}
-                            · {{ form.guest_count }} guests
+                            · {{ form.guest_count }} guests ·
+                            {{ form.duration_minutes / 60 }} hours
                         </p>
                     </div>
                     <BookingEmptyState
@@ -441,8 +455,8 @@ onMounted(async () => {
                 v-else
                 v-model:time="editTime"
                 v-model:guests="editGuests"
+                v-model:duration="editDuration"
                 :capacity="selected.table.seats"
-                :duration="bookingRules.duration_minutes"
                 :busy="loading"
                 :errors="form.errors"
                 @save="saveDraft"

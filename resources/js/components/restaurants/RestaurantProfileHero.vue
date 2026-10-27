@@ -55,7 +55,7 @@ const photo = computed(() =>
                     </h1>
                     <p
                         v-if="rustaveli"
-                        aria-label="Figma demo rating: 4.73 out of 5"
+                        aria-label="Rating: 4.73 out of 5"
                         class="flex items-center gap-1 text-xs leading-4 whitespace-nowrap"
                     >
                         4.73 / 5
@@ -94,12 +94,6 @@ const photo = computed(() =>
                         ><a href="#menu">View menu</a></Button
                     >
                 </div>
-                <p v-if="location.demoLabel || rustaveli" class="sr-only">
-                    {{
-                        location.demoLabel ? `${location.demoLabel} · ` : ''
-                    }}Figma demo: photo, atmosphere and rating are design
-                    examples. Booking uses live data.
-                </p>
             </div>
         </div>
     </section>

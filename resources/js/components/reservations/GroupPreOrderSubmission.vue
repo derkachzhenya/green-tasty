@@ -124,14 +124,14 @@ async function submit() {
         ) {
             accessLost.value = true;
             error.value =
-                'Your session or permission has changed. Reload the dashboard before continuing.';
+                'Your session or permission has changed. Reload the reservation before continuing.';
         } else if (
             failure instanceof SessionRequestError &&
             failure.status === 404
         ) {
             accessLost.value = true;
             error.value =
-                'This reservation is no longer available. Reload the dashboard.';
+                'This reservation is no longer available. Reload the reservation.';
         } else if (
             failure instanceof SessionRequestError &&
             failure.status === 429
@@ -294,7 +294,7 @@ onBeforeUnmount(() => {
                 v-if="accessLost"
                 :href="show(reservationId).url"
                 class="inline-flex min-h-11 items-center rounded-sm text-sm text-primary underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
-                >Reload dashboard</a
+                >Reload reservation</a
             >
         </template>
         <Dialog :open="opened" @update:open="close">

@@ -15,6 +15,7 @@ import RestaurantReviewModal from '@/components/reservations/RestaurantReviewMod
 import SiteContainer from '@/components/site/SiteContainer.vue';
 import { Button } from '@/components/ui/button';
 import { sessionJson, SessionRequestError } from '@/lib/sessionJson';
+import { bookingDurations } from '@/lib/booking';
 import type { WaiterReservation } from '@/types/restaurant-review';
 const props = defineProps<{
     restaurant: { id: number; name: string; address: string };
@@ -46,6 +47,7 @@ const form = ref({
     date: props.filters.date,
     time: '12:00',
     guest_count: 2,
+    duration_minutes: 120,
     table_id: props.tables[0]?.id ?? 0,
 });
 function refresh() {
@@ -65,6 +67,7 @@ function openForm(reservation: WaiterReservation | null, event: Event) {
         date: reservation?.date ?? props.filters.date,
         time: reservation?.time ?? '12:00',
         guest_count: reservation?.guest_count ?? 2,
+        duration_minutes: reservation?.duration_minutes ?? 120,
         table_id: reservation?.table_id ?? props.tables[0]?.id ?? 0,
     };
     formOpen.value = true;
@@ -417,6 +420,21 @@ const labels = {
                     required
                     class="min-h-11 min-w-0 rounded-lg border px-3"
             /></label>
+            <label class="grid gap-1 text-sm"
+                >How long would you like to stay?<select
+                    v-model.number="form.duration_minutes"
+                    :disabled="editing?.phase === 'in_progress'"
+                    class="min-h-11 min-w-0 rounded-lg border px-3"
+                >
+                    <option
+                        v-for="minutes in bookingDurations"
+                        :key="minutes"
+                        :value="minutes"
+                    >
+                        {{ minutes / 60 }} hours
+                    </option>
+                </select></label
+            >
             <label class="grid gap-1 text-sm"
                 >Guests, including owner<input
                     v-model.number="form.guest_count"

@@ -32,15 +32,37 @@ class MyReservationsTest extends TestCase
         $this->restaurant = Restaurant::create(['name' => 'Green Tasty Garden', 'slug' => 'garden', 'address' => 'Garden address']);
     }
 
-    public function test_dashboard_keeps_its_existing_url_and_authentication_redirect(): void
+    public function test_reservations_url_and_authentication_redirect(): void
     {
-        $this->assertSame('/dashboard', route('dashboard', absolute: false));
+        $this->assertSame('/reservations', route('dashboard', absolute: false));
         $this->get(route('dashboard'))->assertRedirect(route('login'));
         $this->getJson(route('dashboard'))->assertUnauthorized();
         $response = $this->actingAs($this->owner)->get(route('dashboard'))->assertOk()
             ->assertHeader('Cache-Control', 'no-store, private')
             ->assertInertia(fn (Assert $page) => $page->component('Dashboard')->where('auth.user.id', $this->owner->id)->missing('reservations'));
         $this->assertTrue($response->viewData('page')['encryptHistory']);
+    }
+
+    public function test_account_dashboard_opens_the_owned_reservation_cards(): void
+    {
+        $this->get('/dashboard')->assertRedirect(route('login'));
+        $this->getJson('/dashboard')->assertUnauthorized();
+        $this->reservation();
+        $this->reservation(['owner_user_id' => User::factory()->create()->id]);
+        $this->actingAs($this->owner)->get(route('account.dashboard'))
+            ->assertOk()->assertHeader('Cache-Control', 'no-store, private')
+            ->assertInertia(fn (Assert $page) => $page->component('Dashboard')->where('dashboardPage', true)
+                ->loadDeferredProps(fn (Assert $loaded) => $loaded->where('reservations.total', 1)));
+    }
+
+    public function test_account_dashboard_pagination_stays_on_dashboard(): void
+    {
+        for ($index = 0; $index < 7; $index++) {
+            $this->reservation();
+        }
+        $this->actingAs($this->owner)->get(route('account.dashboard'))
+            ->assertInertia(fn (Assert $page) => $page->loadDeferredProps(fn (Assert $loaded) => $loaded
+                ->where('reservations.next_page_url', route('account.dashboard', ['page' => 2]))));
     }
 
     public function test_a_new_owner_receives_an_empty_paginated_result_without_creating_records(): void

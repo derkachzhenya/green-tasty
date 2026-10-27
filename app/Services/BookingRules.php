@@ -9,13 +9,25 @@ class BookingRules
 {
     public const TIMEZONE = 'Asia/Tbilisi';
 
+    // Backward-compatible default when an older client omits the duration.
     public const DURATION_MINUTES = 120;
+
+    public const DURATIONS = [90, 120, 150, 180];
+
+    public const MAX_DURATION_MINUTES = 180;
 
     public const SLOT_MINUTES = 30;
 
     public const ADVANCE_DAYS = 90;
 
     public const MAX_GUESTS = 255;
+
+    public function validateDuration(int $minutes): void
+    {
+        if (! in_array($minutes, self::DURATIONS, true)) {
+            throw ValidationException::withMessages(['duration_minutes' => 'Choose a duration of 1.5, 2, 2.5 or 3 hours.']);
+        }
+    }
 
     public function validateGuests(int $guests): void
     {

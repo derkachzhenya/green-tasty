@@ -107,6 +107,9 @@ vi.mock('@/components/ui/dropdown-menu', () => {
                 h('div', {}, [slots.default?.()]),
     };
     return {
+        DropdownMenu: box,
+        DropdownMenuTrigger: box,
+        DropdownMenuContent: box,
         DropdownMenuGroup: box,
         DropdownMenuItem: box,
         DropdownMenuLabel: box,
@@ -183,6 +186,14 @@ afterEach(() => {
 });
 
 describe('My reservations', () => {
+    it('keeps reservation actions and filters on the account Dashboard', async () => {
+        mounted.setProps({ dashboardPage: true });
+        await flush();
+        expect(text()).toContain('Dashboard');
+        expect(text()).toContain('Green Tasty Garden');
+        expect(text()).toContain('Pre-orders: 0/3');
+        expect(link('Upcoming').props.href).toBe('/dashboard?status=upcoming');
+    });
     it('replaces the starter placeholder with real reservation information and navigation', () => {
         expect(text()).toContain('My reservations');
         expect(text()).toContain('Hello, Journey Owner');
@@ -193,7 +204,9 @@ describe('My reservations', () => {
         expect(text()).toContain('Asia/Tbilisi');
         expect(text()).toContain('3 Guests');
         expect(text()).toContain('Pre-orders: 0/3');
-        expect(link('Upcoming').props.href).toBe('/dashboard?status=upcoming');
+        expect(link('Upcoming').props.href).toBe(
+            '/reservations?status=upcoming',
+        );
         expect(
             link(
                 'View reservation at Green Tasty Garden on 2026-10-24 at 12:00',
@@ -266,7 +279,7 @@ describe('My reservations', () => {
         });
         await flush();
         const completed = links().find(
-            (node) => node.props.href === '/dashboard?status=completed',
+            (node) => node.props.href === '/reservations?status=completed',
         )!;
         expect(textContent(completed)).toContain('Completed3');
         expect(completed.props['aria-current']).toBe('page');
@@ -275,9 +288,22 @@ describe('My reservations', () => {
     it('shows an empty state with a real location browsing path', async () => {
         mounted.setProps({
             reservations: result({ data: [], total: 0, from: null, to: null }),
+            reservationCounts: {
+                all: 0,
+                upcoming: 0,
+                in_progress: 0,
+                completed: 0,
+                canceled: 0,
+            },
         });
         await flush();
         expect(text()).toContain('No Reservations');
+        expect(
+            findAll(
+                mounted.root,
+                (node) => node.props['aria-label'] === 'Reservation status',
+            ),
+        ).toHaveLength(0);
         expect(link('Book a Table').props.href).toBe('/book');
         expect(
             findAll(mounted.root, (node) => node.tag === 'img').some((node) =>
@@ -305,13 +331,13 @@ describe('My reservations', () => {
                 last_page: 2,
                 from: null,
                 to: null,
-                prev_page_url: '/dashboard?page=2',
+                prev_page_url: '/reservations?page=2',
             }),
         });
         await flush();
         expect(text()).toContain('No reservations on this page');
         expect(text()).not.toContain('No reservations yet');
-        expect(link('Back to first page').props.href).toBe('/dashboard');
+        expect(link('Back to first page').props.href).toBe('/reservations');
     });
     it('shows a loading state before the deferred owner data arrives', async () => {
         navigation.setDeferred('loading');
@@ -416,13 +442,13 @@ describe('reservation pagination', () => {
             reservations: result({
                 last_page: 2,
                 total: 7,
-                next_page_url: '/dashboard?page=2',
+                next_page_url: '/reservations?page=2',
             }),
         });
         await flush();
         expect(text()).toContain('Page 1 of 2');
         expect(link('Next reservations page').props.href).toBe(
-            '/dashboard?page=2',
+            '/reservations?page=2',
         );
         expect(links().some((node) => textContent(node) === 'Previous')).toBe(
             false,
@@ -432,12 +458,12 @@ describe('reservation pagination', () => {
                 current_page: 2,
                 last_page: 2,
                 total: 7,
-                prev_page_url: '/dashboard?page=1',
+                prev_page_url: '/reservations?page=1',
             }),
         });
         await flush();
         expect(link('Previous reservations page').props.href).toBe(
-            '/dashboard?page=1',
+            '/reservations?page=1',
         );
         expect(links().some((node) => textContent(node) === 'Next')).toBe(
             false,
@@ -448,7 +474,7 @@ describe('reservation pagination', () => {
             reservations: result({
                 last_page: 2,
                 total: 7,
-                next_page_url: '/dashboard?page=2',
+                next_page_url: '/reservations?page=2',
             }),
         });
         await flush();
@@ -467,7 +493,7 @@ describe('reservation pagination', () => {
             reservations: result({
                 last_page: 2,
                 total: 7,
-                next_page_url: '/dashboard?page=2',
+                next_page_url: '/reservations?page=2',
             }),
         });
         await flush();
@@ -501,6 +527,8 @@ describe('site reservation navigation', () => {
             mounted.root,
             (node) => node.props['data-test'] === 'logout-button',
         )[0];
+        expect(link('Dashboard').props.href).toBe('/dashboard');
+        expect(link('Account settings').props.href).toBe('/settings/profile');
         expect(logout.props.href).toBe('/logout');
         await fire(logout, 'onClick');
         expect(navigation.clearHistory).toHaveBeenCalledOnce();
@@ -508,7 +536,7 @@ describe('site reservation navigation', () => {
     it('links authenticated owners to My reservations and marks the current page', () => {
         mounted.unmount();
         mounted = mountComponent(SiteHeader, {});
-        expect(link('Reservations').props.href).toBe('/dashboard');
+        expect(link('Reservations').props.href).toBe('/reservations');
         expect(link('Reservations').props['aria-current']).toBe('page');
         expect(link('Book a Table').props.href).toBe('/book');
     });

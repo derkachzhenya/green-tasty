@@ -29,7 +29,7 @@ const demoStatistics = computed(() =>
                 <img
                     v-if="location.image"
                     :src="location.image"
-                    :alt="`Dining area at ${location.address}${location.demoLabel ? ' (design reference for this demo location)' : ''}`"
+                    :alt="`Dining area at ${location.address}`"
                     width="460"
                     height="271"
                     class="h-full w-full scale-[1.064815] object-cover"
@@ -71,9 +71,6 @@ const demoStatistics = computed(() =>
                             height="16"
                             class="size-4"
                         />
-                        <span v-if="demoStatistics" class="sr-only"
-                            >Figma demo:
-                        </span>
                         {{
                             demoStatistics?.tables ??
                             location.restaurant.table_count
@@ -89,16 +86,9 @@ const demoStatistics = computed(() =>
                         Daily occupancy:
                         <span class="ml-1">{{ demoStatistics.occupancy }}</span>
                     </p>
-                    <span v-if="location.demoLabel" class="sr-only"
-                        >{{ location.demoLabel }}. Statistics are a Figma demo;
-                        live capacity may differ.</span
-                    >
                     <span class="sr-only">View restaurant and menu</span>
                 </div>
             </div>
         </Link>
-        <p v-if="location.demoLabel" class="sr-only">
-            {{ location.demoLabel }} · Figma demo
-        </p>
     </article>
 </template>

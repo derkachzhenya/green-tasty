@@ -8,6 +8,8 @@ import {
 import FigmaReviews from './FigmaReviews.vue';
 import RestaurantProfileHero from './RestaurantProfileHero.vue';
 import DishPreview from './DishPreview.vue';
+import PopularDishCard from './PopularDishCard.vue';
+import { nextTick } from 'vue';
 
 vi.mock('@inertiajs/vue3', async () => {
     const { defineComponent, h } = await import('vue');
@@ -120,27 +122,18 @@ const restaurant = {
     table_count: 3,
 };
 
-describe('Figma profile and safe demonstration content', () => {
-    it('links to the real booking route and live menu, with an explicit demo location and rating', () => {
+describe('public profile and demo content', () => {
+    it('keeps booking identity and menu navigation', () => {
         mounted = mountComponent(RestaurantProfileHero, { restaurant });
-        expect(textContent(mounted.root)).toContain('Demo Address 1');
-        expect(nodes('h1').map(textContent).join('')).not.toContain(
-            '48 Rustaveli Avenue',
+        expect(nodes('h1').map(textContent).join('')).toContain(
+            'Demo Address 1',
         );
-        expect(textContent(mounted.root)).toContain('Demo: Demo Address 1');
-        expect(textContent(mounted.root)).toContain('Booking uses live data');
-        expect(
-            nodes('p').find((node) =>
-                textContent(node).includes('Booking uses live data'),
-            )?.props.class,
-        ).toBe('sr-only');
         expect(nodes('a').map((node) => node.props.href)).toEqual([
             '/restaurants/location-1/book',
             '#menu',
         ]);
-        expect(nodes('img')[0].props.src).toContain('rustaveli-profile.jpg');
     });
-    it('does not attach Rustaveli descriptions, ratings or photos to an unrelated restaurant', () => {
+    it('does not attach Rustaveli demo content to an unrelated restaurant', () => {
         mounted = mountComponent(RestaurantProfileHero, {
             restaurant: {
                 ...restaurant,
@@ -152,84 +145,131 @@ describe('Figma profile and safe demonstration content', () => {
         expect(textContent(mounted.root)).toContain('3 tables');
         expect(textContent(mounted.root)).not.toContain('4.73');
         expect(textContent(mounted.root)).not.toContain('Atmosphere');
-        expect(
-            nodes('img').some((node) =>
-                String(node.props.src).includes('rustaveli-profile'),
-            ),
-        ).toBe(false);
     });
-    it('labels reviews as fictional design examples and supports sorting without pretending additional pages exist', async () => {
+    it('paginates distinct samples and resets the page when category or sort changes', async () => {
         mounted = mountComponent(FigmaReviews, {});
-        expect(textContent(mounted.root)).toContain(
-            'not real customer reviews',
-        );
-        expect(
-            nodes('p').find((node) =>
-                textContent(node).includes('not real customer reviews'),
-            )?.props.class,
-        ).toBe('sr-only');
+        const button = (name: string) =>
+            nodes('button').find((node) => node.props['aria-label'] === name)!;
+        const categoryButton = (name: string) =>
+            nodes('button').find((node) => textContent(node) === name)!;
+        const firstPageText = nodes('article').map(textContent);
         expect(nodes('article')).toHaveLength(4);
         expect(nodes('time')[0].props.datetime).toBe('2024-08-06');
+        await fire(button('Page 2'), 'onClick');
+        const secondPageText = nodes('article').map(textContent);
+        expect(
+            secondPageText.every((text) => !firstPageText.includes(text)),
+        ).toBe(true);
+        expect(button('Page 2').props['aria-current']).toBe('page');
+        await fire(button('Next review page'), 'onClick');
+        expect(button('Page 3').props['aria-current']).toBe('page');
+        expect(
+            nodes('article')
+                .map(textContent)
+                .every((text) => !secondPageText.includes(text)),
+        ).toBe(true);
+        expect(button('Next review page').props.disabled).toBe(true);
         await fire(nodes('select')[0], 'onChange', {
             target: { value: 'oldest' },
         });
-        expect(nodes('time')[0].props.datetime).toBe('2024-07-01');
-        await fire(
-            nodes('button').find(
-                (node) => textContent(node) === 'Cuisine experience',
-            )!,
-            'onClick',
+        expect(button('Page 1').props['aria-current']).toBe('page');
+        expect(nodes('time')[0].props.datetime).toBe('2024-06-21');
+        await fire(nodes('select')[0], 'onChange', {
+            target: { value: 'lowest' },
+        });
+        expect(
+            nodes('p').find((node) => node.props['aria-label'])?.props[
+                'aria-label'
+            ],
+        ).toBe('2 out of 5 stars');
+        await fire(nodes('select')[0], 'onChange', {
+            target: { value: 'highest' },
+        });
+        expect(
+            nodes('p').find((node) => node.props['aria-label'])?.props[
+                'aria-label'
+            ],
+        ).toBe('5 out of 5 stars');
+        await fire(button('Page 3'), 'onClick');
+        await fire(categoryButton('Cuisine experience'), 'onClick');
+        expect(button('Page 1').props['aria-current']).toBe('page');
+        expect(categoryButton('Cuisine experience').props['aria-pressed']).toBe(
+            true,
         );
         expect(
-            nodes('button').find(
-                (node) => textContent(node) === 'Cuisine experience',
-            )!.props['aria-pressed'],
+            nodes('article')
+                .map(textContent)
+                .every((text) => !firstPageText.includes(text)),
         ).toBe(true);
-        expect(
-            nodes('button').filter((node) => node.props.disabled !== undefined),
-        ).toHaveLength(3);
-        expect(nodes('form')).toHaveLength(0);
-    });
-    it('opens and closes a read-only dish preview with verified Figma nutrition and demo price', async () => {
-        mounted = mountComponent(DishPreview, {
-            name: 'Fresh Strawberry Mint Salad',
-            image: '/thumbnail.png',
-        });
-        expect(nodes('h2')).toHaveLength(0);
-        await fire(
-            findAll(
-                mounted.root,
-                (node) => typeof node.props.onClick === 'function',
-            )[0],
-            'onClick',
-        );
-        expect(nodes('h2').map(textContent)).toEqual([
-            'Fresh Strawberry Mint Salad',
-        ]);
-        expect(textContent(mounted.root)).toContain('Calories: ~503 kcal');
-        expect(textContent(mounted.root)).toContain('$15');
         expect(textContent(mounted.root)).toContain(
-            'This preview cannot be ordered',
+            'The strawberry salad had a lovely balance',
         );
-        expect(
-            nodes('p').find((node) =>
-                textContent(node).includes('This preview cannot be ordered'),
-            )?.props.class,
-        ).toBe('sr-only');
-        expect(nodes('img')[0].props.src).toContain('strawberry-detail.png');
-        expect(nodes('form')).toHaveLength(0);
+    });
+
+    it.each([
+        ['Fresh Strawberry Mint Salad', '17.00', '$17', '430 g'],
+        ['Spring Salad', '19.00', '$19', '280 g'],
+        ['Roasted Sweet Potato & Lentil Salad', '10.00', '$10', '380 g'],
+        ['Avocado Pine Nut Bowl', '99.99', '$99.99', '430 g'],
+    ])(
+        'uses the same price and catalog weight for %s in the card and dialog',
+        async (name, price, formatted, weight) => {
+            mounted = mountComponent(PopularDishCard, {
+                name,
+                image: '/dish.png',
+                price,
+            });
+            expect(nodes('p').map(textContent)).toContain(formatted);
+            await fire(
+                findAll(
+                    mounted.root,
+                    (node) => typeof node.props.onClick === 'function',
+                )[0],
+                'onClick',
+            );
+            expect(nodes('span').map(textContent)).toContain(formatted);
+            expect(textContent(nodes('article')[1])).toContain(weight);
+            expect(textContent(nodes('article')[1])).not.toContain('$15');
+            expect(nodes('article')[1].props.class).toContain('green-tasty');
+            mounted.setProps({ price: '22.50' });
+            await nextTick();
+            expect(nodes('p').map(textContent)).toContain('$22.50');
+            expect(nodes('span').map(textContent)).toContain('$22.50');
+            if (name === 'Fresh Strawberry Mint Salad') {
+                expect(textContent(mounted.root)).toContain(
+                    'Calories: ~503 kcal',
+                );
+                expect(nodes('strong').map(textContent)).toContain('Fats:');
+            } else {
+                expect(textContent(mounted.root)).not.toContain('Calories');
+            }
+            await fire(
+                nodes('button').find(
+                    (node) => node.props['aria-label'] === 'Close dish preview',
+                )!,
+                'onClick',
+            );
+            expect(nodes('h2')).toHaveLength(0);
+        },
+    );
+    it('uses fallback catalog prices and does not invent unknown dish details', async () => {
+        mounted = mountComponent(PopularDishCard, {
+            name: 'Spring Salad',
+            image: '/dish.png',
+        });
+        expect(textContent(mounted.root)).toContain('$19');
         await fire(
-            nodes('button').find(
-                (node) => node.props['aria-label'] === 'Close dish preview',
-            )!,
+            findAll(
+                mounted.root,
+                (node) => typeof node.props.onClick === 'function',
+            )[0],
             'onClick',
         );
-        expect(nodes('h2')).toHaveLength(0);
-    });
-    it('does not invent nutritional information for other preview dishes', async () => {
+        expect(textContent(nodes('article')[1])).toContain('$19');
+        mounted.unmount();
         mounted = mountComponent(DishPreview, {
-            name: 'Spring Salad',
-            image: '/spring.png',
+            name: 'Unknown dish',
+            image: '/dish.png',
         });
         await fire(
             findAll(
@@ -238,8 +278,9 @@ describe('Figma profile and safe demonstration content', () => {
             )[0],
             'onClick',
         );
+        expect(textContent(mounted.root)).toContain('Price unavailable');
+        expect(textContent(mounted.root)).toContain('Weight not specified');
+        expect(textContent(mounted.root)).not.toContain('430');
         expect(textContent(mounted.root)).not.toContain('Calories');
-        expect(textContent(mounted.root)).toContain('live menu');
-        expect(nodes('img')[0].props.src).toBe('/spring.png');
     });
 });

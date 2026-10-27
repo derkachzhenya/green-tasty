@@ -25,6 +25,7 @@ class BookingSearchRequest extends FormRequest
             'date' => ['required', 'date_format:Y-m-d', 'after_or_equal:'.CarbonImmutable::now(BookingRules::TIMEZONE)->format('Y-m-d'), 'before_or_equal:'.CarbonImmutable::now(BookingRules::TIMEZONE)->addDays(BookingRules::ADVANCE_DAYS)->format('Y-m-d')],
             'time' => ['required', 'string', 'regex:/\A(?:all|(?:[01][0-9]|2[0-3]):(?:00|30))\z/'],
             'guest_count' => ['required', 'integer', 'between:1,'.BookingRules::MAX_GUESTS],
+            'duration_minutes' => ['sometimes', 'integer', Rule::in(BookingRules::DURATIONS)],
         ];
     }
 

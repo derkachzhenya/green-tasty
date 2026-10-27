@@ -21,7 +21,7 @@ class UpdateBookingRequest extends FormRequest
     public function rules(): array
     {
         return ['time' => ['required', 'date_format:H:i'], 'guest_count' => ['required', 'integer', 'between:1,'.BookingRules::MAX_GUESTS],
-            'duration_minutes' => ['required', 'integer', Rule::in([BookingRules::DURATION_MINUTES])]];
+            'duration_minutes' => ['required', 'integer', Rule::in(BookingRules::DURATIONS)]];
     }
 
     /** @return list<\Closure> */

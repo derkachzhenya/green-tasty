@@ -64,7 +64,7 @@ class PreOrderCutoffTest extends TestCase
         $this->assertSame([], $service->warnings($this->owner));
         $this->travelTo($this->start->subMinutes(45));
         $this->assertSame([['id' => $this->reservation->id, 'code' => 'GT-CUTOFF', 'minutes' => 15]], $service->warnings($this->owner));
-        $this->get('/dashboard')->assertOk()->assertViewHas('page', fn ($page) => $page['props']['preOrderWarnings'][0]['code'] === 'GT-CUTOFF');
+        $this->get(route('dashboard'))->assertOk()->assertViewHas('page', fn ($page) => $page['props']['preOrderWarnings'][0]['code'] === 'GT-CUTOFF');
         $this->assertSame([], $service->warnings(User::factory()->create()));
         $this->travelTo($this->start->subMinutes(30)->subSecond());
         $this->assertSame(1, $service->warnings($this->owner)[0]['minutes']);

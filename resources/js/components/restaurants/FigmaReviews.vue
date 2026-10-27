@@ -1,18 +1,30 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { figmaReviews } from '@/lib/figma-demo';
+import { computed, ref, watch } from 'vue';
+import { demoReviews, type DemoReviewCategory } from '@/lib/figma-demo';
 
-const category = ref('Service');
+const category = ref<DemoReviewCategory>('Service');
 const sort = ref('newest');
+const page = ref(1);
+const categories: DemoReviewCategory[] = ['Service', 'Cuisine experience'];
+const pageSize = 4;
+watch([category, sort], () => {
+    page.value = 1;
+});
 const reviews = computed(() =>
-    [...figmaReviews].sort((a, b) => {
-        if (sort.value === 'oldest') return a.date.localeCompare(b.date);
-        if (sort.value === 'highest')
-            return b.rating - a.rating || b.date.localeCompare(a.date);
-        if (sort.value === 'lowest')
-            return a.rating - b.rating || b.date.localeCompare(a.date);
-        return b.date.localeCompare(a.date);
-    }),
+    demoReviews
+        .filter((review) => review.category === category.value)
+        .sort((a, b) => {
+            if (sort.value === 'oldest') return a.date.localeCompare(b.date);
+            if (sort.value === 'highest')
+                return b.rating - a.rating || b.date.localeCompare(a.date);
+            if (sort.value === 'lowest')
+                return a.rating - b.rating || b.date.localeCompare(a.date);
+            return b.date.localeCompare(a.date);
+        }),
+);
+const pageCount = computed(() => Math.ceil(reviews.value.length / pageSize));
+const visibleReviews = computed(() =>
+    reviews.value.slice((page.value - 1) * pageSize, page.value * pageSize),
 );
 const dateLabel = (date: string) =>
     new Intl.DateTimeFormat('en-US', {
@@ -37,11 +49,11 @@ const dateLabel = (date: string) =>
         <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div
                 role="group"
-                aria-label="Figma review category"
+                aria-label="Review category"
                 class="flex flex-wrap border-b border-border"
             >
                 <button
-                    v-for="label in ['Service', 'Cuisine experience']"
+                    v-for="label in categories"
                     :key="label"
                     type="button"
                     :aria-pressed="category === label"
@@ -65,22 +77,21 @@ const dateLabel = (date: string) =>
                 >
                     <option value="highest">Top rated first</option>
                     <option value="lowest">Low rated first</option>
-                    <option value="newest">Newest first</option>
+                    <option value="newest">Newest First</option>
                     <option value="oldest">Oldest first</option>
                 </select>
             </label>
         </div>
         <p class="sr-only" role="status">
-            {{ category }} — Figma sample reviews,
-            {{ reviews.length }} examples. Category switching previews the same
-            sample set.
+            {{ category }} — {{ reviews.length }} reviews. Page {{ page }} of
+            {{ pageCount }}.
         </p>
         <ul
             class="grid gap-6 sm:grid-cols-2 xl:grid-cols-4"
-            aria-label="Figma demo reviews"
+            aria-label="Customer reviews"
         >
             <li
-                v-for="review in reviews"
+                v-for="review in visibleReviews"
                 :key="review.id"
                 class="gt-card min-w-0 bg-white p-6 xl:min-h-[324px]"
             >
@@ -126,35 +137,33 @@ const dateLabel = (date: string) =>
             </li>
         </ul>
         <nav
-            aria-label="Demo review pages"
-            class="mt-6 flex justify-center gap-3 text-xs leading-6"
+            aria-label="Review pages"
+            class="mt-6 flex items-center justify-center gap-3 text-xs leading-6"
         >
-            <span
-                aria-current="page"
-                class="min-w-6 border-b border-primary text-center text-primary"
-                >1</span
-            ><button
-                v-for="page in [2, 3]"
-                :key="page"
+            <button
+                v-for="number in pageCount"
+                :key="number"
                 type="button"
-                disabled
-                class="min-h-11 min-w-6 text-muted-foreground"
-                :aria-label="`Demo page ${page} unavailable`"
+                :aria-current="page === number ? 'page' : undefined"
+                :aria-label="`Page ${number}`"
+                class="min-h-11 min-w-11 border-b focus-visible:outline-2 focus-visible:outline-ring"
+                :class="
+                    page === number
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-muted-foreground hover:text-primary'
+                "
+                @click="page = number"
             >
-                {{ page }}</button
+                {{ number }}</button
             ><button
                 type="button"
-                disabled
-                aria-label="No additional demo reviews"
-                class="min-h-11 min-w-6 text-muted-foreground"
+                :disabled="page === pageCount"
+                aria-label="Next review page"
+                class="min-h-11 min-w-11 text-primary focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-40"
+                @click="page = Math.min(page + 1, pageCount)"
             >
                 »
             </button>
         </nav>
-        <p class="sr-only">
-            Figma demo — these are design examples, not real customer reviews.
-            Filters preview this same sample set; no additional review pages are
-            available.
-        </p>
     </section>
 </template>

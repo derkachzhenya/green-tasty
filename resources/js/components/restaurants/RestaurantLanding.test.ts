@@ -31,7 +31,7 @@ vi.mock('@/components/restaurants/DishPreview.vue', async () => {
                         'button',
                         {
                             type: 'button',
-                            'aria-label': `View ${props.name} — Figma demo`,
+                            'aria-label': `View ${props.name}`,
                         },
                         slots.default?.(),
                     ),
@@ -113,6 +113,24 @@ vi.mock('@/components/ui/button', async () => {
     };
 });
 
+vi.mock('@/components/UserMenuContent.vue', () => ({
+    default: { render: () => null },
+}));
+vi.mock('@/components/ui/dropdown-menu', async () => {
+    const { defineComponent, h } = await import('vue');
+    const box = defineComponent({
+        setup:
+            (_props, { slots }) =>
+            () =>
+                h('div', {}, slots.default?.()),
+    });
+    return {
+        DropdownMenu: box,
+        DropdownMenuTrigger: box,
+        DropdownMenuContent: box,
+    };
+});
+
 const restaurants: RestaurantListing[] = [1, 2, 3].map((id) => ({
     id,
     name: `Green Tasty - Location ${id}`,
@@ -143,7 +161,11 @@ describe('homepage presentation and real navigation', () => {
             links()
                 .filter((node) => node.props.href === '#locations')
                 .map(textContent),
-        ).toEqual(['Book a table', 'View menu']);
+        ).toEqual(['View menu']);
+        expect(
+            links().find((node) => textContent(node) === 'Book a table')?.props
+                .href,
+        ).toBe('/book');
         const dishes = nodes(
             (node) =>
                 node.tag === 'ul' &&
@@ -173,13 +195,6 @@ describe('homepage presentation and real navigation', () => {
         expect(textContent(mounted.root)).not.toContain(
             'illustrative. Check a location',
         );
-        const locationNotices = nodes(
-            (node) => node.tag === 'p' && textContent(node).startsWith('Demo:'),
-        );
-        expect(locationNotices).toHaveLength(3);
-        expect(
-            locationNotices.every((node) => node.props.class === 'sr-only'),
-        ).toBe(true);
         expect(textContent(mounted.root)).not.toContain('Customer Reviews');
         expect(textContent(mounted.root)).toContain('$17');
         expect(textContent(mounted.root)).toContain('430 g');
@@ -189,7 +204,7 @@ describe('homepage presentation and real navigation', () => {
     it('maps approved demo labels to existing slugs with real table counts and explicit demo addresses', () => {
         mounted = mountComponent(RestaurantLanding, { restaurants });
         expect(links().map((node) => node.props.href)).toEqual([
-            '#locations',
+            '/book',
             '#locations',
             '/restaurants/location-1',
             '/restaurants/location-2',
@@ -199,9 +214,6 @@ describe('homepage presentation and real navigation', () => {
             'Demo Address 1',
             'Demo Address 2',
             'Demo Address 3',
-            'Demo: Demo Address 1',
-            'Demo: Demo Address 2',
-            'Demo: Demo Address 3',
             '10 tables',
             '16 tables',
             '20 tables',
@@ -286,7 +298,7 @@ describe('homepage presentation and real navigation', () => {
         ).toBe(true);
     });
 
-    it('prefers exact backend decimal strings and labels missing prices as a Figma demo', () => {
+    it('prefers exact backend decimal strings and falls back to catalog prices', () => {
         mounted = mountComponent(RestaurantLanding, {
             restaurants,
             featuredPrices: {
@@ -297,15 +309,10 @@ describe('homepage presentation and real navigation', () => {
         const text = textContent(mounted.root);
         expect(text).toContain('10.05');
         expect(text).toContain('99.99');
-        expect(text).toContain('from');
-        expect(
-            nodes(
-                (node) =>
-                    node.tag === 'span' &&
-                    textContent(node) === 'Figma demo price: ',
-            ),
-        ).toHaveLength(2);
-        expect(text).toContain('Figma demo');
+        expect(text).toContain('280 g');
+        expect(text).not.toContain('from');
+        expect(text).toContain('$17');
+        expect(text).toContain('$10');
     });
 
     it('keeps the supplied hero artwork separate from the dish thumbnails', () => {
@@ -337,8 +344,8 @@ describe('loading and retry states', () => {
         expect(
             nodes(
                 (node) =>
-                    node.tag === 'span' &&
-                    textContent(node) === 'Loading price',
+                    node.tag === 'p' &&
+                    textContent(node).trim() === 'Loading price…',
             ),
         ).toHaveLength(4);
         expect(
@@ -386,13 +393,7 @@ describe('loading and retry states', () => {
         expect(textContent(mounted.root)).not.toContain(
             'We couldn’t load current menu prices',
         );
-        expect(
-            nodes(
-                (node) =>
-                    node.tag === 'span' &&
-                    textContent(node) === 'Figma demo price: ',
-            ),
-        ).toHaveLength(4);
+        expect(textContent(mounted.root)).toContain('$19');
     });
 
     it('handles location errors independently of dish prices', async () => {
@@ -422,13 +423,7 @@ describe('loading and retry states', () => {
             restaurants,
             pricesResolved: true,
         });
-        expect(
-            nodes(
-                (node) =>
-                    node.tag === 'span' &&
-                    textContent(node) === 'Figma demo price: ',
-            ),
-        ).toHaveLength(4);
+        expect(textContent(mounted.root)).toContain('$19');
         expect(navigation.reload).not.toHaveBeenCalled();
     });
 });
@@ -437,7 +432,8 @@ describe('shared header', () => {
     it('keeps the real sign-in and booking destinations with the supplied logo', () => {
         mounted = mountComponent(SiteHeader, {});
         expect(
-            links().find((node) => textContent(node) === 'Sign In')?.props.href,
+            links().find((node) => textContent(node).trim() === 'Sign In')
+                ?.props.href,
         ).toBe('/login');
         expect(
             links().find((node) => textContent(node).trim() === 'Book a Table')
@@ -458,7 +454,7 @@ describe('shared header', () => {
         expect(
             links().find((node) => textContent(node) === 'Reservations')?.props
                 .href,
-        ).toBe('/dashboard');
+        ).toBe('/reservations');
         expect(links().some((node) => node.props.href === '/login')).toBe(
             false,
         );

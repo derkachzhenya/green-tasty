@@ -18,14 +18,14 @@ class MyReservationsService
     public function __construct(private RestaurantBookingService $bookings) {}
 
     /** @return ReservationPage */
-    public function forOwner(User $owner, int $page = 1, string $filter = 'all'): array
+    public function forOwner(User $owner, int $page = 1, string $filter = 'all', string $route = 'dashboard'): array
     {
         Gate::forUser($owner)->authorize('viewAny', Reservation::class);
 
         $reservations = Reservation::query()
             // Ownership is always derived from authentication, never query parameters.
             ->where('owner_user_id', $owner->id)
-            ->select(['id', 'restaurant_id', 'restaurant_table_id', 'owner_user_id', 'code', 'reserved_at', 'guest_count', 'status'])
+            ->select(['id', 'restaurant_id', 'restaurant_table_id', 'owner_user_id', 'code', 'reserved_at', 'duration_minutes', 'guest_count', 'status'])
             ->with(['restaurant:id,name,slug,address', 'table:id,name,seats', 'preOrder:id,reservation_id,status,submitted_at', 'feedback:id,reservation_id'])
             ->withCount(['guests as active_participants' => fn (Builder $q) => $q->whereNull('removed_at'),
                 'guests as removed_participants' => fn (Builder $q) => $q->whereNotNull('removed_at'),
@@ -37,7 +37,7 @@ class MyReservationsService
             ->when($filter !== 'all', fn (Builder $query) => $this->filter($query, $filter))
             ->orderByDesc('reserved_at')->orderByDesc('id')
             ->paginate(self::PER_PAGE, page: $page)
-            ->withPath(route('dashboard'))
+            ->withPath(route($route))
             ->appends($filter === 'all' ? [] : ['status' => $filter]);
 
         return [
@@ -103,13 +103,12 @@ class MyReservationsService
     private function filter(Builder $query, string $filter): Builder
     {
         $now = CarbonImmutable::now();
-        $endThreshold = $now->subMinutes(BookingRules::DURATION_MINUTES);
 
         return match ($filter) {
             'canceled' => $query->where('status', 'cancelled'),
             'completed' => $query->where(fn (Builder $q) => $q->where('status', 'completed')
-                ->orWhere(fn (Builder $q) => $q->where('status', 'confirmed')->where('reserved_at', '<=', $endThreshold))),
-            'in_progress' => $query->where('status', 'confirmed')->where('reserved_at', '<=', $now)->where('reserved_at', '>', $endThreshold),
+                ->orWhere(fn (Builder $q) => $q->where('status', 'confirmed')->endedBy($now))),
+            'in_progress' => $query->where('status', 'confirmed')->where('reserved_at', '<=', $now)->endingAfter($now),
             default => $query->whereNotIn('status', ['cancelled', 'completed'])->where(fn (Builder $q) => $q->where('status', '!=', 'confirmed')->orWhere('reserved_at', '>', $now)),
         };
     }

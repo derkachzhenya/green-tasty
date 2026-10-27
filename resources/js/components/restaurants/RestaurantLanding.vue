@@ -35,12 +35,19 @@ const prices = computed(() =>
             aria-labelledby="popular-dishes-heading"
             class="relative pt-10 sm:pt-[60px]"
         >
-            <h2
-                id="popular-dishes-heading"
-                class="mb-8 text-2xl leading-10 font-medium sm:text-[32px]"
+            <div
+                class="mb-8 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2"
             >
-                Most Popular Dishes
-            </h2>
+                <h2
+                    id="popular-dishes-heading"
+                    class="text-2xl leading-10 font-medium sm:text-[32px]"
+                >
+                    Most Popular Dishes
+                </h2>
+                <p class="text-xs text-muted-foreground">
+                    Starting prices across locations
+                </p>
+            </div>
             <div class="xl:min-h-[308px]">
                 <DeferredSection
                     data="featuredPrices"
@@ -87,10 +94,13 @@ const prices = computed(() =>
         >
             <h2
                 id="locations-heading"
-                class="mb-8 text-2xl leading-10 font-medium sm:text-[32px]"
+                class="mb-2 text-2xl leading-10 font-medium sm:text-[32px]"
             >
                 Locations
             </h2>
+            <p class="mb-8 text-sm text-muted-foreground">
+                Choose a location to view its menu.
+            </p>
             <DeferredSection
                 data="restaurants"
                 error-title="We couldn’t load the locations"

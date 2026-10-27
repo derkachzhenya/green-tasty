@@ -8,6 +8,7 @@ use App\Services\BookingRules;
 use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Validator;
 
@@ -28,6 +29,7 @@ class BookingAvailabilityRequest extends FormRequest
             'date' => ['required', 'date_format:Y-m-d'],
             'time' => ['required', 'date_format:H:i'],
             'guest_count' => ['required', 'integer', 'between:1,'.BookingRules::MAX_GUESTS],
+            'duration_minutes' => ['sometimes', 'integer', Rule::in(BookingRules::DURATIONS)],
         ];
     }
 
