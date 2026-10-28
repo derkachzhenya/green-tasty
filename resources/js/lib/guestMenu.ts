@@ -1,4 +1,5 @@
 import catalog from '../../data/restaurant-menu.json';
+import { figmaDishPreview } from '@/lib/figma-demo';
 import { cents } from '@/lib/guestSelection';
 import type { GuestCatalogDish } from '@/types/guest-selection';
 
@@ -16,6 +17,34 @@ export function dishImage(name: string): string | null {
 
 export function dishWeight(name: string): string | null {
     return catalogDish(name)?.weight ?? null;
+}
+
+export function dishPreparationMinutes(name: string): number | null {
+    return catalogDish(name)?.preparation_minutes ?? null;
+}
+
+export function dishDescription(name: string): string | null {
+    if (
+        name.trim().toLowerCase() ===
+        figmaDishPreview.strawberry.name.toLowerCase()
+    )
+        return figmaDishPreview.strawberry.description;
+    return catalogDish(name)?.description ?? null;
+}
+
+export function dishNutrition(name: string) {
+    return name.trim().toLowerCase() ===
+        figmaDishPreview.strawberry.name.toLowerCase()
+        ? figmaDishPreview.strawberry.nutrition
+        : (catalogDish(name)?.nutrition ?? null);
+}
+
+export function dishDietary(name: string): string[] {
+    return catalogDish(name)?.dietary ?? [];
+}
+
+export function dishNutritionNote(name: string): string | null {
+    return catalogDish(name)?.nutrition_note ?? null;
 }
 
 export function dishImageCropped(name: string): boolean {

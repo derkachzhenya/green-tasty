@@ -15,6 +15,9 @@ export type OwnedReservation = ReservationDetails & {
     active_participants?: number;
     removed_participants?: number;
     pre_order_status: string | null;
+    has_pre_order_updates?: boolean;
+    can_cancel?: boolean;
+    cancel_version?: string;
     phase?: ReservationPhase;
     submitted_pre_orders?: number;
     can_invite?: boolean;

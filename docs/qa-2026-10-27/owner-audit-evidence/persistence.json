@@ -1,0 +1,40 @@
+{
+    "removed_guest": {
+        "booked_places": 4,
+        "membership_rows": 2,
+        "active_memberships": 1,
+        "guest_removal_recorded": true,
+        "group_status": "submitted",
+        "group_total": "17.00"
+    },
+    "replacement": {
+        "status": "Updated Pre-Order",
+        "totals": {
+            "requested": "36.00",
+            "confirmed": "17.00",
+            "rejected": "0.00",
+            "pending": "19.00"
+        },
+        "old_rejection_retained": 1,
+        "confirmed_original_retained": 1
+    },
+    "sent_blocked_removal": {
+        "http_status": 409,
+        "item_rows_unchanged": true,
+        "editable": false,
+        "total": "36.00"
+    },
+    "cutoff_blocked_removal": {
+        "http_status": 409,
+        "item_rows_unchanged": true,
+        "editable": false,
+        "total": "27.00"
+    },
+    "additional_warning_gap": {
+        "minutes_before_start": 44,
+        "saved_additional_rows": 1,
+        "timing_unconfirmed": false,
+        "dashboard_warning_present": false,
+        "locked": false
+    }
+}

@@ -24,6 +24,9 @@ class WaiterReservationRequest extends FormRequest
             'staff.reservations.index' => ['date' => ['nullable', 'date_format:Y-m-d'], 'time' => ['nullable', 'date_format:H:i'], 'table' => ['nullable', 'integer', 'min:1'], 'page' => ['nullable', 'integer', 'between:1,10000']],
             'staff.reservations.create', 'staff.reservations.update' => ['owner_email' => [$this->isMethod('post') ? 'required' : 'prohibited', 'email'], 'date' => ['required', 'date_format:Y-m-d'], 'time' => ['required', 'date_format:H:i'], 'guest_count' => ['required', 'integer', 'between:1,255'], 'table_id' => ['required', 'integer', 'min:1'], 'duration_minutes' => ['sometimes', 'integer', Rule::in(BookingRules::DURATIONS)]],
             'staff.review.decision' => ['decision' => ['required', 'in:confirmed,rejected']],
+            'staff.order.save' => ['items' => ['required', 'array', 'min:1', 'max:500'], 'items.*' => ['required', 'array:line_key,menu_item_id,quantity,notes'],
+                'items.*.line_key' => ['required', 'string', 'regex:/\A(?:preorder|new)-[1-9][0-9]*\z/', 'distinct'],
+                'items.*.menu_item_id' => ['required', 'integer', 'min:1'], 'items.*.quantity' => ['required', 'integer', 'between:1,99'], 'items.*.notes' => ['nullable', 'string', 'max:500']],
             default => [],
         };
     }

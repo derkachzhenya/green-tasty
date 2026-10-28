@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
-import { computed, ref, shallowRef, watch } from 'vue';
+import { computed, ref, shallowRef, watch, onMounted } from 'vue';
+import OwnerGroupPreOrderModal from '@/components/reservations/OwnerGroupPreOrderModal.vue';
 import GroupPreOrderSubmission from '@/components/reservations/GroupPreOrderSubmission.vue';
 import OwnerRestaurantReview from '@/components/reservations/OwnerRestaurantReview.vue';
 import type { RestaurantReview } from '@/types/restaurant-review';
@@ -19,6 +20,8 @@ import type {
     SubmittedGroupOrder,
 } from '@/types/reservation';
 
+defineOptions({ inheritAttrs: false });
+
 const props = defineProps<{
     reservation: ReservationDetails;
     groupOrder?: DashboardOrder;
@@ -31,6 +34,10 @@ const refreshing = ref(false);
 const refreshError = ref('');
 const submitting = ref(false);
 const confirming = ref(false);
+const groupOpen = ref(false);
+onMounted(() => {
+    groupOpen.value = window.location?.hash === '#group-pre-order';
+});
 const refreshVersion = ref(0);
 const submittedResult = shallowRef<SubmittedGroupOrder | null>(null);
 const displayedOrder = computed<DashboardOrder | undefined>(() => {
@@ -126,6 +133,7 @@ function refresh(): void {
             </div>
             <a
                 href="#group-pre-order"
+                @click.prevent="groupOpen = true"
                 class="inline-flex min-h-11 items-center rounded-sm text-sm font-medium text-primary underline focus-visible:outline-2 focus-visible:outline-offset-4"
                 >Go to group pre-order</a
             >
@@ -222,8 +230,9 @@ function refresh(): void {
                                 role="status"
                                 class="rounded-xl bg-accent p-4 text-sm"
                             >
-                                Group pre-order submitted. Guest selections are
-                                now locked.
+                                Group pre-order submitted. Manage permitted
+                                changes in Group Pre-Order until 30 minutes
+                                before the reservation.
                             </p>
                             <OwnerRestaurantReview
                                 v-if="restaurantReview"
@@ -253,4 +262,10 @@ function refresh(): void {
             </div>
         </div>
     </SiteContainer>
+    <OwnerGroupPreOrderModal
+        v-if="groupOpen"
+        :reservation="reservation"
+        @close="groupOpen = false"
+        @changed="refresh"
+    />
 </template>

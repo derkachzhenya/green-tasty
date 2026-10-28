@@ -1,0 +1,25 @@
+{
+    "reservation_id": 20,
+    "guest_name": "Manual Guest",
+    "guest_submitted": true,
+    "duration_minutes": 180,
+    "pre_order_count": 1,
+    "group_status": "draft",
+    "items": [
+        {
+            "menu_item_id": 7,
+            "name": "Fresh Strawberry Mint Salad",
+            "quantity": 1,
+            "subtotal": "17.00"
+        },
+        {
+            "menu_item_id": 9,
+            "name": "Roasted Sweet Potato & Lentil Salad",
+            "quantity": 1,
+            "subtotal": "10.00"
+        }
+    ],
+    "total_quantity": 2,
+    "grand_total": "27.00",
+    "duplicate_confirmation_unchanged": true
+}

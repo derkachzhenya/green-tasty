@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\GuestNameRequest;
+use App\Http\Requests\StartGuestPreOrderRequest;
 use App\Http\Requests\SubmitGuestPreOrderRequest;
 use App\Services\GuestPreOrderService;
 use Illuminate\Http\JsonResponse;
@@ -10,6 +11,11 @@ use SensitiveParameter;
 
 class GuestPreOrderController extends Controller
 {
+    public function start(StartGuestPreOrderRequest $request, #[SensitiveParameter] string $token, GuestPreOrderService $service): JsonResponse
+    {
+        return $this->respond($service->start($token, $request->expectedVersion()));
+    }
+
     public function identify(GuestNameRequest $request, #[SensitiveParameter] string $token, GuestPreOrderService $service): JsonResponse
     {
         return $this->respond($service->identify($token, $request->validated('name')));

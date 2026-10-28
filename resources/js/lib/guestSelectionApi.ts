@@ -146,6 +146,11 @@ export function guestMenu(value: unknown): GuestMenu {
         throw new Error('Invalid guest response.');
     if (typeof order.editable !== 'boolean')
         throw new Error('Invalid guest response.');
+    if (
+        state.can_start_new !== undefined &&
+        typeof state.can_start_new !== 'boolean'
+    )
+        throw new Error('Invalid guest response.');
     return {
         ...(data.timing ? { timing: data.timing as GuestMenu['timing'] } : {}),
         context: {
@@ -162,7 +167,14 @@ export function guestMenu(value: unknown): GuestMenu {
             name_confirmed: state.name_confirmed,
             submitted_at: nullableString(state.submitted_at),
             version: integer(state.version, 0),
+            draft_round:
+                state.draft_round == null ? null : integer(state.draft_round),
+            can_start_new: state.can_start_new === true,
         },
+        previous_selections:
+            data.previous_selections == null
+                ? null
+                : selectionSummary(data.previous_selections),
         catalog: list(data.catalog).map((value) => {
             const category = record(value);
             return {

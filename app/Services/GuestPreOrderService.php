@@ -11,7 +11,13 @@ use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 /** @phpstan-import-type GuestMenu from GuestMenuService */
 class GuestPreOrderService
 {
-    public function __construct(private GuestInvitationService $invitations, private GuestDishSelectionService $selections, private GuestMenuService $menus) {}
+    public function __construct(private GuestInvitationService $invitations, private GuestDishSelectionService $selections, private GuestMenuService $menus, private GuestAdditionalPreOrderService $additional) {}
+
+    /** @return GuestMenu|null */
+    public function start(#[SensitiveParameter] string $token, int $expectedVersion): ?array
+    {
+        return $this->additional->start($token, $expectedVersion) ? $this->menus->view($token) : null;
+    }
 
     /** @return GuestMenu|null */
     public function identify(#[SensitiveParameter] string $token, string $name): ?array
@@ -44,6 +50,12 @@ class GuestPreOrderService
                 return null;
             }
             // A lost response or repeated click must never create another order or reopen one.
+            if (($round = $this->additional->draft($guest)) !== null) {
+                $this->additional->submitLocked($guest->reservation, $guest, $round, $items, $expectedVersion);
+                PreOrderNotifications::guestSubmitted($guest->refresh());
+
+                return $this->menus->view($token);
+            }
             if ($guest->pre_order_submitted_at !== null) {
                 return $this->menus->view($token);
             }
@@ -55,6 +67,7 @@ class GuestPreOrderService
                 return null;
             }
             $guest->forceFill(['pre_order_submitted_at' => now()])->save();
+            PreOrderNotifications::guestSubmitted($guest);
 
             return $this->menus->view($token);
         }, attempts: 3);

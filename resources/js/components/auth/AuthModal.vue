@@ -655,6 +655,12 @@ onBeforeUnmount(() => {
                                 Create an Account
                             </button>
                         </p>
+                        <p v-if="step === 'login'" class="text-xs leading-6">
+                            Restaurant staff?
+                            <a href="/staff/login" class="auth-link"
+                                >Staff sign in</a
+                            >
+                        </p>
                         <p
                             v-else-if="step === 'register'"
                             class="text-xs leading-6"

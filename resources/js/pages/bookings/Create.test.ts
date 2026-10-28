@@ -188,6 +188,19 @@ afterEach(() => {
 });
 
 describe('database-backed booking search and review', () => {
+    it('searches using ISO after a dotted date entry and clears stale availability while editing it', async () => {
+        const date = findAll(
+            mounted.root,
+            (node) => node.props.id === 'booking-date',
+        )[0];
+        await fire(date, 'onInput', { target: { value: '12.11.2026' } });
+        await search();
+        expect(fetchMock.mock.calls[0][0]).toContain('date=2026-11-12');
+        expect(text()).toContain('Garden table');
+        await fire(date, 'onInput', { target: { value: '12.11.202' } });
+        expect(form.date).toBe('');
+        expect(text()).not.toContain('Garden table');
+    });
     it('uses the supplied default photo, actual addresses and real support phone without an initial booking', () => {
         expect(
             findAll(mounted.root, (node) => node.tag === 'img').some((node) =>

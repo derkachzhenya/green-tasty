@@ -12,6 +12,12 @@ import {
 } from 'reka-ui';
 import { figmaDishPreview } from '@/lib/figma-demo';
 import { formatMenuPrice } from '@/lib/homepage';
+import {
+    dishDescription,
+    dishNutrition,
+    dishNutritionNote,
+} from '@/lib/guestMenu';
+import DishDietaryBadges from '@/components/guest/DishDietaryBadges.vue';
 
 defineProps<{
     name: string;
@@ -54,6 +60,7 @@ defineProps<{
                         class="pr-4 text-[26px] leading-10 font-medium"
                         >{{ name }}</DialogTitle
                     >
+                    <DishDietaryBadges :name="name" />
                     <div class="space-y-4">
                         <template
                             v-if="name === figmaDishPreview.strawberry.name"
@@ -83,9 +90,38 @@ defineProps<{
                             v-else
                             class="text-sm leading-6 text-muted-foreground"
                         >
-                            See a location’s live menu for ingredients and
-                            availability.
+                            {{
+                                dishDescription(name) ||
+                                'See a location’s live menu for ingredients and availability.'
+                            }}
                         </p>
+                        <template
+                            v-if="
+                                name !== figmaDishPreview.strawberry.name &&
+                                dishNutrition(name)
+                            "
+                        >
+                            <ul class="space-y-2 text-xs leading-5">
+                                <li
+                                    v-for="(line, index) in dishNutrition(name)"
+                                    :key="index"
+                                    class="flex flex-wrap gap-x-3"
+                                >
+                                    <span
+                                        v-for="field in line"
+                                        :key="field.label"
+                                        ><strong>{{ field.label }}:</strong>
+                                        {{ field.value }}</span
+                                    >
+                                </li>
+                            </ul>
+                            <p
+                                v-if="dishNutritionNote(name)"
+                                class="text-xs text-muted-foreground"
+                            >
+                                {{ dishNutritionNote(name) }}
+                            </p>
+                        </template>
                         <p>
                             <span
                                 class="text-xl leading-8 font-semibold text-primary"

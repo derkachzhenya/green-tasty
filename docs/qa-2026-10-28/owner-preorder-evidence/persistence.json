@@ -1,0 +1,73 @@
+{
+    "submitted_order": {
+        "revision": 5,
+        "reviewed_revision": 4,
+        "original_items": [
+            {
+                "id": 22,
+                "name": "Fresh Strawberry Mint Salad",
+                "quantity": 1,
+                "unit_price": 17,
+                "notes": "No onions please",
+                "restaurant_decision": "confirmed",
+                "review_published_at": "2026-10-28 05:43:44",
+                "superseded_at": "2026-10-28 05:49:35"
+            },
+            {
+                "id": 23,
+                "name": "Roasted Sweet Potato & Lentil Salad",
+                "quantity": 1,
+                "unit_price": 10,
+                "notes": null,
+                "restaurant_decision": "confirmed",
+                "review_published_at": "2026-10-28 05:43:44",
+                "superseded_at": "2026-10-28 05:50:36"
+            }
+        ],
+        "active_items": [
+            {
+                "id": 29,
+                "name": "Fresh Strawberry Mint Salad",
+                "quantity": 2,
+                "unit_price": 17,
+                "notes": "No onions please",
+                "restaurant_decision": "confirmed",
+                "review_published_at": "2026-10-28 06:13:58",
+                "superseded_at": null
+            },
+            {
+                "id": 31,
+                "name": "Avocado Pine Nut Bowl",
+                "quantity": 1,
+                "unit_price": 17,
+                "notes": null,
+                "restaurant_decision": "pending",
+                "review_published_at": null,
+                "superseded_at": null
+            }
+        ],
+        "active_total": "51.00",
+        "revision_snapshots": 5,
+        "removed_guest_retained": true,
+        "reserved_places": 4
+    },
+    "cancelled_reservation": {
+        "status": "cancelled",
+        "participant_rows": 2,
+        "item_rows": 2
+    },
+    "cutoff_retained": {
+        "item_rows": 2,
+        "active_total": "27.00"
+    },
+    "manual_migration": {
+        "existing_data_unchanged": true,
+        "changed_tables": [],
+        "tables_checked": 21
+    },
+    "working_migration": {
+        "existing_data_unchanged": true,
+        "changed_tables": [],
+        "legacy_items_with_nonzero_round": 6
+    }
+}

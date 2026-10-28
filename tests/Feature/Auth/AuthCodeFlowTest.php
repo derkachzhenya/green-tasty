@@ -43,7 +43,10 @@ class AuthCodeFlowTest extends TestCase
 
     private function register(): User
     {
-        $this->postJson(route('register.store'), $this->details())->assertCreated()->assertJsonPath('next', 'verify');
+        // Exercise still-supported legacy challenges independently of the new
+        // self-registration flow, which signs in immediately without mail.
+        $user = User::factory()->unverified()->create(['name' => "Test O'Brien", 'email' => 'test@example.com', 'password' => 'Secure9!Pass']);
+        $this->actingAs($user)->postJson(route('verification.send'))->assertOk()->assertJsonPath('next', 'verify');
 
         return User::where('email', 'test@example.com')->sole();
     }
@@ -53,7 +56,7 @@ class AuthCodeFlowTest extends TestCase
         return ['first_name' => 'Test', 'last_name' => "O'Brien", 'email' => 'test@example.com', 'password' => 'Secure9!Pass', 'password_confirmation' => 'Secure9!Pass'];
     }
 
-    public function test_registration_requires_real_single_use_email_verification_before_login(): void
+    public function test_legacy_registration_challenges_remain_single_use_and_do_not_expose_secrets(): void
     {
         $user = $this->register();
         $this->assertGuest();
@@ -273,20 +276,18 @@ class AuthCodeFlowTest extends TestCase
         $this->assertDatabaseCount('auth_challenges', 0);
     }
 
-    public function test_csrf_protection_and_session_rotation_are_preserved_through_registration_and_verification(): void
+    public function test_csrf_protection_and_session_rotation_are_preserved_during_immediate_registration(): void
     {
         $this->app->instance('env', 'local');
         $page = $this->get(route('register'))->assertOk();
         $xsrf = $page->getCookie('XSRF-TOKEN', false)->getValue();
         $this->postJson(route('register.store'), $this->details())->assertStatus(419);
         $before = session()->getId();
-        $created = $this->postJson(route('register.store'), $this->details(), ['X-XSRF-TOKEN' => $xsrf])->assertCreated();
+        $this->postJson(route('register.store'), $this->details(), ['X-XSRF-TOKEN' => $xsrf])->assertCreated()->assertJsonPath('next', 'authenticated');
         $this->assertNotSame($before, session()->getId());
-        $this->assertGuest();
-        $this->postJson(route('auth.code.verify'), ['purpose' => 'registration', 'code' => $this->code()])->assertStatus(419);
-        $xsrf = $created->getCookie('XSRF-TOKEN', false)->getValue();
-        $this->postJson(route('auth.code.verify'), ['purpose' => 'registration', 'code' => $this->code()], ['X-XSRF-TOKEN' => $xsrf])->assertOk();
-        $this->assertGuest();
+        $this->assertAuthenticated();
+        Notification::assertNothingSent();
+        $this->assertDatabaseCount('auth_challenges', 0);
         $this->postJson(route('password.email'), ['email' => 'test@example.com'])->assertStatus(419);
         $this->postJson(route('password.update'), ['password' => 'NewSecure9!Pass', 'password_confirmation' => 'NewSecure9!Pass'])->assertStatus(419);
         $this->patchJson(route('auth.registration.update'), $this->details())->assertStatus(419);

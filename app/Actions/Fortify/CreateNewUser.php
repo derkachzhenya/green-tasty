@@ -24,10 +24,15 @@ class CreateNewUser implements CreatesNewUsers
         }
         Validator::make($input, $this->registrationRules())->validate();
 
-        return User::create([
+        $user = new User([
             'name' => $input['first_name'].' '.$input['last_name'],
             'email' => $input['email'],
             'password' => $input['password'],
         ]);
+        // Self-registration is approved immediately, without an email challenge.
+        // Set readiness before Fortify dispatches Registered so no code is sent.
+        $user->forceFill(['email_verified_at' => now()])->save();
+
+        return $user;
     }
 }

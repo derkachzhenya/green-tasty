@@ -5,6 +5,8 @@ import {
     dishImage,
     dishImageCropped,
     dishWeight,
+    dishDescription,
+    dishNutrition,
     sortedDishes,
 } from './guestMenu';
 const dishes: GuestCatalogDish[] = [
@@ -40,6 +42,15 @@ const dishes: GuestCatalogDish[] = [
     },
 ];
 describe('guest menu filters and presentation', () => {
+    it('has descriptions for the reference dishes and only supplied nutrition facts', () => {
+        for (const dish of catalog.dishes)
+            expect(dishDescription(dish.name)).toBeTruthy();
+        expect(dishDescription('Avocado Pine Nut Bowl')).toContain('avocado');
+        expect(dishNutrition('Fresh Strawberry Mint Salad')?.[0][0].value).toBe(
+            '~503 kcal',
+        );
+        expect(dishNutrition('Avocado Pine Nut Bowl')).toBeNull();
+    });
     it('resolves every installable menu image, including the sold-out original', () => {
         expect(catalog.dishes).toHaveLength(8);
         for (const dish of catalog.dishes) {

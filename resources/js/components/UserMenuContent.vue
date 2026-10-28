@@ -1,6 +1,12 @@
 <script setup lang="ts">
-import { Link, router } from '@inertiajs/vue3';
-import { LayoutDashboard, LogOut, Settings } from '@lucide/vue';
+import { Link, router, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
+import {
+    LayoutDashboard,
+    LogOut,
+    Settings,
+    UtensilsCrossed,
+} from '@lucide/vue';
 import {
     DropdownMenuGroup,
     DropdownMenuItem,
@@ -23,6 +29,8 @@ const handleLogout = () => {
 };
 
 defineProps<Props>();
+const page = usePage();
+const isStaff = computed(() => Boolean(page.props.auth?.isStaff));
 </script>
 
 <template>
@@ -34,9 +42,12 @@ defineProps<Props>();
     <DropdownMenuSeparator />
     <DropdownMenuGroup>
         <DropdownMenuItem :as-child="true">
-            <Link class="block w-full cursor-pointer" :href="dashboard()">
+            <Link
+                class="block w-full cursor-pointer"
+                :href="isStaff ? '/staff/enter' : dashboard()"
+            >
                 <LayoutDashboard class="mr-2 h-4 w-4" />
-                Dashboard
+                {{ isStaff ? 'Staff workspace' : 'Dashboard' }}
             </Link>
         </DropdownMenuItem>
         <DropdownMenuItem :as-child="true">
@@ -45,6 +56,11 @@ defineProps<Props>();
                 Account settings
             </Link>
         </DropdownMenuItem>
+        <DropdownMenuItem v-if="!isStaff" :as-child="true"
+            ><Link class="block w-full cursor-pointer" href="/staff"
+                ><UtensilsCrossed class="mr-2 h-4 w-4" />Staff area</Link
+            ></DropdownMenuItem
+        >
     </DropdownMenuGroup>
     <DropdownMenuSeparator />
     <DropdownMenuItem :as-child="true">

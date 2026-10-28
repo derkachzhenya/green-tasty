@@ -198,7 +198,7 @@ describe('persisted booking confirmation', () => {
             links.some(
                 (node) =>
                     textContent(node).trim() === 'View Reservation' &&
-                    node.props.href === '/reservations/29',
+                    node.props.href === '/reservations',
             ),
         ).toBe(true);
         expect(

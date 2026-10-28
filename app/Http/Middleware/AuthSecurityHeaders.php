@@ -13,9 +13,9 @@ class AuthSecurityHeaders
     /** @param Closure(Request): Response $next */
     public function handle(Request $request, Closure $next): Response
     {
-        if ($request->routeIs('register.store')) {
+        if ($request->routeIs('register.store', 'staff.register.store')) {
             $key = 'registration:'.hash('sha256', (string) $request->ip());
-            abort_if(RateLimiter::tooManyAttempts($key, 10), 429, 'Too many registration requests. Please try again later.');
+            abort_if(RateLimiter::tooManyAttempts($key, 10), response()->json(['message' => 'Too many registration requests. Please try again later.'], 429)->header('Retry-After', (string) RateLimiter::availableIn($key)));
             RateLimiter::hit($key, 60);
             // Fortify canonicalizes email before calling the registration action.
             // Reject malformed shapes first so arrays cannot reach Str::lower/trim.

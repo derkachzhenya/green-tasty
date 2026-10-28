@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\GroupPreOrderSubmissionService;
 use App\Services\RestaurantPreOrderReviewService;
 use App\Services\WaiterReservationService;
+use App\Services\WaiterServiceOrderService;
 use Illuminate\Database\Connection;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\DatabaseTruncation;
@@ -66,6 +67,33 @@ class RestaurantReviewConcurrencyTest extends TestCase
         $this->assertDatabaseCount('pre_order_review_rounds', 1);
         $this->assertSame('confirmed', $item->fresh()->restaurant_decision);
         $this->assertSame('10.00', $item->fresh()->unit_price);
+    }
+
+    public function test_competing_service_order_saves_wait_and_reject_a_stale_snapshot(): void
+    {
+        $this->databasePrepared = true;
+        $owner = User::factory()->create();
+        $staff = User::factory()->create();
+        $restaurant = Restaurant::create(['name' => 'Service race', 'slug' => 'service-race', 'address' => 'Test']);
+        $restaurant->refresh();
+        $staff->staffRestaurants()->attach($restaurant, ['role' => 'waiter', 'is_active' => true]);
+        $reservation = $restaurant->reservations()->create(['owner_user_id' => $owner->id, 'code' => 'GT-SERVICE-RACE', 'reserved_at' => now()->subMinutes(10), 'status' => 'confirmed', 'guest_count' => 1]);
+        $category = $restaurant->menuCategories()->create(['name' => 'Main', 'slug' => 'main']);
+        $dish = $category->items()->create(['name' => 'Dish', 'price' => '12.50']);
+        $service = app(WaiterServiceOrderService::class);
+        $old = $service->view($restaurant, $reservation, $staff)['version'];
+        $items = [['line_key' => 'new-'.$dish->id, 'menu_item_id' => $dish->id, 'quantity' => 1, 'notes' => null]];
+        $this->holdOperation(fn () => $service->save(Restaurant::findOrFail($restaurant->id), Reservation::findOrFail($reservation->id), User::findOrFail($staff->id), $items, $old));
+        $this->assertBlockedByRowLock(fn () => $service->save($restaurant, $reservation, $staff, $items, $old));
+        $this->heldConnection->commit();
+        try {
+            $service->save($restaurant, $reservation, $staff, $items, $old);
+            $this->fail('Stale service order overwrote committed order');
+        } catch (ConflictHttpException $e) {
+            $this->assertSame(409, $e->getStatusCode());
+        }
+        $this->assertDatabaseCount('restaurant_service_order_revisions', 1);
+        $this->assertSame('12.50', $service->view($restaurant, $reservation, $staff)['total']);
     }
 
     protected function tearDown(): void

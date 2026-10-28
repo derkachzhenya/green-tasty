@@ -115,7 +115,7 @@ class PreOrderCutoffTest extends TestCase
         $this->assertTrue($stamp->equalTo($this->reservation->guests()->where('user_id', $this->owner->id)->firstOrFail()->pre_order_submitted_at));
     }
 
-    public function test_owner_atomic_edit_is_versioned_and_cannot_touch_guest_or_submitted_group(): void
+    public function test_owner_atomic_edit_is_versioned_and_revises_submitted_rows_without_touching_guest(): void
     {
         $this->postJson($this->own.'/submit', $this->items(), ['If-Match' => '"1"'])->assertOk();
         $this->postJson($this->own.'/submit', $this->items(3), ['If-Match' => '"0"'])->assertConflict();
@@ -123,8 +123,9 @@ class PreOrderCutoffTest extends TestCase
         $this->postJson($this->own.'/submit', $this->items(4), ['If-Match' => '"1"'])->assertConflict();
         $this->getJson('/invitations/'.$this->token.'/menu')->assertJsonPath('selections.subtotal', '17.00');
         $this->postJson('/reservations/'.$this->reservation->id.'/pre-order/submit')->assertOk();
-        $this->postJson($this->own.'/submit', $this->items(3), ['If-Match' => '"2"'])->assertConflict();
-        $this->postJson($this->own.'/submit', $this->items(2), ['If-Match' => '"1"'])->assertOk();
+        $this->postJson($this->own.'/submit', $this->items(3), ['If-Match' => '"2"'])->assertOk()->assertJsonPath('selections.subtotal', '51.00');
+        $this->postJson($this->own.'/submit', $this->items(2), ['If-Match' => '"1"'])->assertConflict();
+        $this->getJson('/invitations/'.$this->token.'/menu')->assertJsonPath('selections.subtotal', '17.00');
     }
 
     public function test_owner_can_save_empty_cart_without_creating_an_empty_confirmation(): void
@@ -133,13 +134,15 @@ class PreOrderCutoffTest extends TestCase
         $this->getJson($this->group)->assertJsonPath('summary.grand_total', '17.00');
     }
 
-    public function test_only_real_unsubmitted_saved_items_trigger_warning_and_confirmed_group_does_not(): void
+    public function test_warning_distinguishes_participant_confirmation_from_restaurant_confirmation(): void
     {
         $this->travelTo($this->start->subMinutes(45));
         $this->reservation->guests()->update(['pre_order_submitted_at' => now()]);
         $this->assertFalse(PreOrderTiming::state($this->reservation)['unconfirmed']);
         $this->reservation->guests()->update(['pre_order_submitted_at' => null]);
         $this->reservation->preOrder()->update(['status' => 'submitted', 'submitted_at' => now()]);
+        $this->assertTrue(PreOrderTiming::state($this->reservation)['unconfirmed']);
+        $this->reservation->preOrder->items()->update(['restaurant_decision' => 'confirmed', 'review_published_at' => now()]);
         $this->assertFalse(PreOrderTiming::state($this->reservation)['unconfirmed']);
     }
 }

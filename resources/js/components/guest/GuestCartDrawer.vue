@@ -7,7 +7,12 @@ import {
     SheetDescription,
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { dishImage, dishImageCropped } from '@/lib/guestMenu';
+import {
+    dishImage,
+    dishImageCropped,
+    dishPreparationMinutes,
+} from '@/lib/guestMenu';
+import { dollarPrice } from '@/lib/guestSelection';
 import type { DraftDish } from '@/types/guest-selection';
 import QuantityControl from './QuantityControl.vue';
 const props = defineProps<{
@@ -143,8 +148,15 @@ function close(): void {
                                     <Trash2 class="size-5" />
                                 </button>
                             </div>
+                            <p
+                                v-if="dishPreparationMinutes(item.name)"
+                                class="mt-1 text-xs text-muted-foreground"
+                            >
+                                Expected ready time –
+                                {{ dishPreparationMinutes(item.name) }} minutes
+                            </p>
                             <p class="mt-1 text-xs text-muted-foreground">
-                                Unit price: {{ item.unit_price }}
+                                Unit price: {{ dollarPrice(item.unit_price) }}
                             </p>
                             <p v-if="!item.available" class="mt-1 text-xs">
                                 No longer available. Remove before submitting.
@@ -169,7 +181,7 @@ function close(): void {
                                 >
                                 <span
                                     class="text-sm font-medium text-primary tabular-nums"
-                                    >{{ item.subtotal }}</span
+                                    >{{ dollarPrice(item.subtotal) }}</span
                                 >
                             </div>
                         </div>
@@ -217,7 +229,7 @@ function close(): void {
                     ><output
                         aria-label="Your pre-order total"
                         class="text-primary tabular-nums"
-                        >{{ total }}</output
+                        >{{ dollarPrice(total) }}</output
                     >
                 </div>
                 <div

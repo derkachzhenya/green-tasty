@@ -6,6 +6,7 @@ use App\Models\Reservation;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -25,7 +26,8 @@ class MyReservationsService
         $reservations = Reservation::query()
             // Ownership is always derived from authentication, never query parameters.
             ->where('owner_user_id', $owner->id)
-            ->select(['id', 'restaurant_id', 'restaurant_table_id', 'owner_user_id', 'code', 'reserved_at', 'duration_minutes', 'guest_count', 'status'])
+            ->select(['id', 'restaurant_id', 'restaurant_table_id', 'owner_user_id', 'code', 'reserved_at', 'duration_minutes', 'guest_count', 'status', 'updated_at', 'pre_order_seen_event_id'])
+            ->addSelect(['latest_pre_order_event_id' => DB::table('reservation_events')->selectRaw('MAX(id)')->whereColumn('reservation_id', 'reservations.id')->where('audience', 'owner')->whereColumn('recipient_user_id', 'reservations.owner_user_id')])
             ->with(['restaurant:id,name,slug,address', 'table:id,name,seats', 'preOrder:id,reservation_id,status,submitted_at', 'feedback:id,reservation_id'])
             ->withCount(['guests as active_participants' => fn (Builder $q) => $q->whereNull('removed_at'),
                 'guests as removed_participants' => fn (Builder $q) => $q->whereNotNull('removed_at'),
@@ -44,6 +46,9 @@ class MyReservationsService
             'data' => array_values($reservations->getCollection()->map(fn (Reservation $reservation): array => [
                 ...$this->bookings->confirmation($reservation),
                 'pre_order_status' => $reservation->preOrder?->status,
+                'has_pre_order_updates' => (int) $reservation->getAttribute('latest_pre_order_event_id') > (int) $reservation->getAttribute('pre_order_seen_event_id'),
+                'can_cancel' => ReservationCardState::acceptsPreOrder($reservation),
+                'cancel_version' => OwnerReservationCancellation::version($reservation),
                 'phase' => ReservationCardState::phase($reservation),
                 'active_participants' => (int) $reservation->getAttribute('active_participants'),
                 'removed_participants' => (int) $reservation->getAttribute('removed_participants'),

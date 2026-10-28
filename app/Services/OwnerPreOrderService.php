@@ -31,12 +31,20 @@ class OwnerPreOrderService
             ksort($quantities);
             ksort($previous);
             // Lost-success retries are read-only, including after the cutoff or group submission.
-            if ($guest->pre_order_submitted_at !== null && $quantities === $previous && $version <= $guest->selection_version) {
+            if (($guest->pre_order_submitted_at !== null || $locked->preOrder?->status === 'submitted') && $quantities === $previous && $version <= $guest->selection_version) {
                 return $this->menus->forOwner($locked, $owner);
             }
             PreOrderTiming::ensureOpen($locked);
             if (! ReservationCardState::acceptsPreOrder($locked)) {
                 throw new ConflictHttpException('This reservation is no longer accepting pre-orders.');
+            }
+            if ($locked->preOrder?->status === 'submitted' && $locked->preOrder->submitted_at !== null) {
+                if ($guest->selection_version !== $version) {
+                    throw new ConflictHttpException('Your cart changed. Refresh before saving.');
+                }
+                app(CustomerPreOrderRevisionService::class)->replaceOwner($locked, $owner, $guest, $items);
+
+                return $this->menus->forOwner($locked, $owner);
             }
             $this->selections->replaceForOwner($locked, $owner, $items, $version);
             $guest->refresh()->forceFill(['pre_order_submitted_at' => $items === [] ? null : now()])->save();

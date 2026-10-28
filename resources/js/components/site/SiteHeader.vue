@@ -16,15 +16,33 @@ const page = usePage();
 const user = computed(() => page.props.auth?.user ?? null);
 const isHome = computed(() => page.component.startsWith('restaurants/'));
 const isBooking = computed(() => page.component.startsWith('bookings/'));
-const isStaff = computed(() => page.component.startsWith('staff/'));
+const isStaffAccess = computed(() =>
+    ['staff/Access', 'staff/Login'].includes(page.component),
+);
+const isStaff = computed(
+    () =>
+        Boolean(page.props.auth?.isStaff) ||
+        (page.component.startsWith('staff/') && !isStaffAccess.value),
+);
 const isReservations = computed(
     () =>
         (page.component === 'Dashboard' && !page.props.dashboardPage) ||
         page.component.startsWith('reservations/'),
 );
+const staffRestaurant = computed(
+    () => page.props.restaurant as { id: number; slug?: string } | undefined,
+);
 const workplaces = computed(
     () => (page.props.staffRestaurants ?? []) as { id: number; name: string }[],
 );
+const workspaceBase = computed(() => {
+    const id = staffRestaurant.value?.id ?? workplaces.value[0]?.id;
+    return id ? `/staff/restaurants/${id}` : null;
+});
+const workspaceHome = computed(() =>
+    workspaceBase.value ? `${workspaceBase.value}/reservations` : '/staff',
+);
+const isStaffMenu = computed(() => page.component === 'staff/Menu');
 </script>
 
 <template>
@@ -34,8 +52,12 @@ const workplaces = computed(
                 class="flex min-h-[67px] flex-wrap items-center justify-between gap-x-2 gap-y-2 py-3 lg:grid lg:grid-cols-[112px_minmax(0,1fr)_112px] lg:gap-x-6 lg:py-0"
             >
                 <Link
-                    :href="home()"
-                    aria-label="Green Tasty home"
+                    :href="isStaff ? workspaceHome : home()"
+                    :aria-label="
+                        isStaff
+                            ? 'Green Tasty staff workspace'
+                            : 'Green Tasty home'
+                    "
                     class="w-fit rounded-sm text-lg font-medium tracking-tight text-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
                 >
                     <img
@@ -53,16 +75,31 @@ const workplaces = computed(
                 >
                     <template v-if="isStaff">
                         <Link
-                            v-for="place in workplaces"
-                            :key="place.id"
-                            :href="`/staff/restaurants/${place.id}/reservations`"
-                            class="inline-flex min-h-11 items-center border-b-2 border-primary px-3 text-center text-sm break-words text-primary"
-                            >Reservations · {{ place.name }}</Link
+                            :href="workspaceHome"
+                            :aria-current="
+                                page.component === 'staff/Reservations'
+                                    ? 'page'
+                                    : undefined
+                            "
+                            :class="
+                                page.component === 'staff/Reservations'
+                                    ? 'border-primary text-primary'
+                                    : 'border-transparent'
+                            "
+                            class="inline-flex min-h-11 items-center border-b-2 px-4 text-base font-medium lg:min-h-[67px] lg:text-xl"
+                            >Reservations</Link
                         >
                         <Link
-                            :href="home()"
-                            class="inline-flex min-h-11 items-center px-3 text-sm"
-                            >Main page</Link
+                            v-if="workspaceBase"
+                            :href="`${workspaceBase}/menu`"
+                            :aria-current="isStaffMenu ? 'page' : undefined"
+                            :class="
+                                isStaffMenu
+                                    ? 'border-primary text-primary'
+                                    : 'border-transparent'
+                            "
+                            class="inline-flex min-h-11 items-center border-b-2 px-4 text-base font-medium lg:min-h-[67px] lg:text-xl"
+                            >Menu</Link
                         >
                     </template>
                     <template v-else>
@@ -138,18 +175,6 @@ const workplaces = computed(
                         <UserMenuContent :user="user" />
                     </DropdownMenuContent>
                 </DropdownMenu>
-                <div
-                    v-if="!isStaff && workplaces.length"
-                    class="flex w-full flex-wrap justify-end gap-3 text-xs lg:col-span-3"
-                >
-                    <Link
-                        v-for="place in workplaces"
-                        :key="place.id"
-                        :href="`/staff/restaurants/${place.id}/reservations`"
-                        class="inline-flex min-h-11 items-center text-primary underline"
-                        >Waiter · {{ place.name }}</Link
-                    >
-                </div>
             </div>
         </SiteContainer>
     </header>

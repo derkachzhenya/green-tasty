@@ -2,9 +2,6 @@
 
 namespace App\Http\Responses;
 
-use App\Models\User;
-use App\Services\AuthCodeService;
-use Illuminate\Contracts\Auth\StatefulGuard;
 use Laravel\Fortify\Contracts\RegisterResponse;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -12,14 +9,10 @@ class AuthRegisterResponse implements RegisterResponse
 {
     public function toResponse($request): Response
     {
-        $user = $request->user();
-        abort_unless($user instanceof User, 401);
-        app(StatefulGuard::class)->logout();
-        $request->session()->regenerate();
-        $codes = app(AuthCodeService::class);
-        $context = $codes->context($request, AuthCodeService::REGISTRATION)
-            ?? $codes->start($request, AuthCodeService::REGISTRATION, $user->email, $user);
+        // Fortify has already signed in the newly created account and rotated
+        // its session. Use the normal destination, including a pending booking.
+        $response = app(AuthLoginResponse::class)->toResponse($request);
 
-        return $request->expectsJson() ? response()->json(['next' => 'verify', 'challenge' => $context], 201) : redirect()->route('auth.verify');
+        return $request->expectsJson() ? $response->setStatusCode(201) : $response;
     }
 }

@@ -1,0 +1,14 @@
+{
+    "review_rounds_retained": 2,
+    "review_revision": 2,
+    "reviewed_revision": 2,
+    "superseded_item_history_count": 1,
+    "owner_rejection_event_exists": true,
+    "service_revisions": 1,
+    "service_total": "34.00",
+    "service_note": "No onions please",
+    "service_has_no_customer_preorder": true,
+    "table_change_persisted": true,
+    "cancelled_status": "cancelled",
+    "new_90_minute_reservation_created": true
+}

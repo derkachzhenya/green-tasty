@@ -19,13 +19,13 @@ use SensitiveParameter;
  * @phpstan-type CatalogDish array{id: int, name: string, description: string|null, price: string, available: bool, created_at: string|null, popularity: int, sort_order: int}
  * @phpstan-type CatalogCategory array{id: int, name: string, dishes: list<CatalogDish>}
  * @phpstan-type GuestContext array{restaurant: string, address: string, table: string, date: string, time: string, end_date: string, end_time: string, guests: int}
- * @phpstan-type GuestState array{name_confirmed: bool, submitted_at: string|null, version: int}
+ * @phpstan-type GuestState array{name_confirmed: bool, submitted_at: string|null, version: int, draft_round: int|null, can_start_new: bool}
  * @phpstan-type Timing array{server_now: string, warning_at: string, locks_at: string, locked: bool, unconfirmed: bool}
- * @phpstan-type GuestMenu array{timing: Timing, context: GuestContext, guest_state: GuestState, catalog: list<CatalogCategory>,invitation: InvitationView, selections: SelectionSummary, order: array{status: string|null, submitted_at: string|null, editable: bool}, timezone: string}
+ * @phpstan-type GuestMenu array{timing: Timing, context: GuestContext, guest_state: GuestState, catalog: list<CatalogCategory>,invitation: InvitationView, selections: SelectionSummary, previous_selections: SelectionSummary|null, order: array{status: string|null, submitted_at: string|null, editable: bool}, timezone: string}
  */
 class GuestMenuService
 {
-    public function __construct(private GuestInvitationService $invitations, private GuestDishSelectionService $selections) {}
+    public function __construct(private GuestInvitationService $invitations, private GuestDishSelectionService $selections, private GuestAdditionalPreOrderService $additional) {}
 
     /** @return GuestMenu|null */
     public function view(#[SensitiveParameter] string $token): ?array
@@ -76,6 +76,9 @@ class GuestMenuService
         $reservation->load(['restaurant', 'table']);
         $start = $reservation->reserved_at->toImmutable()->setTimezone(BookingRules::TIMEZONE);
         $end = $reservation->endsAt()->setTimezone(BookingRules::TIMEZONE);
+        $draft = $owner ? null : $this->additional->draft($guest);
+        $open = ! PreOrderTiming::locked($reservation) && ReservationCardState::acceptsPreOrder($reservation)
+            && ($order === null || ($order->status === 'draft' && $order->submitted_at === null));
         $catalog = $reservation->restaurant->menuCategories()->where('is_active', true)
             ->with(['items' => fn ($query) => $query->withSum([
                 'preOrderItems as ordered_quantity' => fn (Builder $query) => $query->whereHas('preOrder', fn (Builder $query) => $query->where('status', 'submitted')),
@@ -94,7 +97,9 @@ class GuestMenuService
             ],
             'guest_state' => ['name_confirmed' => $owner || $guest->name_confirmed_at !== null,
                 'submitted_at' => $guest->pre_order_submitted_at?->toIso8601String(),
-                'version' => $guest->selection_version],
+                'version' => $guest->selection_version,
+                'draft_round' => $draft?->number,
+                'can_start_new' => ! $owner && $open && $guest->pre_order_submitted_at !== null && $draft === null && $this->additional->available()],
             'catalog' => array_values($catalog->map(fn (MenuCategory $category): array => [
                 'id' => $category->id, 'name' => $category->name,
                 'dishes' => array_values($category->items->map(fn (MenuItem $dish): array => [
@@ -116,13 +121,14 @@ class GuestMenuService
                 ])->all()),
             ],
             'selections' => $selections,
+            'previous_selections' => $draft === null ? null : $this->selections->forGuest($guest),
             'order' => [
                 'status' => $order?->status,
                 'submitted_at' => $order?->submitted_at?->toIso8601String(),
-                'editable' => ! PreOrderTiming::locked($reservation) && ($owner || $guest->pre_order_submitted_at === null)
+                'editable' => ! PreOrderTiming::locked($reservation) && ($owner || $guest->pre_order_submitted_at === null || $draft !== null)
                             && (! $owner || ReservationCardState::acceptsPreOrder($reservation))
                     && ! in_array($reservation->status, ['cancelled', 'completed'], true)
-                    && ($order === null || ($order->status === 'draft' && $order->submitted_at === null)),
+                    && ($order === null || ($order->status === 'draft' && $order->submitted_at === null) || ($owner && $order->status === 'submitted' && $order->submitted_at !== null)),
             ],
             'timezone' => BookingRules::TIMEZONE,
         ];

@@ -1,6 +1,7 @@
 import type {
     DraftDish,
     GuestMenu,
+    GuestSelectionItem,
     SelectionInput,
 } from '@/types/guest-selection';
 
@@ -11,6 +12,35 @@ export function cents(value: string): bigint {
 
 export function decimal(value: bigint): string {
     return `${value / 100n}.${(value % 100n).toString().padStart(2, '0')}`;
+}
+
+// Keep API amounts decimal-only; currency is presentation, not arithmetic.
+export function dollarPrice(value: string): string {
+    cents(value);
+    return `$${value}`;
+}
+
+export function submittedDishes(
+    items: GuestSelectionItem[],
+): GuestSelectionItem[] {
+    const grouped = new Map<string, GuestSelectionItem>();
+    for (const item of items) {
+        const key = `${item.menu_item_id}:${item.unit_price}`;
+        const previous = grouped.get(key);
+        grouped.set(
+            key,
+            previous
+                ? {
+                      ...previous,
+                      quantity: previous.quantity + item.quantity,
+                      subtotal: decimal(
+                          cents(previous.subtotal) + cents(item.subtotal),
+                      ),
+                  }
+                : { ...item },
+        );
+    }
+    return [...grouped.values()];
 }
 
 export function draftDishes(

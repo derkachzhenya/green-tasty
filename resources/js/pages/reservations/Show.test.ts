@@ -181,11 +181,11 @@ describe('dashboard group submission integration', () => {
     it('shows the consolidated and individual saved prices before confirmation, then uses the server result and refreshes', async () => {
         expect(text()).toContain('All selected dishes');
         expect(text()).toContain('Selections by participant');
-        expect(text()).toContain('12.50 · 11.00');
+        expect(text()).toContain('$12.50 · $11.00');
         expect(text()).toContain('34.50');
         expect(text()).toContain('Alice');
         await submit();
-        expect(text()).toContain('Guest selections are now locked.');
+        expect(text()).toContain('Manage permitted changes');
         expect(text()).toContain('45.50');
         expect(text()).toContain('23 Oct 2026, 12:00');
         expect(text()).toContain('(Asia/Tbilisi)');
@@ -213,7 +213,7 @@ describe('dashboard group submission integration', () => {
             await flush();
             expect(text()).toContain('couldn’t refresh');
             expect(text()).toContain('45.50');
-            expect(text()).toContain('Selections are locked.');
+            expect(text()).toContain('Open Group Pre-Order');
             expect(buttons('Submit Group Pre-Order')).toHaveLength(0);
         },
     );
@@ -228,7 +228,7 @@ describe('dashboard group submission integration', () => {
         reloadCallbacks().onFinish();
         await flush();
         expect(text()).toContain('45.50');
-        expect(text()).toContain('Guest selections are now locked.');
+        expect(text()).toContain('Manage permitted changes');
         expect(text()).not.toContain('couldn’t load your participants');
         expect(buttons('Submit Group Pre-Order')).toHaveLength(0);
     });

@@ -10,6 +10,7 @@ use App\Models\ReservationGuest;
 use App\Models\Restaurant;
 use App\Models\User;
 use App\Services\ConsolidatedPreOrderService;
+use App\Services\GuestAdditionalPreOrderService;
 use App\Services\GuestDishSelectionService;
 use App\Services\GuestInvitationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -365,7 +366,7 @@ class GuestDishSelectionTest extends TestCase
             return $real->resolve($this->token, lockForUpdate: true);
         });
 
-        $service = new GuestDishSelectionService($invitationService);
+        $service = new GuestDishSelectionService($invitationService, app(GuestAdditionalPreOrderService::class));
 
         $this->assertNull($service->replace($this->token, [['menu_item_id' => $this->bowl->id, 'quantity' => 1]], 0));
         $this->assertDatabaseCount('pre_orders', 0);

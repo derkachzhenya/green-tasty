@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { useGuestSelections } from '@/composables/useGuestSelections';
 import { bookingDate } from '@/lib/booking';
 import { sortedDishes, type MenuSort } from '@/lib/guestMenu';
+import { dollarPrice, submittedDishes } from '@/lib/guestSelection';
 
 const props = withDefaults(
     defineProps<{ initiallyInvalid?: boolean; ownerReservationId?: number }>(),
@@ -43,6 +44,8 @@ const {
     submit,
     identifying,
     submitting,
+    startNew,
+    starting,
 } = useGuestSelections(props.initiallyInvalid, props.ownerReservationId);
 const cartOpen = ref(false);
 const ownerSubmitted = ref(false);
@@ -62,9 +65,16 @@ const needsName = computed(() =>
     ),
 );
 const submitted = computed(() =>
-    Boolean(!props.ownerReservationId && menu.value?.guest_state.submitted_at),
+    Boolean(
+        !props.ownerReservationId &&
+        menu.value?.guest_state.submitted_at &&
+        !menu.value.guest_state.draft_round,
+    ),
 );
 const categories = computed(() => menu.value?.catalog ?? []);
+const submittedItems = computed(() =>
+    submittedDishes(menu.value?.selections.items ?? []),
+);
 const activeCategory = computed(
     () =>
         categories.value.find((category) => category.id === categoryId.value) ??
@@ -253,14 +263,14 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                             class="space-y-4 text-xs leading-5 text-muted-foreground"
                         >
                             <li
-                                v-for="item in menu.selections.items"
-                                :key="item.menu_item_id"
+                                v-for="item in submittedItems"
+                                :key="`${item.menu_item_id}-${item.unit_price}`"
                                 class="flex justify-between gap-4"
                             >
                                 <span class="min-w-0 wrap-anywhere"
                                     >{{ item.name }} × {{ item.quantity }}</span
                                 ><span class="shrink-0 tabular-nums">{{
-                                    item.subtotal
+                                    dollarPrice(item.subtotal)
                                 }}</span>
                             </li>
                         </ul>
@@ -271,21 +281,48 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                             ><output
                                 aria-label="Submitted pre-order total"
                                 class="text-primary"
-                                >{{ menu.selections.subtotal }}</output
+                                >{{
+                                    dollarPrice(menu.selections.subtotal)
+                                }}</output
                             >
                         </div>
                         <p
                             class="mt-6 text-center text-xs leading-5 text-muted-foreground"
                         >
-                            This selection is confirmed and cannot be changed.
-                            Contact the reservation owner if you need help.
+                            Your submitted dishes are saved. You can add another
+                            pre-order while this reservation is still accepting
+                            selections.
+                        </p>
+                        <p
+                            v-if="error"
+                            role="alert"
+                            class="mt-4 text-sm text-destructive"
+                        >
+                            {{ error }}
                         </p>
                         <Button
                             variant="outline"
                             class="mt-5 min-h-14 w-full"
-                            disabled
-                            >Create New Pre-Order</Button
+                            :disabled="
+                                busy ||
+                                cutoffLocked ||
+                                !menu.guest_state.can_start_new
+                            "
+                            @click="startNew()"
+                            >{{
+                                starting
+                                    ? 'Opening menu…'
+                                    : 'Create New Pre-Order'
+                            }}</Button
                         >
+                        <p
+                            v-if="
+                                cutoffLocked || !menu.guest_state.can_start_new
+                            "
+                            class="mt-3 text-center text-xs text-muted-foreground"
+                        >
+                            New pre-orders are closed for this reservation.
+                        </p>
                     </section>
                 </SiteContainer>
             </template>
@@ -347,6 +384,18 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                     >
                 </section>
                 <SiteContainer class="guest-container pb-12">
+                    <p
+                        v-if="menu.previous_selections"
+                        role="status"
+                        class="mt-5 rounded-lg bg-accent p-4 text-sm leading-6"
+                    >
+                        Previously submitted:
+                        <strong>{{
+                            dollarPrice(menu.previous_selections.subtotal)
+                        }}</strong
+                        >. This cart will be added to your saved dishes when you
+                        submit it.
+                    </p>
                     <div
                         v-if="needsName && !nameOpen"
                         role="status"
@@ -432,7 +481,8 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                         role="status"
                         class="mb-4 rounded-lg bg-[#fff5f7] p-4 text-sm"
                     >
-                        You have unsubmitted saved selections. Changes close in
+                        Some pre-order items are still unconfirmed. Changes
+                        close in
                         {{ minutes }} minutes. Saved dishes will be retained.
                     </p>
                     <p
@@ -566,12 +616,19 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                 :open="ownerSubmitted"
                 :return-focus-target="cartTrigger"
                 title="Pre-Order Submitted"
-                description="Your own selection has been saved for this reservation."
+                :description="
+                    menu?.order.status === 'submitted'
+                        ? 'Your changes have been sent to the restaurant for review.'
+                        : 'Your own selection has been saved for this reservation.'
+                "
                 @update:open="ownerSubmitted = $event"
             >
                 <p class="my-5 text-sm leading-6">
-                    Your pre-order was saved successfully. Review the group
-                    order in Reservations and submit it to the restaurant.
+                    {{
+                        menu?.order.status === 'submitted'
+                            ? 'Your changes were sent successfully. Wait for confirmation from the restaurant.'
+                            : 'Your pre-order was saved successfully. Review the group order in Reservations and submit it to the restaurant.'
+                    }}
                 </p>
                 <a
                     href="/reservations"

@@ -174,7 +174,7 @@ describe('owner group submission', () => {
             'Guests will no longer be able to add, change or remove dishes.',
         );
         expect(text()).toContain('34.50');
-        expect(text()).not.toContain('$');
+        expect(text()).toContain('$34.50');
         expect(fetchMock).not.toHaveBeenCalled();
         await fire(button('Keep reviewing'), 'onClick');
         expect(dialog()).toBeUndefined();

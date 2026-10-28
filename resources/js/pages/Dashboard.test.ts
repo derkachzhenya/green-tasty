@@ -195,7 +195,7 @@ describe('My reservations', () => {
         expect(link('Upcoming').props.href).toBe('/dashboard?status=upcoming');
     });
     it('replaces the starter placeholder with real reservation information and navigation', () => {
-        expect(text()).toContain('My reservations');
+        expect(text()).not.toContain('My reservations');
         expect(text()).toContain('Hello, Journey Owner');
         expect(text()).toContain('Green Tasty Garden');
         expect(text()).toContain('Garden address');

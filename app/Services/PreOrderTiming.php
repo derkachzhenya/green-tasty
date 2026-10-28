@@ -2,8 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\GuestPreOrderRound;
 use App\Models\Reservation;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 /** Server-time rules shared by every owner and guest pre-order entry point. */
@@ -29,6 +31,16 @@ class PreOrderTiming
             && $order?->status === 'draft' && $order->submitted_at === null
             && $reservation->guests()->whereNull('pre_order_submitted_at')->whereNull('invitation_revoked_at')
                 ->whereHas('preOrderItems', fn ($q) => $q->where('pre_order_id', $order->id))->exists();
+        if (in_array($reservation->status, ['draft', 'confirmed'], true) && $order !== null) {
+            $activeGuests = $reservation->guests()->active()->pluck('id');
+            if ($order->status === 'draft' && $order->submitted_at === null && Schema::hasTable('guest_pre_order_rounds')) {
+                $pending = $pending || GuestPreOrderRound::query()->whereIn('reservation_guest_id', $reservation->guests()->active()->whereNull('invitation_revoked_at')->select('id'))->whereNull('submitted_at')->get(['items'])->contains(fn (GuestPreOrderRound $round): bool => $round->items !== []);
+            }
+            if ($order->status === 'submitted' && $order->submitted_at !== null) {
+                $pending = ((int) $order->review_revision > 1 && (int) $order->review_revision !== (int) $order->reviewed_revision) || $order->items()->whereIn('reservation_guest_id', $activeGuests)->whereNull('superseded_at')
+                    ->where(fn ($q) => $q->whereNull('review_published_at')->orWhere('restaurant_decision', 'rejected'))->exists();
+            }
+        }
 
         return [
             'server_now' => CarbonImmutable::now()->toIso8601String(),

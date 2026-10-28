@@ -15,13 +15,13 @@ defineEmits<{ close: []; confirm: [] }>();
     <BookingModal
         :open="open"
         title="Remove Guest"
-        description="Confirm removal of this participant and their draft pre-order."
+        description="Confirm removal of this participant and their current pre-order."
         :busy="busy"
         :return-focus-target="returnFocusTarget"
         @update:open="!$event && $emit('close')"
     >
         <p class="guest-remove-copy my-6 text-sm leading-6 wrap-anywhere">
-            Remove <strong>{{ guestName }}</strong> and their draft pre-order
+            Remove <strong>{{ guestName }}</strong> and their current pre-order
             from the active participants? Their invitation will stop working.
             Booked places and reservation history are retained.
         </p>

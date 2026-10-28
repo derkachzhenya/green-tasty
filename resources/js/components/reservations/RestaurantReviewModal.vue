@@ -1,6 +1,14 @@
 <script setup lang="ts">
-import { ref, shallowRef, onMounted, onBeforeUnmount } from 'vue';
-import { Check, X } from '@lucide/vue';
+import { ref, shallowRef, onMounted, onBeforeUnmount, computed } from 'vue';
+import {
+    Check,
+    X,
+    MapPin,
+    CalendarDays,
+    Clock,
+    Users,
+    Bell,
+} from '@lucide/vue';
 import {
     Dialog,
     DialogContent,
@@ -9,6 +17,8 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { sessionJson, SessionRequestError } from '@/lib/sessionJson';
+import { bookingDate } from '@/lib/booking';
+import { dollarPrice } from '@/lib/guestSelection';
 import { dishImage } from '@/lib/guestMenu';
 import type {
     RestaurantReview,
@@ -20,6 +30,16 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ close: []; changed: [] }>();
 const review = shallowRef<RestaurantReview | null>(null);
+const pendingNames = computed(
+    () =>
+        review.value?.participants
+            .filter(
+                (p) =>
+                    !p.is_owner &&
+                    p.items.some((i) => !i.published && !i.superseded),
+            )
+            .map((p) => p.name) ?? [],
+);
 const busy = ref(false),
     stale = ref(false),
     error = ref(''),
@@ -106,21 +126,44 @@ onBeforeUnmount(() => controller.abort());
                         >Reservation Pre-Order</DialogTitle
                     ><span
                         v-if="review"
-                        class="rounded bg-accent px-2 py-1 text-xs"
+                        class="rounded px-2 py-1 text-xs"
+                        :class="
+                            review.status === 'Confirmed by Restaurant'
+                                ? 'bg-[#e8ffea]'
+                                : review.status === 'Updated Pre-Order'
+                                  ? 'bg-[#dedede]'
+                                  : 'bg-[#fff3d2]'
+                        "
                         >{{ review.status }}</span
                     >
                 </div>
                 <DialogDescription class="mt-2 text-xs wrap-anywhere"
                     >Reservation: {{ reservation.code }}</DialogDescription
                 >
-                <p class="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs">
-                    <span>{{ reservation.restaurant.address }}</span
-                    ><span>{{ reservation.date }}</span
-                    ><span
-                        >{{ reservation.time }} – {{ reservation.end_time }} ·
-                        Asia/Tbilisi</span
-                    ><span>{{ reservation.guest_count }} Guests</span>
-                </p>
+                <div class="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs">
+                    <span class="inline-flex items-center gap-1"
+                        ><MapPin class="size-4 text-primary" />{{
+                            reservation.restaurant.address
+                        }}</span
+                    >
+                    <span class="inline-flex items-center gap-1"
+                        ><CalendarDays class="size-4 text-primary" />{{
+                            bookingDate(reservation.date ?? '')
+                        }}</span
+                    >
+                    <span class="inline-flex items-center gap-1"
+                        ><Clock class="size-4 text-primary" />{{
+                            reservation.time
+                        }}
+                        – {{ reservation.end_time }}</span
+                    >
+                    <span class="inline-flex items-center gap-1"
+                        ><Users class="size-4 text-primary" />{{
+                            reservation.guest_count
+                        }}
+                        Guests</span
+                    >
+                </div>
             </header>
             <div
                 class="min-h-0 space-y-4 overflow-y-auto p-4 sm:p-8"
@@ -165,9 +208,24 @@ onBeforeUnmount(() => controller.abort());
                         Some items were rejected.
                         {{
                             review.editable
-                                ? 'The owner will be notified after you submit.'
-                                : 'The owner can see the published result.'
+                                ? 'Owner will be notified after you submit.'
+                                : 'Owner was notified about it.'
                         }}
+                    </p>
+                    <p
+                        v-if="
+                            review.editable &&
+                            review.revision > 1 &&
+                            pendingNames.length
+                        "
+                        role="status"
+                        class="flex gap-2 rounded-lg border border-amber-100 bg-[#fffced] p-3 text-sm"
+                    >
+                        <Bell class="size-4 shrink-0" />{{
+                            pendingNames.join(', ')
+                        }}
+                        {{ pendingNames.length === 1 ? 'has' : 'have' }} updated
+                        the pre-order. Review all new dishes before submitting.
                     </p>
                     <section
                         v-for="participant in review.participants"
@@ -180,14 +238,20 @@ onBeforeUnmount(() => controller.abort());
                             {{ participant.name }}
                         </h3>
                         <p
-                            v-if="!participant.items.length"
+                            v-if="
+                                !participant.items.some(
+                                    (item) => !item.superseded,
+                                )
+                            "
                             class="text-sm text-muted-foreground"
                         >
                             No submitted dishes
                         </p>
                         <ul>
                             <li
-                                v-for="item in participant.items"
+                                v-for="item in participant.items.filter(
+                                    (item) => !item.superseded,
+                                )"
                                 :key="item.id"
                                 class="flex flex-wrap items-center gap-3 border-b border-border/50 py-3 last:border-0"
                                 :class="
@@ -212,7 +276,7 @@ onBeforeUnmount(() => controller.abort());
                                     <p class="wrap-anywhere">{{ item.name }}</p>
                                     <p class="text-xs text-muted-foreground">
                                         Qty: {{ item.quantity }} ·
-                                        {{ item.unit_price }} each
+                                        {{ dollarPrice(item.unit_price) }} each
                                     </p>
                                     <p v-if="item.notes" class="text-xs">
                                         {{ item.notes }}
@@ -225,7 +289,9 @@ onBeforeUnmount(() => controller.abort());
                                         }}
                                     </p>
                                 </div>
-                                <span class="text-sm">{{ item.total }}</span>
+                                <span class="text-sm font-medium">{{
+                                    dollarPrice(item.total)
+                                }}</span>
                                 <div
                                     class="ml-auto flex gap-1"
                                     role="group"
@@ -295,25 +361,61 @@ onBeforeUnmount(() => controller.abort());
                                 </div>
                             </li>
                         </ul>
+                        <details
+                            v-if="
+                                participant.items.some(
+                                    (item) => item.superseded,
+                                )
+                            "
+                            class="mt-3 text-xs text-muted-foreground"
+                        >
+                            <summary class="min-h-11 cursor-pointer py-3">
+                                Earlier replaced dishes
+                            </summary>
+                            <p
+                                v-for="item in participant.items.filter(
+                                    (item) => item.superseded,
+                                )"
+                                :key="item.id"
+                                class="py-2"
+                            >
+                                {{ item.name }} · Qty: {{ item.quantity }} ·
+                                {{ dollarPrice(item.total) }} ·
+                                {{ item.decision }}
+                            </p>
+                        </details>
                     </section>
+                    <details class="text-sm">
+                        <summary class="min-h-11 cursor-pointer py-3">
+                            Review totals
+                        </summary>
+                        <dl class="grid grid-cols-2 gap-2">
+                            <dt>Requested (active items)</dt>
+                            <dd class="text-right">
+                                {{ dollarPrice(review.totals.requested) }}
+                            </dd>
+                            <dt>Confirmed</dt>
+                            <dd class="text-right">
+                                {{ dollarPrice(review.totals.confirmed) }}
+                            </dd>
+                            <dt>Rejected · excluded</dt>
+                            <dd class="text-right">
+                                {{ dollarPrice(review.totals.rejected) }}
+                            </dd>
+                            <dt>Pending review</dt>
+                            <dd class="text-right">
+                                {{ dollarPrice(review.totals.pending) }}
+                            </dd>
+                        </dl>
+                    </details>
                 </template>
             </div>
             <footer
                 v-if="review"
                 class="shrink-0 space-y-3 border-t border-primary/15 px-4 py-4 sm:px-8"
             >
-                <dl class="grid grid-cols-2 gap-2 text-sm">
-                    <dt>Requested (active items)</dt>
-                    <dd class="text-right">{{ review.totals.requested }}</dd>
-                    <dt>Confirmed</dt>
-                    <dd class="text-right">{{ review.totals.confirmed }}</dd>
-                    <dt>Rejected · excluded</dt>
-                    <dd class="text-right">{{ review.totals.rejected }}</dd>
-                    <dt>Pending review</dt>
-                    <dd class="text-right">{{ review.totals.pending }}</dd>
-                </dl>
                 <Button
-                    class="min-h-12 w-full"
+                    class="min-h-12 w-full disabled:bg-[#8b8b8b]! disabled:text-white! disabled:opacity-100"
                     :disabled="busy || stale || !review.can_submit"
                     @click="request('/submit', 'post')"
                     >Submit Pre-order</Button

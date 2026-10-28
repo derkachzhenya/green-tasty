@@ -33,6 +33,7 @@ export function useGuestSelections(
     const saving = ref(false);
     const submitting = ref(false);
     const identifying = ref(false);
+    const starting = ref(false);
     const error = ref('');
     const validation = ref<string[]>([]);
     const success = ref('');
@@ -69,7 +70,8 @@ export function useGuestSelections(
             loading.value ||
             saving.value ||
             submitting.value ||
-            identifying.value,
+            identifying.value ||
+            starting.value,
     );
     const unavailable = computed(() =>
         rows.value.some((row) => !row.available),
@@ -101,6 +103,7 @@ export function useGuestSelections(
         saving.value = false;
         submitting.value = false;
         identifying.value = false;
+        starting.value = false;
     }
     function failure(reason: unknown) {
         if (reason instanceof GuestSelectionError && reason.status === 404) {
@@ -278,6 +281,48 @@ export function useGuestSelections(
             if (current === generation) identifying.value = false;
         }
     }
+    async function startNew(): Promise<boolean> {
+        if (
+            busy.value ||
+            invalid.value ||
+            cutoffLocked.value ||
+            !menu.value?.guest_state.can_start_new ||
+            ownerReservationId
+        )
+            return false;
+        starting.value = true;
+        error.value = '';
+        const current = ++generation;
+        controller = new AbortController();
+        try {
+            const data = guestMenu(
+                await guestAction(
+                    `${path}/start`,
+                    controller.signal,
+                    {},
+                    menu.value.guest_state.version,
+                ),
+            );
+            if (current !== generation) return false;
+            menu.value = data;
+            restoreSaved();
+            conflict.value = !data.order.editable;
+            return data.guest_state.draft_round != null;
+        } catch (reason) {
+            if (current === generation) {
+                if (
+                    reason instanceof GuestSelectionError &&
+                    reason.status === 409
+                )
+                    error.value =
+                        'The order changed or is now closed. Refresh before starting a new pre-order.';
+                else failure(reason);
+            }
+            return false;
+        } finally {
+            if (current === generation) starting.value = false;
+        }
+    }
     async function submit(): Promise<boolean> {
         if (
             busy.value ||
@@ -405,5 +450,7 @@ export function useGuestSelections(
         submit,
         submitting,
         identifying,
+        startNew,
+        starting,
     };
 }

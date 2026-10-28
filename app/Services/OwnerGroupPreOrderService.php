@@ -39,6 +39,9 @@ class OwnerGroupPreOrderService
             $guest = $locked->guests()->whereKey($item->reservation_guest_id)->lockForUpdate()->firstOrFail();
             $item = $order->items()->whereKey($itemId)->lockForUpdate()->firstOrFail();
             $this->guestEditable($locked, $guest);
+            if ($item->superseded_at !== null) {
+                throw new ConflictHttpException('This item was replaced. Refresh the order.');
+            }
             if ($quantity > 0) {
                 // Match the existing category -> dish lock order and stabilize availability.
                 $category = MenuCategory::query()->whereHas('items', fn ($query) => $query->whereKey($item->menu_item_id))->sharedLock()->first();
@@ -48,14 +51,18 @@ class OwnerGroupPreOrderService
                 }
             }
             if ($quantity !== $item->quantity) {
-                if ($quantity === 0) {
+                if ($order->status === 'submitted' || $guest->pre_order_submitted_at !== null) {
+                    app(CustomerPreOrderRevisionService::class)->quantity($locked, $owner, $item, $quantity);
+                } elseif ($quantity === 0) {
                     $item->delete();
                 } else {
                     // Preserve the saved price and notes; only an absolute quantity can be changed.
                     $item->fill(['quantity' => $quantity])->save();
                 }
-                $guest->increment('selection_version');
-                if ($guest->user_id === $locked->owner_user_id) {
+                if ($order->status !== 'submitted' && $guest->pre_order_submitted_at === null) {
+                    $guest->increment('selection_version');
+                }
+                if ($order->status !== 'submitted' && $guest->user_id === $locked->owner_user_id) {
                     $guest->forceFill(['pre_order_submitted_at' => null])->save();
                 }
             }
@@ -78,7 +85,13 @@ class OwnerGroupPreOrderService
             }
             $this->guestEditable($locked, $guest);
             $order = $locked->preOrder()->lockForUpdate()->first();
-            $order?->items()->where('reservation_guest_id', $guest->id)->delete();
+            if ($order?->status === 'submitted') {
+                app(CustomerPreOrderRevisionService::class)->removeGuest($locked, $owner, $guest);
+            } elseif ($guest->pre_order_submitted_at !== null) {
+                $order?->items()->where('reservation_guest_id', $guest->id)->whereNull('superseded_at')->update(['superseded_at' => now()]);
+            } else {
+                $order?->items()->where('reservation_guest_id', $guest->id)->delete();
+            }
             // Remove active membership, retaining the reservation relationship and RSVP history.
             $guest->forceFill(['removed_at' => now(), 'invitation_token' => null, 'invitation_revoked_at' => now(), 'selection_version' => $guest->selection_version + 1])->save();
 
@@ -111,18 +124,28 @@ class OwnerGroupPreOrderService
         return $locked;
     }
 
+    public function acknowledge(Reservation $reservation, User $owner, string $version): void
+    {
+        DB::transaction(function () use ($reservation, $owner, $version): void {
+            $locked = $this->lock($reservation, $owner);
+            $this->match($locked, $version);
+            // Reading a group never mutates the order or acknowledges a later racing event.
+            DB::table('reservations')->where('id', $locked->id)->update(['pre_order_seen_event_id' => PreOrderNotifications::latest($locked)]);
+        }, attempts: 3);
+    }
+
     private function editable(Reservation $reservation): void
     {
         $order = $reservation->preOrder()->first();
-        if (! ReservationCardState::acceptsPreOrder($reservation) || ($order !== null && ($order->status !== 'draft' || $order->submitted_at !== null))) {
+        if (! ReservationCardState::acceptsPreOrder($reservation) || ($order !== null && ! (($order->status === 'draft' && $order->submitted_at === null) || ($order->status === 'submitted' && $order->submitted_at !== null)))) {
             throw new ConflictHttpException('This group pre-order is read-only.');
         }
     }
 
     private function guestEditable(Reservation $reservation, ReservationGuest $guest): void
     {
-        if ($guest->user_id !== $reservation->owner_user_id && ($guest->removed_at !== null || $guest->pre_order_submitted_at !== null || $guest->invitation_revoked_at !== null)) {
-            throw new ConflictHttpException('This guest selection is confirmed or its invitation was revoked.');
+        if ($guest->removed_at !== null || ($guest->user_id !== $reservation->owner_user_id && $guest->invitation_revoked_at !== null)) {
+            throw new ConflictHttpException('This guest was removed or their invitation was revoked.');
         }
     }
 
@@ -137,6 +160,7 @@ class OwnerGroupPreOrderService
     {
         $order = $reservation->preOrder()->first();
         $state = [
+            PreOrderNotifications::latest($reservation),
             $reservation->only(['id', 'owner_user_id', 'restaurant_id', 'reserved_at', 'duration_minutes', 'guest_count', 'status', 'updated_at']),
             $order?->only(['id', 'status', 'submitted_at', 'updated_at', 'review_revision', 'reviewed_revision', 'review_submitted_at']),
             $reservation->guests()->orderBy('id')->get(['id', 'user_id', 'name', 'selection_version', 'pre_order_submitted_at', 'invitation_revoked_at', 'invitation_expires_at', 'removed_at'])->toArray(),
@@ -151,7 +175,7 @@ class OwnerGroupPreOrderService
     {
         $data = $this->dashboard->groupOrder($reservation);
         $order = $reservation->preOrder()->first();
-        $editable = ReservationCardState::acceptsPreOrder($reservation) && ($order === null || ($order->status === 'draft' && $order->submitted_at === null));
+        $editable = ReservationCardState::acceptsPreOrder($reservation) && ($order === null || ($order->status === 'draft' && $order->submitted_at === null) || ($order->status === 'submitted' && $order->submitted_at !== null));
         $guests = $reservation->guests()->active()->orderBy('id')->get();
         $items = $order?->items()->whereNull('superseded_at')->whereRelation('guest', 'reservation_id', $reservation->id)->with('menuItem')->orderBy('id')->get();
         $participants = [];
@@ -163,10 +187,10 @@ class OwnerGroupPreOrderService
             foreach ($saved['items'] ?? [] as $index => $line) {
                 $row = $source?->get($index);
                 if ($row !== null) {
-                    $lines[] = [...$line, 'id' => $row->id, 'notes' => $row->notes];
+                    $lines[] = [...$line, 'id' => $row->id, 'notes' => $row->notes, 'decision' => $row->review_published_at === null ? 'pending' : $row->restaurant_decision];
                 }
             }
-            $participantEditable = $editable && ($own || ($guest->pre_order_submitted_at === null && $guest->invitation_revoked_at === null));
+            $participantEditable = $editable && ($own || $guest->invitation_revoked_at === null);
             $participants[] = [
                 'id' => $guest->id, 'name' => $guest->name, 'is_owner' => $own,
                 'confirmed' => $guest->pre_order_submitted_at !== null,
@@ -179,6 +203,7 @@ class OwnerGroupPreOrderService
 
         return [
             'timing' => PreOrderTiming::state($reservation),
+            'notification_event_id' => PreOrderNotifications::latest($reservation),
             'reservation_id' => $reservation->id, 'version' => $this->version($reservation),
             'status' => $order?->status, 'submitted_at' => $order?->submitted_at?->toIso8601String(),
             'editable' => $editable, 'can_submit' => $editable && Gate::allows('submitPreOrder', $reservation) && $order?->status === 'draft' && $data['summary']['total_quantity'] > 0,

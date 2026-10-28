@@ -1,5 +1,7 @@
 # Waiter reservations and restaurant pre-order review
 
+> Update 2026-10-28: the previously documented service-order gap is now implemented. See [waiter flows and verification](qa-2026-10-28/waiter-flows-ru.md). The report below records the earlier 2026-10-26 state.
+
 Verified on 2026-10-26. Local branch: `feature/waiter-reservations-preorder-review`, based on fetched `origin/main` at `976f930` (including the previous owner/guest-removal work). No commit, push, merge, or deployment was performed.
 
 ## Implemented scope
