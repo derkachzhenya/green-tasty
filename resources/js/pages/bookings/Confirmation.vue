@@ -278,9 +278,7 @@ watch(
             </div>
             <div class="mt-3 grid gap-3 sm:grid-cols-2">
                 <Button as-child variant="outline" class="min-h-14 bg-card"
-                    ><Link :href="reservationShow(reservation.id)"
-                        >View Reservation</Link
-                    ></Button
+                    ><Link :href="dashboard()">View Reservation</Link></Button
                 ><Button as-child class="min-h-14"
                     ><a
                         v-if="canEdit"

@@ -19,7 +19,7 @@ class ReservationDashboardController extends Controller
         Gate::authorize('viewSummary', $reservation);
 
         return Inertia::render('reservations/Show', [
-            'canEditOwnPreOrder' => ReservationCardState::acceptsPreOrder($reservation) && ($reservation->preOrder === null || $reservation->preOrder->status === 'draft'),
+            'canEditOwnPreOrder' => ReservationCardState::acceptsPreOrder($reservation) && ($reservation->preOrder === null || in_array($reservation->preOrder->status, ['draft', 'submitted'], true)),
             'canSubmitPreOrder' => Gate::allows('submitPreOrder', $reservation) && ReservationCardState::acceptsPreOrder($reservation),
             'canManageInvitations' => Gate::allows('manageInvitations', $reservation) && ReservationCardState::acceptsPreOrder($reservation) && ($reservation->preOrder === null || $reservation->preOrder->status === 'draft'),
             'restaurantReview' => fn () => app(RestaurantPreOrderReviewService::class)->ownerState($reservation),

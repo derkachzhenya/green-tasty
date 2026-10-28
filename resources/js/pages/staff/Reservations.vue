@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, usePage, router, Link } from '@inertiajs/vue3';
-import { ref, shallowRef, computed } from 'vue';
+import { ref, shallowRef, computed, onMounted, onBeforeUnmount } from 'vue';
 import {
     CalendarDays,
     Clock,
@@ -9,14 +9,22 @@ import {
     Pencil,
     Search,
     Bell,
+    CircleCheck,
+    X,
+    UserRound,
+    Salad,
+    ChevronDown,
 } from '@lucide/vue';
+import BookingDateInput from '@/components/bookings/BookingDateInput.vue';
+import ServiceOrderModal from '@/components/reservations/ServiceOrderModal.vue';
 import BookingModal from '@/components/bookings/BookingModal.vue';
 import RestaurantReviewModal from '@/components/reservations/RestaurantReviewModal.vue';
 import SiteContainer from '@/components/site/SiteContainer.vue';
 import { Button } from '@/components/ui/button';
 import { sessionJson, SessionRequestError } from '@/lib/sessionJson';
-import { bookingDurations } from '@/lib/booking';
+import { bookingDurations, bookingDate, bookingTimes } from '@/lib/booking';
 import type { WaiterReservation } from '@/types/restaurant-review';
+defineOptions({ inheritAttrs: false });
 const props = defineProps<{
     restaurant: { id: number; name: string; address: string };
     filters: { date: string; time?: string; table?: number };
@@ -31,7 +39,12 @@ const page = usePage();
 const root = computed(
     () => `/staff/restaurants/${props.restaurant.id}/reservations`,
 );
-const filter = ref({ ...props.filters });
+const filter = ref({
+    ...props.filters,
+    time: props.filters.time ?? '',
+    table: props.filters.table ?? '',
+});
+const serving = shallowRef<WaiterReservation | null>(null);
 const reviewing = shallowRef<WaiterReservation | null>(null),
     cancelling = shallowRef<WaiterReservation | null>(null),
     editing = shallowRef<WaiterReservation | null>(null);
@@ -54,6 +67,7 @@ function refresh() {
     router.reload({ only: ['reservations', 'notifications'] });
 }
 function search() {
+    if (!filter.value.date) return;
     router.get(root.value, { ...filter.value }, { preserveState: true });
 }
 function openForm(reservation: WaiterReservation | null, event: Event) {
@@ -112,6 +126,31 @@ async function save(cancel = false) {
         busy.value = false;
     }
 }
+let polling: ReturnType<typeof setInterval> | undefined;
+onMounted(() => {
+    polling = setInterval(() => {
+        if (
+            !formOpen.value &&
+            !reviewing.value &&
+            !serving.value &&
+            !cancelling.value &&
+            !busy.value &&
+            document.visibilityState === 'visible'
+        )
+            refresh();
+    }, 30000);
+});
+onBeforeUnmount(() => clearInterval(polling));
+function notificationLabel(kind: string) {
+    const labels: Record<string, string> = {
+        customer_preorder_submitted: 'Customer pre-order submitted',
+        customer_preorder_updated: 'Customer updated the pre-order',
+        guest_preorder_submitted: 'Guest selections updated',
+        guest_removed: 'Guest removed',
+        group_submitted: 'Group pre-order submitted',
+    };
+    return labels[kind] ?? 'Customer pre-order changed';
+}
 const labels = {
     upcoming: 'Reserved',
     in_progress: 'In Progress',
@@ -124,69 +163,91 @@ const labels = {
         ><meta name="robots" content="noindex"
     /></Head>
     <div class="bg-accent">
-        <SiteContainer class="py-5"
-            ><h1 class="text-2xl font-medium wrap-anywhere">
+        <SiteContainer
+            class="flex min-h-[84px] flex-wrap items-center justify-between gap-3 py-4"
+        >
+            <h1 class="text-2xl font-medium wrap-anywhere">
                 Hello, {{ page.props.auth.user.name }} (Waiter)
             </h1>
-            <p class="mt-1 text-sm">
-                {{ restaurant.name }} · {{ restaurant.address }}
-            </p></SiteContainer
-        >
+            <details class="relative text-sm">
+                <summary
+                    class="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-3"
+                    aria-label="Restaurant notifications"
+                >
+                    <Bell class="size-5" /><span class="sr-only"
+                        >Notifications</span
+                    ><span
+                        v-if="notifications.length"
+                        class="rounded-full bg-white px-2 text-xs"
+                        >{{ notifications.length }}</span
+                    >
+                </summary>
+                <div
+                    class="absolute right-0 z-20 mt-2 max-h-80 w-[min(340px,calc(100vw-32px))] overflow-y-auto rounded-xl border bg-white p-4 shadow-lg"
+                >
+                    <h2 class="mb-2 font-medium">Restaurant notifications</h2>
+                    <p v-if="!notifications.length">
+                        No pre-order notifications
+                    </p>
+                    <ul>
+                        <li
+                            v-for="(event, index) in notifications"
+                            :key="index"
+                            class="border-b py-3 last:border-0"
+                        >
+                            Reservation #{{ event.reservation_id }}<br />{{
+                                notificationLabel(event.kind)
+                            }}
+                        </li>
+                    </ul>
+                </div>
+            </details>
+        </SiteContainer>
     </div>
     <SiteContainer class="py-6">
         <p
             v-if="notice"
             role="status"
-            class="mb-4 flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-[#e8ffea] p-4"
+            class="mb-4 flex items-center gap-3 rounded-lg border border-primary/20 bg-[#e8ffea] p-3 text-sm"
         >
-            {{ notice
-            }}<button class="min-h-11 px-2 underline" @click="notice = ''">
-                Dismiss
+            <CircleCheck class="size-5 shrink-0 text-primary" />{{ notice
+            }}<button
+                aria-label="Dismiss notification"
+                class="ml-auto grid size-11 place-items-center"
+                @click="notice = ''"
+            >
+                <X class="size-5" />
             </button>
         </p>
-        <details class="mb-5 text-sm">
-            <summary class="flex min-h-11 cursor-pointer items-center gap-2">
-                <Bell class="size-5" />Restaurant notifications ({{
-                    notifications.length
-                }})
-            </summary>
-            <p v-if="!notifications.length" class="py-2">
-                No pre-order notifications
-            </p>
-            <ul>
-                <li
-                    v-for="(event, index) in notifications"
-                    :key="index"
-                    class="py-2"
-                >
-                    Reservation {{ event.reservation_id }}:
-                    {{ event.kind.replaceAll('_', ' ') }} · revision
-                    {{ event.revision }}
-                </li>
-            </ul>
-        </details>
         <form
             class="mb-6 flex flex-wrap items-end gap-3"
             @submit.prevent="search"
         >
-            <label class="grid min-w-0 flex-1 basis-36 gap-1 text-sm"
-                >Date<input
+            <div class="w-full sm:w-[192px]">
+                <label for="staff-filter-date" class="sr-only">Date</label
+                ><BookingDateInput
+                    id="staff-filter-date"
                     v-model="filter.date"
-                    type="date"
-                    required
-                    class="min-h-12 w-full rounded-lg border bg-white px-3"
-            /></label>
-            <label class="grid min-w-0 flex-1 basis-28 gap-1 text-sm"
-                >Time<input
-                    v-model="filter.time"
-                    type="time"
-                    class="min-h-12 w-full rounded-lg border bg-white px-3"
-            /></label>
-            <label class="grid min-w-0 flex-1 basis-32 gap-1 text-sm"
-                >Table<select
-                    v-model="filter.table"
-                    class="min-h-12 rounded-lg border bg-white px-3"
-                >
+                    min="1900-01-01"
+                    max="2100-12-31"
+                />
+            </div>
+            <label class="grid w-full sm:w-[172px]"
+                ><span class="sr-only">Time</span
+                ><select v-model="filter.time" class="booking-input min-h-12">
+                    <option value="">All times</option>
+                    <option
+                        v-for="time in bookingTimes"
+                        :key="time"
+                        :value="time"
+                    >
+                        {{ time }}
+                    </option>
+                </select></label
+            >
+            <label class="grid w-full sm:w-[160px]"
+                ><span class="sr-only">Table</span
+                ><select v-model="filter.table" class="booking-input min-h-12">
                     <option value="">All tables</option>
                     <option
                         v-for="table in tables"
@@ -246,8 +307,12 @@ const labels = {
                     <div
                         class="flex flex-wrap items-center justify-between gap-3 border-b pb-4"
                     >
-                        <h2 class="min-w-0 font-medium wrap-anywhere">
-                            {{ reservation.owner_name }}
+                        <h2
+                            class="flex min-w-0 items-center gap-2 text-sm font-medium wrap-anywhere"
+                        >
+                            <UserRound class="size-4 shrink-0 text-primary" />{{
+                                reservation.owner_name
+                            }}
                         </h2>
                         <button
                             v-if="reservation.can_edit"
@@ -255,9 +320,8 @@ const labels = {
                             :aria-label="`Change table for ${reservation.code}`"
                             @click="openForm(reservation, $event)"
                         >
-                            {{
-                                reservation.table?.name ?? 'Unassigned table'
-                            }}⌄</button
+                            {{ reservation.table?.name ?? 'Unassigned table'
+                            }}<ChevronDown class="ml-3 inline size-4" /></button
                         ><span v-else class="text-sm">{{
                             reservation.table?.name ?? 'Unassigned'
                         }}</span>
@@ -267,29 +331,52 @@ const labels = {
                         <dd class="flex items-center gap-2">
                             <CalendarDays
                                 class="size-4 shrink-0 text-primary"
-                            />{{ reservation.date }}
+                            />{{ bookingDate(reservation.date) }}
                         </dd>
-                        <dt class="sr-only">Pre-orders</dt>
-                        <dd v-if="reservation.pre_orders">
-                            Pre-orders: {{ reservation.pre_orders }}/{{
+                        <dt class="sr-only">Guests</dt>
+                        <dd
+                            class="col-start-2 flex items-center gap-2"
+                            :class="
+                                reservation.pre_orders &&
+                                reservation.phase !== 'canceled'
+                                    ? 'row-start-2'
+                                    : 'row-start-1'
+                            "
+                        >
+                            <Users class="size-4 shrink-0 text-primary" />{{
                                 reservation.guest_count
                             }}
+                            {{
+                                reservation.guest_count === 1
+                                    ? 'Guest'
+                                    : 'Guests'
+                            }}
                         </dd>
-                        <dd v-else>No pre-order</dd>
                         <dt class="sr-only">Time</dt>
-                        <dd class="flex items-center gap-2">
+                        <dd
+                            class="col-start-1 row-start-2 flex items-center gap-2"
+                        >
                             <Clock class="size-4 shrink-0 text-primary" />{{
                                 reservation.time
                             }}
                             – {{ reservation.end_time }}
                         </dd>
-                        <dt class="sr-only">Guests</dt>
-                        <dd class="flex items-center gap-2">
-                            <Users class="size-4 shrink-0 text-primary" />{{
-                                reservation.guest_count
-                            }}
-                            Guests
-                        </dd>
+                        <template
+                            v-if="
+                                reservation.pre_orders &&
+                                reservation.phase !== 'canceled'
+                            "
+                            ><dt class="sr-only">Pre-orders</dt>
+                            <dd
+                                class="col-start-2 row-start-1 flex items-center gap-2"
+                            >
+                                <Salad
+                                    class="size-4 shrink-0 text-primary"
+                                />Pre-orders: {{ reservation.pre_orders }}/{{
+                                    reservation.guest_count
+                                }}
+                            </dd></template
+                        >
                     </dl>
                     <div
                         class="flex flex-wrap items-center gap-1 border-t pt-3"
@@ -311,7 +398,12 @@ const labels = {
                             <Pencil class="size-5" />
                         </button>
                         <Button
-                            v-if="reservation.has_pre_order"
+                            v-if="
+                                reservation.has_pre_order &&
+                                (reservation.phase === 'upcoming' ||
+                                    (reservation.phase === 'in_progress' &&
+                                        reservation.needs_review))
+                            "
                             :variant="
                                 reservation.needs_review && reservation.can_edit
                                     ? 'default'
@@ -325,20 +417,38 @@ const labels = {
                                     : 'View Pre-order'
                             }}</Button
                         >
-                        <p
-                            v-else-if="
+                        <Button
+                            v-if="
                                 reservation.phase === 'in_progress' ||
                                 reservation.phase === 'completed'
                             "
-                            class="text-xs text-muted-foreground"
+                            :variant="
+                                reservation.phase === 'in_progress' &&
+                                !reservation.has_service_order &&
+                                !reservation.has_pre_order
+                                    ? 'default'
+                                    : 'outline'
+                            "
+                            class="ml-auto min-h-11 text-xs"
+                            @click="serving = reservation"
+                            >{{
+                                reservation.phase === 'completed'
+                                    ? 'View Order'
+                                    : reservation.has_service_order ||
+                                        reservation.has_pre_order
+                                      ? 'Edit Order'
+                                      : 'Create Order'
+                            }}</Button
                         >
-                            No service order recorded.
-                        </p>
                     </div>
                 </div>
             </li>
         </ul>
-        <nav aria-label="Reservation pages" class="mt-6 flex flex-wrap gap-2">
+        <nav
+            v-if="reservations.links.filter((link) => link.url).length > 1"
+            aria-label="Reservation pages"
+            class="mt-6 flex flex-wrap gap-2"
+        >
             <template v-for="(link, index) in reservations.links" :key="index"
                 ><Link
                     v-if="link.url"
@@ -354,6 +464,13 @@ const labels = {
             >
         </nav>
     </SiteContainer>
+    <ServiceOrderModal
+        v-if="serving"
+        :restaurant-id="restaurant.id"
+        :reservation="serving"
+        @close="serving = null"
+        @changed="refresh"
+    />
     <RestaurantReviewModal
         v-if="reviewing"
         :restaurant-id="restaurant.id"
@@ -405,18 +522,22 @@ const labels = {
                     required
                     class="min-h-11 min-w-0 rounded-lg border px-3"
             /></label>
-            <label class="grid gap-1 text-sm"
-                >Date<input
+            <div class="grid gap-1 text-sm">
+                <label for="staff-reservation-date">Date</label
+                ><BookingDateInput
+                    id="staff-reservation-date"
                     v-model="form.date"
-                    type="date"
-                    required
-                    class="min-h-11 min-w-0 rounded-lg border px-3"
-            /></label>
+                    min="1900-01-01"
+                    max="2100-12-31"
+                    :disabled="editing?.phase === 'in_progress'"
+                />
+            </div>
             <label class="grid gap-1 text-sm"
                 >Time · Asia/Tbilisi<input
                     v-model="form.time"
                     type="time"
                     step="1800"
+                    :disabled="editing?.phase === 'in_progress'"
                     required
                     class="min-h-11 min-w-0 rounded-lg border px-3"
             /></label>
@@ -424,7 +545,7 @@ const labels = {
                 >How long would you like to stay?<select
                     v-model.number="form.duration_minutes"
                     :disabled="editing?.phase === 'in_progress'"
-                    class="min-h-11 min-w-0 rounded-lg border px-3"
+                    class="booking-input min-h-11 min-w-0"
                 >
                     <option
                         v-for="minutes in bookingDurations"
@@ -448,7 +569,7 @@ const labels = {
                 >Table<select
                     v-model.number="form.table_id"
                     required
-                    class="min-h-11 min-w-0 rounded-lg border px-3"
+                    class="booking-input min-h-11 min-w-0"
                 >
                     <option
                         v-for="table in tables"

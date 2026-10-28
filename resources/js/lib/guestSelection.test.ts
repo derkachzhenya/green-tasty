@@ -1,7 +1,31 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { cents, decimal, selectionKey } from './guestSelection';
+import {
+    cents,
+    decimal,
+    selectionKey,
+    submittedDishes,
+} from './guestSelection';
 
 describe('guest decimal display calculations', () => {
+    it('combines repeated dishes only when their saved unit prices match', () => {
+        const item = {
+            menu_item_id: 1,
+            name: 'Salad',
+            quantity: 1,
+            unit_price: '17.00',
+            subtotal: '17.00',
+        };
+        const rows = [
+            item,
+            { ...item },
+            { ...item, unit_price: '19.00', subtotal: '19.00' },
+        ];
+        expect(submittedDishes(rows)).toEqual([
+            { ...item, quantity: 2, subtotal: '34.00' },
+            { ...item, unit_price: '19.00', subtotal: '19.00' },
+        ]);
+        expect(rows[0].quantity).toBe(1);
+    });
     it('calculates 0.10 × 3 + 0.20 × 2 without floating-point rounding', () => {
         expect(decimal(cents('0.10') * 3n + cents('0.20') * 2n)).toBe('0.70');
         expect(decimal(0n)).toBe('0.00');

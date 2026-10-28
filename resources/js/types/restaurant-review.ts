@@ -49,8 +49,35 @@ export type WaiterReservation = {
     version: string;
     pre_orders: number;
     has_pre_order: boolean;
+    has_service_order?: boolean;
     needs_review: boolean;
     updated: boolean;
     can_edit: boolean;
     can_cancel: boolean;
+};
+
+export type ServiceOrderLine = {
+    line_key: string;
+    menu_item_id: number;
+    name: string;
+    quantity: number;
+    unit_price: string;
+    notes: string | null;
+    total: string;
+};
+export type ServiceOrder = {
+    exists: boolean;
+    revision: number;
+    editable: boolean;
+    phase: string;
+    blocked_reason?: string | null;
+    version: string;
+    items: ServiceOrderLine[];
+    total: string;
+    catalog: {
+        id: number;
+        name: string;
+        price: string;
+        is_available: boolean;
+    }[];
 };

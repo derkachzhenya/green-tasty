@@ -6,7 +6,6 @@ use App\Models\Reservation;
 use App\Models\ReservationGuest;
 use App\Models\Restaurant;
 use App\Models\User;
-use App\Notifications\AuthVerificationCode;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
@@ -39,15 +38,9 @@ class EndToEndIntegrationTest extends TestCase
             'password' => 'Secure9!Pass', 'password_confirmation' => 'Secure9!Pass',
         ])->assertSessionHasNoErrors()->assertRedirect();
         $owner = User::query()->where('email', 'journey@example.test')->sole();
-        $this->assertGuest();
-        Notification::assertSentOnDemand(AuthVerificationCode::class, function (AuthVerificationCode $notification): bool {
-            $this->postJson(route('auth.code.verify'), ['purpose' => 'registration', 'code' => $notification->code])->assertOk();
-
-            return true;
-        });
-        $this->post(route('login.store'), ['email' => $owner->email, 'password' => 'wrong'])->assertSessionHasErrors('email');
-        $this->post(route('login.store'), ['email' => $owner->email, 'password' => 'Secure9!Pass'])->assertSessionHasNoErrors()->assertRedirect();
         $this->assertAuthenticatedAs($owner);
+        Notification::assertNothingSent();
+        $this->assertDatabaseCount('auth_challenges', 0);
 
         $booking = ['date' => '2026-10-24', 'time' => '12:00', 'guest_count' => 3, 'restaurant_table_id' => $table->id];
         $availability = array_diff_key($booking, ['restaurant_table_id' => true]);

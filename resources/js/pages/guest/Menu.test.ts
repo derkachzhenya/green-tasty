@@ -396,7 +396,7 @@ describe('Figma guest pre-order flow', () => {
                         n.props['aria-label'] === 'Your pre-order total',
                 )[0],
             ),
-        ).toBe('17.00');
+        ).toBe('$17.00');
     });
     it('updates quantities and removes only the selected guest line', async () => {
         await mount();
@@ -428,7 +428,7 @@ describe('Figma guest pre-order flow', () => {
         mounted?.unmount();
         await mount();
         await cart();
-        expect(text()).toContain('Unit price: 0.10');
+        expect(text()).toContain('Unit price: $0.10');
         expect(text()).toContain('0.30');
     });
     it('confirms only after server success and refresh restores the submitted screen', async () => {
@@ -449,6 +449,75 @@ describe('Figma guest pre-order flow', () => {
         await mount();
         expect(text()).toContain('Pre-Order Submitted!');
     });
+    it('starts an empty additional cart and keeps prior dishes when the next order is submitted', async () => {
+        await mount();
+        await click('Add Fresh Strawberry Mint Salad');
+        server.guest_state.can_start_new = true;
+        await cart();
+        await click('Submit Pre-Order');
+        const previous = structuredClone(server.selections);
+        fetchMock.mockImplementationOnce(
+            async (path: string, options: RequestInit) => {
+                expect(path).toMatch(/\/start$/);
+                expect(
+                    (options.headers as Record<string, string>)['If-Match'],
+                ).toBe('"1"');
+                server.previous_selections = previous;
+                server.selections = {
+                    items: [],
+                    total_quantity: 0,
+                    subtotal: '0.00',
+                };
+                server.guest_state.draft_round = 1;
+                server.guest_state.can_start_new = false;
+                server.guest_state.version++;
+                server.order.editable = true;
+                return response(server);
+            },
+        );
+        await click('Create New Pre-Order');
+        expect(text()).not.toContain('Pre-Order Submitted!');
+        expect(text()).toContain('Previously submitted: $17.00');
+        expect(button('Open cart, 0 items')).toBeDefined();
+        await click('Add Roasted Sweet Potato & Lentil Salad');
+        await cart();
+        expect(text()).toContain('Grand Total$10.00');
+        expect(server.previous_selections).toEqual(previous);
+        fetchMock.mockImplementationOnce(async () => {
+            server.selections = {
+                items: [...previous.items, ...server.selections.items],
+                total_quantity: 2,
+                subtotal: '27.00',
+            };
+            server.guest_state.draft_round = null;
+            server.guest_state.can_start_new = true;
+            server.order.editable = false;
+            return response(server);
+        });
+        await click('Submit Pre-Order');
+        expect(text()).toContain('Pre-Order Submitted!');
+        expect(text()).toContain('$27.00');
+        expect(text()).toContain('Fresh Strawberry Mint Salad × 1');
+        expect(text()).toContain('Roasted Sweet Potato & Lentil Salad × 1');
+        mounted?.unmount();
+        await mount();
+        expect(text()).toContain('$27.00');
+    });
+
+    it('keeps the submitted confirmation when starting an additional order fails', async () => {
+        await mount();
+        await click('Add Fresh Strawberry Mint Salad');
+        server.guest_state.can_start_new = true;
+        await cart();
+        await click('Submit Pre-Order');
+        fetchMock.mockResolvedValueOnce(response({}, 409));
+        await click('Create New Pre-Order');
+        expect(text()).toContain('Pre-Order Submitted!');
+        expect(text()).toContain('$17.00');
+        expect(text()).toContain('The order changed or is now closed.');
+        expect(server.selections.total_quantity).toBe(1);
+    });
+
     it('never shows success for a failed or uncertain submission', async () => {
         await mount();
         await click('Add Fresh Strawberry Mint Salad');

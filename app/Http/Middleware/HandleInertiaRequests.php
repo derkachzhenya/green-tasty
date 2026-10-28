@@ -56,6 +56,7 @@ class HandleInertiaRequests extends Middleware
             'name' => config('app.name'),
             'auth' => [
                 'user' => $request->user(),
+                'isStaff' => $request->user()?->isStaffAccount() ?? false,
             ],
             'staffRestaurants' => fn () => $request->user()?->staffRestaurants()->wherePivot('is_active', true)->wherePivot('role', 'waiter')->where('restaurants.is_active', true)->get(['restaurants.id', 'restaurants.name'])->map->only(['id', 'name'])->all() ?? [],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',

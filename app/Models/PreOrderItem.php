@@ -19,6 +19,7 @@ class PreOrderItem extends Model
         'quantity',
         'unit_price',
         'notes',
+        'selection_round',
     ];
 
     /** @return array{quantity: 'integer', unit_price: 'decimal:2'} */

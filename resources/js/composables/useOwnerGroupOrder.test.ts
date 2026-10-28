@@ -61,6 +61,30 @@ afterEach(() => {
     vi.unstubAllGlobals();
 });
 describe('owner group order concurrency and recovery', () => {
+    it('acknowledges only the loaded event snapshot and keeps reads usable if acknowledgement races', async () => {
+        const result = { ...fixture(), notification_event_id: 12 };
+        request
+            .mockResolvedValueOnce(result)
+            .mockRejectedValueOnce(new SessionRequestError(409));
+        await api.load();
+        await flush();
+        expect(request).toHaveBeenLastCalledWith(
+            '/reservations/7/pre-order/owner-view/seen',
+            'post',
+            expect.any(AbortSignal),
+            undefined,
+            result.version,
+        );
+        expect(api.order.value?.notification_event_id).toBe(12);
+        expect(api.stale.value).toBe(false);
+        expect(changed).not.toHaveBeenCalled();
+        request
+            .mockResolvedValueOnce(result)
+            .mockResolvedValueOnce({ acknowledged: true });
+        await api.load();
+        await flush();
+        expect(changed).toHaveBeenCalledOnce();
+    });
     it('loads only the protected read endpoint and sends the authoritative version with mutations', async () => {
         expect(request.mock.calls[0].slice(0, 2)).toEqual([
             '/reservations/7/pre-order/owner-view',

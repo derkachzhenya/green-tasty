@@ -28,6 +28,7 @@ import {
     DialogDescription,
 } from '@/components/ui/dialog';
 import QuantityControl from '@/components/guest/QuantityControl.vue';
+import { dollarPrice } from '@/lib/guestSelection';
 import { Button } from '@/components/ui/button';
 import { useOwnerGroupOrder } from '@/composables/useOwnerGroupOrder';
 import { bookingDate } from '@/lib/booking';
@@ -80,11 +81,15 @@ const pending = computed(() =>
         : [],
 );
 const status = computed(() =>
-    order.value?.status === 'submitted'
-        ? 'Sent to Restaurant'
-        : order.value?.status === 'draft' || order.value?.status == null
-          ? 'Created New Pre-Order'
-          : `Stored status: ${order.value.status}`,
+    order.value?.restaurant_review?.status === 'Confirmed by Restaurant'
+        ? 'Confirmed by Restaurant'
+        : order.value?.restaurant_review?.status === 'Updated Pre-Order'
+          ? 'Updated Pre-Order'
+          : order.value?.status === 'submitted'
+            ? 'Sent to Restaurant'
+            : order.value?.status === 'draft' || order.value?.status == null
+              ? 'Created New Pre-Order'
+              : `Stored status: ${order.value.status}`,
 );
 watch(confirming, async (value) => {
     await nextTick();
@@ -159,9 +164,11 @@ async function confirm() {
                         v-if="order"
                         class="rounded-md px-3 py-1 text-xs leading-5"
                         :class="
-                            order.status === 'submitted'
-                                ? 'bg-[#fff3d1]'
-                                : 'bg-[#e4e4e4]'
+                            status === 'Confirmed by Restaurant'
+                                ? 'bg-[#e8ffea]'
+                                : order.status === 'submitted'
+                                  ? 'bg-[#fff3d1]'
+                                  : 'bg-[#e4e4e4]'
                         "
                         >{{ status }}</span
                     >
@@ -238,6 +245,7 @@ async function confirm() {
                     v-if="order?.restaurant_review"
                     :review="order.restaurant_review"
                     :reservation-id="reservation.id"
+                    :locked="cutoffLocked"
                     class="mb-5"
                     @changed="
                         load();
@@ -300,8 +308,20 @@ async function confirm() {
                         <Bell
                             class="mt-1 size-4 shrink-0"
                             aria-hidden="true"
-                        />You have unsubmitted saved selections. Changes close
-                        in {{ minutes }} minutes. Saved dishes will be retained.
+                        />Some pre-order items are still unconfirmed. Changes
+                        close in {{ minutes }} minutes. Saved dishes will be
+                        retained.
+                    </p>
+                    <p
+                        v-if="
+                            order.status === 'submitted' &&
+                            order.editable &&
+                            !cutoffLocked
+                        "
+                        class="mb-4 text-sm leading-6 text-muted-foreground"
+                    >
+                        Changes are sent to the restaurant for review. Previous
+                        versions are kept.
                     </p>
                     <p
                         v-else-if="pending.length"
@@ -441,6 +461,11 @@ async function confirm() {
                                         class="text-sm font-medium wrap-anywhere"
                                     >
                                         {{ item.name }}
+                                        <span
+                                            v-if="item.decision === 'rejected'"
+                                            class="ml-2 rounded bg-[#fce8ee] px-2 py-1 text-xs font-normal"
+                                            >Rejected</span
+                                        >
                                     </p>
                                     <p
                                         v-if="item.notes"
@@ -449,7 +474,8 @@ async function confirm() {
                                         {{ item.notes }}
                                     </p>
                                     <p class="sr-only">
-                                        Saved unit price: {{ item.unit_price }}
+                                        Saved unit price:
+                                        {{ dollarPrice(item.unit_price) }}
                                     </p>
                                 </div>
                                 <QuantityControl
@@ -473,7 +499,7 @@ async function confirm() {
                                 <p
                                     class="col-start-2 text-right text-sm font-medium tabular-nums sm:col-start-auto"
                                 >
-                                    {{ item.subtotal }}
+                                    {{ dollarPrice(item.subtotal) }}
                                 </p>
                             </li>
                         </ul>
@@ -482,7 +508,7 @@ async function confirm() {
                         >
                             <span>Subtotal</span
                             ><span class="tabular-nums">{{
-                                participant.subtotal
+                                dollarPrice(participant.subtotal)
                             }}</span>
                         </div>
                     </section>
@@ -499,8 +525,9 @@ async function confirm() {
                     class="mt-4 rounded-xl border border-primary/20 bg-accent p-4"
                 >
                     <p class="text-sm leading-6">
-                        Submit all saved selections? This locks changes for
-                        everyone.
+                        Send all saved selections to the restaurant for review?
+                        You can make changes until 30 minutes before your
+                        reservation.
                     </p>
                     <div class="mt-3 flex flex-wrap gap-3">
                         <Button
@@ -531,7 +558,7 @@ async function confirm() {
                     ><output
                         aria-label="Group pre-order total"
                         class="text-primary tabular-nums"
-                        >{{ order.summary.grand_total }}</output
+                        >{{ dollarPrice(order.summary.grand_total) }}</output
                     >
                 </div>
                 <Button

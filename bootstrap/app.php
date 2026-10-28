@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\KeepStaffInWorkspace;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -19,10 +20,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('staff/*') ? route('staff.login') : route('login'));
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
         $middleware->web(append: [
             AuthenticateSession::class,
+            KeepStaffInWorkspace::class,
             HandleAppearance::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
@@ -31,7 +34,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->dontFlash(['code', 'token', 'password', 'password_confirmation', 'current_password']);
         $exceptions->respond(function (Response $response): Response {
-            if (request()->routeIs('auth.*', 'login*', 'register*', 'password.*', 'verification.*')) {
+            if (request()->routeIs('auth.*', 'login*', 'staff.login*', 'staff.register*', 'register*', 'password.*', 'verification.*')) {
                 $response->headers->set('Cache-Control', 'private, no-store');
                 $response->headers->set('Referrer-Policy', 'no-referrer');
             }

@@ -22,7 +22,7 @@ use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
  */
 class GuestDishSelectionService
 {
-    public function __construct(private GuestInvitationService $invitations) {}
+    public function __construct(private GuestInvitationService $invitations, private GuestAdditionalPreOrderService $additional) {}
 
     /** @return SelectionSummary|null */
     public function view(#[SensitiveParameter] string $token): ?array
@@ -33,8 +33,12 @@ class GuestDishSelectionService
             return null;
         }
 
+        if (($round = $this->additional->draft($guest)) !== null) {
+            return $this->additional->summary($round);
+        }
+
         $items = $guest->preOrderItems()
-            ->whereRelation('preOrder', 'reservation_id', $guest->reservation_id)
+            ->whereRelation('preOrder', 'reservation_id', $guest->reservation_id)->whereNull('superseded_at')
             ->with('menuItem')
             ->orderBy('menu_item_id')
             ->get();
@@ -90,8 +94,8 @@ class GuestDishSelectionService
     public function forGuest(ReservationGuest $guest): array
     {
         return $this->summary($guest->preOrderItems()
-            ->whereRelation('preOrder', 'reservation_id', $guest->reservation_id)
-            ->with('menuItem')->orderBy('menu_item_id')->get());
+            ->whereRelation('preOrder', 'reservation_id', $guest->reservation_id)->whereNull('superseded_at')
+            ->with('menuItem')->orderBy('menu_item_id')->orderBy('id')->get());
     }
 
     /**
@@ -102,6 +106,10 @@ class GuestDishSelectionService
     {
         PreOrderTiming::ensureOpen($reservation);
         $preOrder = $reservation->preOrder()->lockForUpdate()->first();
+
+        if (! $ownerEdit && ($round = $this->additional->draft($guest)) !== null) {
+            return $this->additional->replaceLocked($reservation, $guest, $round, $selections, $expectedVersion);
+        }
 
         if ((! $ownerEdit && $guest->pre_order_submitted_at !== null) || in_array($reservation->status, ['cancelled', 'completed'], true)
             || ($preOrder !== null && ($preOrder->status !== 'draft' || $preOrder->submitted_at !== null))) {

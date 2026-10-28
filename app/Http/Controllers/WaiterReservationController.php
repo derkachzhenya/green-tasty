@@ -7,6 +7,7 @@ use App\Models\Reservation;
 use App\Models\Restaurant;
 use App\Services\RestaurantPreOrderReviewService;
 use App\Services\WaiterReservationService;
+use App\Services\WaiterServiceOrderService;
 use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -46,5 +47,15 @@ class WaiterReservationController extends Controller
     public function submit(WaiterReservationRequest $request, Restaurant $restaurant, Reservation $reservation, RestaurantPreOrderReviewService $service): JsonResponse
     {
         return response()->json($service->submit($restaurant, $reservation, $request->user(), $request->version()));
+    }
+
+    public function order(WaiterReservationRequest $request, Restaurant $restaurant, Reservation $reservation, WaiterServiceOrderService $service): JsonResponse
+    {
+        return response()->json($service->view($restaurant, $reservation, $request->user()))->header('Cache-Control', 'no-store, private');
+    }
+
+    public function saveOrder(WaiterReservationRequest $request, Restaurant $restaurant, Reservation $reservation, WaiterServiceOrderService $service): JsonResponse
+    {
+        return response()->json($service->save($restaurant, $reservation, $request->user(), $request->validated('items'), $request->version()))->header('Cache-Control', 'no-store, private');
     }
 }

@@ -169,7 +169,7 @@ class ReservationFigmaStatesTest extends TestCase
         $this->assertTrue($this->card()['can_view_group']);
         $this->postJson('/reservations/'.$this->reservation->id.'/pre-order/submit')->assertOk();
         $this->postJson('/reservations/'.$this->reservation->id.'/invitations', ['name' => 'Late guest'])->assertConflict();
-        $this->get('/reservations/'.$this->reservation->id)->assertInertia(fn (Assert $page) => $page->where('canEditOwnPreOrder', false)->where('canManageInvitations', false));
+        $this->get('/reservations/'.$this->reservation->id)->assertInertia(fn (Assert $page) => $page->where('canEditOwnPreOrder', true)->where('canManageInvitations', false));
         // Legacy finalized orders have no per-guest timestamp; their saved rows are still submitted.
         $this->reservation->guests()->update(['pre_order_submitted_at' => null]);
         $this->assertSame(4, $this->card()['submitted_pre_orders']);

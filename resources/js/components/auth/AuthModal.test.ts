@@ -134,6 +134,25 @@ afterEach(() => {
 });
 
 describe('authentication modal flows', () => {
+    it('finishes a new registration by signing in immediately without showing a code step', async () => {
+        mount('register');
+        await registerFields();
+        fetchMock.mockResolvedValue(
+            response({ next: 'authenticated', redirect: '/reservations' }, 201),
+        );
+        await submit();
+        expect(fetchMock.mock.calls[0][0]).toBe('/register');
+        expect(navigation.visit).toHaveBeenCalledWith('/reservations', {
+            replace: true,
+        });
+        expect(navigation.clearHistory).toHaveBeenCalledOnce();
+        expect(textContent(mounted.root)).not.toContain(
+            'Enter Verification Code',
+        );
+        expect(input('password').value).toBe('');
+        expect(input('password_confirmation').value).toBe('');
+    });
+
     it('keeps empty sign in disabled and shows required errors on blur', async () => {
         mount();
         expect(button('Sign In').props.disabled).toBe(true);

@@ -33,6 +33,13 @@ class OwnerGroupPreOrderController extends Controller
         return $this->respond($service->submit($reservation, $request->user(), $request->version()));
     }
 
+    public function seen(OwnerGroupPreOrderRequest $request, Reservation $reservation, OwnerGroupPreOrderService $service): JsonResponse
+    {
+        $service->acknowledge($reservation, $request->user(), $request->version());
+
+        return response()->json(['acknowledged' => true])->header('Cache-Control', 'no-store, private');
+    }
+
     /** @param array<string, mixed> $data */
     private function respond(array $data): JsonResponse
     {

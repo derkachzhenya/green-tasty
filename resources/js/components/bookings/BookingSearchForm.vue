@@ -7,6 +7,7 @@ import type {
     BookingRestaurant,
     BookingRules,
 } from '@/types/booking';
+import BookingDateInput from './BookingDateInput.vue';
 import GuestCounter from './GuestCounter.vue';
 defineProps<{
     filters: BookingFilters;
@@ -54,21 +55,15 @@ const emit = defineEmits<{ change: [Partial<BookingFilters>]; search: [] }>();
         </div>
         <div class="space-y-1">
             <label for="booking-date" class="text-sm">Date</label>
-            <input
+            <BookingDateInput
                 id="booking-date"
-                type="date"
-                :value="filters.date"
+                :model-value="filters.date"
                 :min="rules.min_date"
                 :max="rules.max_date"
                 :disabled="busy"
-                class="booking-input"
-                :aria-invalid="!!errors.date"
-                aria-describedby="date-error booking-rules"
-                @input="
-                    emit('change', {
-                        date: ($event.target as HTMLInputElement).value,
-                    })
-                "
+                :invalid="!!errors.date"
+                described-by="date-error booking-rules"
+                @update:model-value="emit('change', { date: $event })"
             />
             <InputError id="date-error" :message="errors.date" />
         </div>

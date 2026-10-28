@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import ContentState from '@/components/site/ContentState.vue';
 import { orderLocked, submissionTime } from '@/lib/groupPreOrder';
+import { dollarPrice } from '@/lib/guestSelection';
 import type { DashboardOrder } from '@/types/reservation';
 
 const props = withDefaults(
@@ -58,7 +59,7 @@ const savedPrices = computed(() => {
         >
             {{
                 order.status === 'submitted'
-                    ? 'This group pre-order has been submitted. Selections are locked.'
+                    ? 'This group pre-order has been submitted. Open Group Pre-Order to view the current review and permitted changes.'
                     : 'Selections are locked for this order.'
             }}
         </p>
@@ -112,7 +113,9 @@ const savedPrices = computed(() => {
                                         ...(savedPrices.get(
                                             dish.menu_item_id,
                                         ) ?? []),
-                                    ].join(' · ')
+                                    ]
+                                        .map(dollarPrice)
+                                        .join(' · ')
                                 }}
                             </p>
                         </div>
@@ -130,7 +133,7 @@ const savedPrices = computed(() => {
                                 <dd
                                     class="mt-1 font-medium text-primary tabular-nums"
                                 >
-                                    {{ dish.subtotal }}
+                                    {{ dollarPrice(dish.subtotal) }}
                                 </dd>
                             </div>
                         </dl>
@@ -171,13 +174,13 @@ const savedPrices = computed(() => {
                                 </p>
                                 <p class="mt-1 text-sm text-muted-foreground">
                                     Quantity: {{ item.quantity }} · Saved unit
-                                    price: {{ item.unit_price }}
+                                    price: {{ dollarPrice(item.unit_price) }}
                                 </p>
                             </div>
                             <p class="text-sm tabular-nums">
                                 Line subtotal:
                                 <span class="font-medium text-primary">{{
-                                    item.subtotal
+                                    dollarPrice(item.subtotal)
                                 }}</span>
                             </p>
                         </li>
@@ -188,7 +191,7 @@ const savedPrices = computed(() => {
                         Participant subtotal:
                         <span
                             class="ml-2 font-medium text-primary tabular-nums"
-                            >{{ guest.subtotal }}</span
+                            >{{ dollarPrice(guest.subtotal) }}</span
                         >
                     </p>
                 </details>
@@ -206,7 +209,7 @@ const savedPrices = computed(() => {
             <p
                 class="text-2xl font-medium wrap-anywhere text-primary tabular-nums"
             >
-                {{ order.summary.grand_total }}
+                {{ dollarPrice(order.summary.grand_total) }}
             </p>
         </div>
     </section>

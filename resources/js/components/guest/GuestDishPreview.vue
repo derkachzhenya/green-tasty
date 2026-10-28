@@ -11,9 +11,23 @@ import {
     DialogClose,
 } from 'reka-ui';
 import { Button } from '@/components/ui/button';
-import { dishImage, dishWeight, dishImageCropped } from '@/lib/guestMenu';
+import DishDietaryBadges from './DishDietaryBadges.vue';
+import {
+    dishImage,
+    dishWeight,
+    dishImageCropped,
+    dishDescription,
+    dishNutrition,
+    dishNutritionNote,
+} from '@/lib/guestMenu';
+import { dollarPrice } from '@/lib/guestSelection';
 import type { GuestCatalogDish } from '@/types/guest-selection';
-defineProps<{ dish: GuestCatalogDish; disabled: boolean; locked: boolean }>();
+defineProps<{
+    dish: GuestCatalogDish;
+    disabled: boolean;
+    locked: boolean;
+    readOnly?: boolean;
+}>();
 defineEmits<{ add: [] }>();
 </script>
 <template>
@@ -58,17 +72,42 @@ defineEmits<{ add: [] }>();
                         class="pr-4 text-[26px] leading-10 font-medium wrap-anywhere"
                         >{{ dish.name }}</DialogTitle
                     >
+                    <DishDietaryBadges :name="dish.name" class="-mt-3" />
                     <DialogDescription class="text-sm leading-6">{{
                         dish.description ||
+                        dishDescription(dish.name) ||
                         'Ask the restaurant for ingredients and nutritional information.'
                     }}</DialogDescription>
+                    <ul
+                        v-if="dishNutrition(dish.name)"
+                        class="space-y-2 text-xs leading-5"
+                    >
+                        <li
+                            v-for="line in dishNutrition(dish.name)"
+                            :key="line[0].label"
+                            class="flex flex-wrap gap-x-3"
+                        >
+                            <span v-for="field in line" :key="field.label"
+                                ><strong class="font-semibold"
+                                    >{{ field.label }}:</strong
+                                >
+                                {{ field.value }}</span
+                            >
+                        </li>
+                    </ul>
+                    <p
+                        v-if="dishNutritionNote(dish.name)"
+                        class="-mt-4 text-xs leading-5 text-muted-foreground"
+                    >
+                        {{ dishNutritionNote(dish.name) }}
+                    </p>
                     <div
                         class="mt-auto flex flex-wrap items-center justify-between gap-4"
                     >
                         <p>
                             <span
                                 class="text-[26px] font-medium text-primary"
-                                >{{ dish.price }}</span
+                                >{{ dollarPrice(dish.price) }}</span
                             ><span
                                 v-if="dishWeight(dish.name)"
                                 class="text-sm text-muted-foreground"
@@ -77,6 +116,7 @@ defineEmits<{ add: [] }>();
                             >
                         </p>
                         <Button
+                            v-if="!readOnly"
                             :disabled="disabled || locked || !dish.available"
                             class="min-h-11"
                             @click="$emit('add')"

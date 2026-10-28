@@ -36,6 +36,8 @@ export type GuestMenu = {
         name_confirmed: boolean;
         submitted_at: string | null;
         version: number;
+        draft_round?: number | null;
+        can_start_new?: boolean;
     };
     catalog: { id: number; name: string; dishes: GuestCatalogDish[] }[];
     invitation: {
@@ -45,6 +47,7 @@ export type GuestMenu = {
         menu_categories: { id: number; name: string; dishes: MenuDish[] }[];
     };
     selections: GuestSelectionSummary;
+    previous_selections?: GuestSelectionSummary | null;
     order: {
         status: string | null;
         submitted_at: string | null;

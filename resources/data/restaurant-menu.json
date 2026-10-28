@@ -1,12 +1,23 @@
 {
     "categories": [
-        { "slug": "appetizers", "name": "Appetizers" },
-        { "slug": "main-courses", "name": "Main Courses" },
-        { "slug": "desserts", "name": "Desserts" }
+        {
+            "slug": "appetizers",
+            "name": "Appetizers"
+        },
+        {
+            "slug": "main-courses",
+            "name": "Main Courses"
+        },
+        {
+            "slug": "desserts",
+            "name": "Desserts"
+        }
     ],
     "dishes": [
         {
             "name": "Fresh Strawberry Mint Salad",
+            "preparation_minutes": 10,
+            "description": "Strawberries, spinach, mint leaves, feta or goat cheese, walnuts, balsamic glaze, poppy seeds.",
             "category": "appetizers",
             "price": "17.00",
             "available": true,
@@ -16,6 +27,7 @@
         },
         {
             "name": "Green Asparagus Salad",
+            "description": "A fresh asparagus salad with a light, crisp finish.",
             "category": "appetizers",
             "price": "12.00",
             "available": false,
@@ -25,6 +37,8 @@
         },
         {
             "name": "Roasted Sweet Potato & Lentil Salad",
+            "preparation_minutes": 10,
+            "description": "Roasted sweet potato and lentils in a hearty salad with a balance of soft and crisp textures.",
             "category": "appetizers",
             "price": "10.00",
             "available": true,
@@ -34,15 +48,48 @@
         },
         {
             "name": "Spring Salad",
+            "preparation_minutes": 10,
+            "description": "Quinoa, asparagus, green peas, roasted bell pepper, avocado, red onion and pumpkin seeds, finished with a lemon and olive oil dressing.",
             "category": "appetizers",
             "price": "19.00",
             "available": true,
             "image": "/images/green-tasty/dishes/spring-salad.png",
             "weight": "280 g",
-            "crop": false
+            "crop": false,
+            "dietary": ["Vegetarian", "Lactose free"],
+            "nutrition": [
+                [
+                    {
+                        "label": "Calories",
+                        "value": "~410 kcal"
+                    }
+                ],
+                [
+                    {
+                        "label": "Protein",
+                        "value": "~11 g"
+                    },
+                    {
+                        "label": "Fats",
+                        "value": "~25 g"
+                    },
+                    {
+                        "label": "Carbs",
+                        "value": "~35 g"
+                    }
+                ],
+                [
+                    {
+                        "label": "Vitamins & minerals",
+                        "value": "Vitamin C, folate, potassium"
+                    }
+                ]
+            ],
+            "nutrition_note": "Approximate nutrition per 280 g serving."
         },
         {
             "name": "Berry Breakfast Bowl",
+            "description": "A colourful breakfast bowl topped with mixed berries for a fresh, fruity start to the day.",
             "category": "appetizers",
             "price": "13.00",
             "available": true,
@@ -52,6 +99,7 @@
         },
         {
             "name": "Avocado Pine Nut Bowl",
+            "description": "Creamy avocado and pine nuts served in a fresh, satisfying bowl.",
             "category": "appetizers",
             "price": "17.00",
             "available": true,
@@ -61,6 +109,7 @@
         },
         {
             "name": "Avocado & Egg Toast",
+            "description": "Toast topped with creamy avocado and egg, with a contrast of crisp and soft textures.",
             "category": "appetizers",
             "price": "15.00",
             "available": true,
@@ -70,6 +119,7 @@
         },
         {
             "name": "Citrus Cream Tart",
+            "description": "A citrus tart with a smooth cream filling and a bright, refreshing finish.",
             "category": "appetizers",
             "price": "11.00",
             "available": true,

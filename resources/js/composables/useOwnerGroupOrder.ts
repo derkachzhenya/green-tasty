@@ -72,6 +72,22 @@ export function useOwnerGroupOrder(reservationId: number, changed: () => void) {
             if (current !== sequence) return;
             order.value = result;
             stale.value = false;
+            if (result.notification_event_id) {
+                // Acknowledge exactly the snapshot just opened; a racing newer event stays unread.
+                void sessionJson(
+                    `${root}/seen`,
+                    'post',
+                    controller.signal,
+                    undefined,
+                    result.version,
+                )
+                    .then(() => {
+                        if (current === sequence) changed();
+                    })
+                    .catch(() => {
+                        /* Keep the marker if acknowledgement races or fails. */
+                    });
+            }
         } catch (reason) {
             if (current === sequence) failure(reason);
         } finally {

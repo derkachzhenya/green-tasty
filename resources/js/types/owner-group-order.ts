@@ -9,7 +9,11 @@ export type OwnerGroupParticipant = {
     revoked: boolean;
     editable: boolean;
     can_remove: boolean;
-    items: (GuestSelection & { id: number; notes: string | null })[];
+    items: (GuestSelection & {
+        id: number;
+        notes: string | null;
+        decision?: string;
+    })[];
     subtotal: string;
 };
 export type OwnerGroupOrder = {
@@ -19,6 +23,7 @@ export type OwnerGroupOrder = {
     removed_participants?: number;
     reservation_id: number;
     version: string;
+    notification_event_id?: number;
     status: string | null;
     submitted_at: string | null;
     editable: boolean;

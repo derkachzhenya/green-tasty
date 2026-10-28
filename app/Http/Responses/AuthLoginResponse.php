@@ -26,7 +26,19 @@ class AuthLoginResponse implements LoginResponse
 
             return $request->expectsJson() ? response()->json(['next' => 'verify', 'challenge' => $context]) : redirect()->route('auth.verify');
         }
-        $redirect = redirect()->intended(config('fortify.home'))->getTargetUrl();
+        if ($user->isStaffAccount()) {
+            $request->session()->forget('url.intended');
+            $redirect = route('staff.entry');
+        } else {
+            $redirect = redirect()->intended(config('fortify.home'))->getTargetUrl();
+            // Old reservation-detail links can survive logout in url.intended.
+            // Sign-in should return visitors to the reservation cards, while
+            // retaining a pending table search/booking destination.
+            $path = parse_url($redirect, PHP_URL_PATH);
+            if (is_string($path) && preg_match('#^/reservations/[^/]+(?:/confirmation)?/?$#', $path)) {
+                $redirect = route('dashboard');
+            }
+        }
         $request->session()->put('password_hash_'.config('auth.defaults.guard'), $user->getAuthPassword());
         Inertia::flash('authNotification', 'You have signed in successfully.');
 

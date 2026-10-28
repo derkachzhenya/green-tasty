@@ -34,7 +34,7 @@ class WaiterReservationService
         }
         $page = $query->orderBy('reserved_at')->orderBy('id')->paginate(24)->withQueryString();
 
-        return ['restaurant' => $restaurant->only(['id', 'name', 'address']), 'filters' => [...$filters, 'date' => $date],
+        return ['restaurant' => $restaurant->only(['id', 'name', 'address', 'slug']), 'filters' => [...$filters, 'date' => $date],
             'tables' => $restaurant->tables()->where('is_active', true)->orderBy('id')->get(['id', 'name', 'seats']),
             'reservations' => $page->through(fn (Reservation $reservation): array => $this->card($reservation)),
             'notifications' => DB::table('reservation_events')->where('restaurant_id', $restaurant->id)->where('audience', 'restaurant')
@@ -58,6 +58,7 @@ class WaiterReservationService
                 ->when(! $submitted, fn ($q) => $q->whereNotNull('pre_order_submitted_at'))->count(),
             'has_pre_order' => $submitted, 'needs_review' => $submitted && (int) $order->review_revision !== (int) $order->reviewed_revision,
             'updated' => $submitted && (int) $order->review_revision > (int) $order->reviewed_revision && (int) $order->review_revision > 1,
+            'has_service_order' => DB::table('restaurant_service_orders')->where('reservation_id', $reservation->id)->exists(),
             'can_edit' => in_array($phase, ['upcoming', 'in_progress'], true) && $reservation->status === 'confirmed',
             'can_cancel' => $phase === 'upcoming' && $reservation->status === 'confirmed'];
     }
@@ -109,9 +110,11 @@ class WaiterReservationService
             $duration = (int) ($data['duration_minutes'] ?? $locked->duration_minutes);
             $this->rules->validateDuration($duration);
             if ($phase === 'in_progress') {
-                if (! $start->equalTo($locked->reserved_at) || $duration !== $locked->duration_minutes) {
+                if (! $start->equalTo($locked->reserved_at->startOfMinute()) || $duration !== $locked->duration_minutes) {
                     throw new ConflictHttpException('An in-progress reservation can change table or party size, but not its time interval.');
                 }
+                // The form represents minutes; retain seconds on legacy reservations.
+                $start = $locked->reserved_at;
             } else {
                 $start = $this->rules->start($data['date'], $data['time']);
             }

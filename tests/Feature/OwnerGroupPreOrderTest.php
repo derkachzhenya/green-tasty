@@ -92,12 +92,14 @@ class OwnerGroupPreOrderTest extends TestCase
         $this->deleteJson($this->url.'/guests/'.$ownerGuest->id, [], ['If-Match' => $this->version()])->assertUnprocessable();
     }
 
-    public function test_confirmed_guest_items_are_immutable_and_cannot_be_removed_by_owner(): void
+    public function test_confirmed_guest_changes_preserve_the_original_rows(): void
     {
         $this->reservation->guests()->whereKey($this->guestId)->update(['pre_order_submitted_at' => now()]);
-        $this->getJson($this->url)->assertJsonPath('participants.1.editable', false)->assertJsonPath('participants.1.can_remove', false);
-        $this->change($this->guestItem, 2)->assertConflict();
-        $this->deleteJson($this->url.'/guests/'.$this->guestId, [], ['If-Match' => $this->version()])->assertConflict();
+        $this->getJson($this->url)->assertJsonPath('participants.1.editable', true)->assertJsonPath('participants.1.can_remove', true);
+        $this->change($this->guestItem, 2)->assertOk()->assertJsonPath('summary.grand_total', '54.00');
+        $this->assertDatabaseHas('pre_order_items', ['id' => $this->guestItem, 'quantity' => 1, 'unit_price' => '10.00']);
+        $this->deleteJson($this->url.'/guests/'.$this->guestId, [], ['If-Match' => $this->version()])->assertOk()->assertJsonPath('summary.grand_total', '34.00');
+        $this->assertNotNull(PreOrderItem::findOrFail($this->guestItem)->superseded_at);
     }
 
     public function test_cross_owner_guest_and_cross_reservation_mutations_are_rejected(): void
@@ -125,10 +127,11 @@ class OwnerGroupPreOrderTest extends TestCase
     {
         $version = $this->version();
         $this->postJson($this->url.'/submit')->assertUnprocessable();
-        $this->postJson($this->url.'/submit', [], ['If-Match' => $version])->assertOk()->assertJsonPath('status', 'submitted')->assertJsonPath('editable', false)->assertJsonPath('summary.grand_total', '44.00');
+        $this->postJson($this->url.'/submit', [], ['If-Match' => $version])->assertOk()->assertJsonPath('status', 'submitted')->assertJsonPath('editable', true)->assertJsonPath('can_submit', false)->assertJsonPath('summary.grand_total', '44.00');
         $stamp = $this->reservation->preOrder->submitted_at->toIso8601String();
         $this->postJson($this->url.'/submit', [], ['If-Match' => $version])->assertOk()->assertJsonPath('submitted_at', $stamp);
-        $this->change($this->ownItem, 3)->assertConflict();
+        $this->change($this->ownItem, 3)->assertOk()->assertJsonPath('summary.grand_total', '61.00');
+        $this->assertDatabaseHas('pre_order_items', ['id' => $this->ownItem, 'quantity' => 2, 'unit_price' => '17.00']);
     }
 
     public function test_availability_validation_notes_and_rejected_status_injection(): void
@@ -215,15 +218,16 @@ class OwnerGroupPreOrderTest extends TestCase
         $this->assertDatabaseHas('pre_order_items', ['id' => $this->guestItem, 'quantity' => 3]);
     }
 
-    public function test_submitted_history_cannot_be_removed_and_remains_byte_for_byte_unchanged(): void
+    public function test_submitted_guest_removal_preserves_original_values_and_submission_timestamp(): void
     {
         $this->postJson($this->url.'/submit', [], ['If-Match' => $this->version()])->assertOk();
-        $before = PreOrderItem::orderBy('id')->get()->toJson();
+        $original = PreOrderItem::findOrFail($this->guestItem)->only(['quantity', 'unit_price', 'notes']);
         $stamp = $this->reservation->preOrder()->firstOrFail()->submitted_at->toIso8601String();
-        $this->deleteJson($this->url.'/guests/'.$this->guestId, [], ['If-Match' => $this->version()])->assertConflict();
-        $this->assertSame($before, PreOrderItem::orderBy('id')->get()->toJson());
+        $this->deleteJson($this->url.'/guests/'.$this->guestId, [], ['If-Match' => $this->version()])->assertOk();
+        $this->assertSame($original, PreOrderItem::findOrFail($this->guestItem)->only(['quantity', 'unit_price', 'notes']));
+        $this->assertNotNull(PreOrderItem::findOrFail($this->guestItem)->superseded_at);
         $this->assertSame($stamp, $this->reservation->preOrder()->firstOrFail()->submitted_at->toIso8601String());
-        $this->assertNull($this->reservation->guests()->findOrFail($this->guestId)->removed_at);
+        $this->assertNotNull($this->reservation->guests()->findOrFail($this->guestId)->removed_at);
     }
 
     public function test_owner_without_items_can_open_guest_group_then_create_only_their_own_selection(): void

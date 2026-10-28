@@ -73,7 +73,7 @@ class RestaurantPreOrderReviewService
                     throw ValidationException::withMessages(['review' => 'The review contains an invalid participant or restaurant item.']);
                 }
             }
-            if ($items->isEmpty() || $items->contains(fn (PreOrderItem $item): bool => ! in_array($item->restaurant_decision, ['confirmed', 'rejected'], true))) {
+            if (($items->isEmpty() && (int) $order->review_revision === 1) || $items->contains(fn (PreOrderItem $item): bool => ! in_array($item->restaurant_decision, ['confirmed', 'rejected'], true))) {
                 throw ValidationException::withMessages(['review' => 'Decide every active item before submitting.']);
             }
             foreach ($items as $item) {
@@ -116,14 +116,16 @@ class RestaurantPreOrderReviewService
             $guest = $locked->guests()->active()->whereKey($item->reservation_guest_id)->lockForUpdate()->firstOrFail();
             $categoryIds = MenuCategory::query()->where('restaurant_id', $locked->restaurant_id)->where('is_active', true)->sharedLock()->pluck('id');
             $dish = MenuItem::query()->whereKey($dishId)->where('is_available', true)->whereIn('menu_category_id', $categoryIds)->sharedLock()->first();
-            if ($dish === null || $quantity < 1 || $quantity > 99 || $order->items()->where('reservation_guest_id', $guest->id)->where('menu_item_id', $dishId)->exists()) {
+            if ($dish === null || $quantity < 1 || $quantity > 99 || $order->items()->where('reservation_guest_id', $guest->id)->where('menu_item_id', $dishId)->whereNull('superseded_at')->exists()) {
                 throw ValidationException::withMessages(['replacement' => 'Choose an available dish not already recorded for this participant and a quantity from 1 to 99.']);
             }
+            app(CustomerPreOrderRevisionService::class)->record($order, $owner, 'before_correction');
             // Never edit or delete a submitted row, its quantity, notes or saved unit price.
             $item->forceFill(['superseded_at' => now()])->save();
-            $order->items()->create(['reservation_guest_id' => $guest->id, 'menu_item_id' => $dish->id, 'quantity' => $quantity, 'unit_price' => $dish->price]);
+            $order->items()->create(['reservation_guest_id' => $guest->id, 'menu_item_id' => $dish->id, 'quantity' => $quantity, 'unit_price' => $dish->price, 'selection_round' => (int) $order->items()->where('reservation_guest_id', $guest->id)->max('selection_round') + 1]);
             $order->forceFill(['review_revision' => (int) $order->review_revision + 1])->save();
             $guest->increment('selection_version');
+            app(CustomerPreOrderRevisionService::class)->record($order, $owner, 'rejection_replaced');
             $this->event($locked, 'customer_updated', (int) $order->review_revision, 'restaurant');
 
             return $this->ownerState($locked) ?? throw new ConflictHttpException('The submitted order is unavailable.');
@@ -199,7 +201,7 @@ class RestaurantPreOrderReviewService
 
         return ['version' => $this->version($reservation), 'revision' => (int) $order->review_revision,
             'status' => $unreviewed ? ((int) $order->review_revision > 1 ? 'Updated Pre-Order' : 'Created by Customer') : 'Confirmed by Restaurant',
-            'editable' => $editable, 'can_submit' => $editable && $order->items()->whereNull('superseded_at')->exists()
+            'editable' => $editable, 'can_submit' => $editable && ($order->items()->whereNull('superseded_at')->exists() || (int) $order->review_revision > 1)
                 && ! $order->items()->whereNull('superseded_at')->where('restaurant_decision', 'pending')->exists(),
             'participants' => $participants, 'totals' => array_map(fn (BigDecimal $amount): string => (string) $amount->toScale(2), $totals),
             'events' => DB::table('reservation_events')->where('reservation_id', $reservation->id)->orderByDesc('id')->limit(10)->get(['kind', 'revision', 'audience'])->toArray()];

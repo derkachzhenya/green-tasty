@@ -2,6 +2,7 @@
 import { Utensils } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { dishImage, dishImageCropped, dishWeight } from '@/lib/guestMenu';
+import { dollarPrice } from '@/lib/guestSelection';
 import type { GuestCatalogDish } from '@/types/guest-selection';
 import GuestDishPreview from './GuestDishPreview.vue';
 import QuantityControl from './QuantityControl.vue';
@@ -63,7 +64,7 @@ defineEmits<{ change: [quantity: number] }>();
                 <div class="shrink-0 text-right">
                     <span
                         class="text-sm font-medium text-primary tabular-nums"
-                        >{{ dish.price }}</span
+                        >{{ dollarPrice(dish.price) }}</span
                     >
                     <p
                         v-if="dishWeight(dish.name)"

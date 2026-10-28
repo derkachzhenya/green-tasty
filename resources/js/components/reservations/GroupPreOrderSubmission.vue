@@ -18,6 +18,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { orderLocked, submittedOrder } from '@/lib/groupPreOrder';
+import { dollarPrice } from '@/lib/guestSelection';
 import { sessionJson, SessionRequestError } from '@/lib/sessionJson';
 import { show } from '@/routes/reservations';
 import { submit as submissionRoute } from '@/routes/reservations/pre-order';
@@ -241,7 +242,9 @@ onBeforeUnmount(() => {
                 <h3 class="text-lg font-medium">Ready to submit?</h3>
                 <p class="mt-2 text-sm leading-6 text-muted-foreground">
                     Review the dishes and each participant’s selections above.
-                    Submitting locks selections for everyone.
+                    The owner can manage permitted changes until 30 minutes
+                    before the reservation. Previous submitted versions are
+                    retained.
                 </p>
             </div>
             <Button
@@ -327,7 +330,7 @@ onBeforeUnmount(() => {
                         <dd
                             class="font-medium wrap-anywhere text-primary tabular-nums"
                         >
-                            {{ order.summary.grand_total }}
+                            {{ dollarPrice(order.summary.grand_total) }}
                         </dd>
                     </div>
                 </dl>

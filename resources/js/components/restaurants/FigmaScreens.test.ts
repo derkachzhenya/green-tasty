@@ -240,6 +240,17 @@ describe('public profile and demo content', () => {
                     'Calories: ~503 kcal',
                 );
                 expect(nodes('strong').map(textContent)).toContain('Fats:');
+            } else if (name === 'Spring Salad') {
+                expect(textContent(mounted.root)).toContain(
+                    'Calories: ~410 kcal',
+                );
+                expect(textContent(mounted.root)).toContain(
+                    'Approximate nutrition per 280 g serving.',
+                );
+                expect(textContent(mounted.root)).toContain('Lactose free');
+                expect(textContent(mounted.root)).not.toContain(
+                    'Strawberries, spinach',
+                );
             } else {
                 expect(textContent(mounted.root)).not.toContain('Calories');
             }

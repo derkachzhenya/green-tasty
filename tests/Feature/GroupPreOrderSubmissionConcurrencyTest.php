@@ -8,10 +8,12 @@ use App\Models\Reservation;
 use App\Models\Restaurant;
 use App\Models\User;
 use App\Services\GroupPreOrderSubmissionService;
+use App\Services\GuestAdditionalPreOrderService;
 use App\Services\GuestDishSelectionService;
 use App\Services\GuestInvitationService;
 use App\Services\GuestPreOrderService;
 use App\Services\OwnerGroupPreOrderService;
+use App\Services\RestaurantPreOrderReviewService;
 use Illuminate\Database\Connection;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\DatabaseTruncation;
@@ -226,6 +228,75 @@ class GroupPreOrderSubmissionConcurrencyTest extends TestCase
         $this->assertSame('0.00', $result['summary']['grand_total']);
         $this->assertNotNull($guest->fresh()->removed_at);
         $this->assertNull(app(GuestInvitationService::class)->resolve($this->token));
+    }
+
+    public function test_additional_confirmation_serializes_with_duplicate_and_group_submission(): void
+    {
+        $this->reservation->update(['status' => 'confirmed']);
+        $service = app(GuestPreOrderService::class);
+        $service->identify($this->token, 'Alice');
+        $service->submit($this->token, [['menu_item_id' => $this->dish->id, 'quantity' => 1]], 1);
+        app(GuestAdditionalPreOrderService::class)->start($this->token, 1);
+        app(GuestDishSelectionService::class)->replace($this->token, [['menu_item_id' => $this->dish->id, 'quantity' => 2]], 2);
+        $this->holdOperation(fn () => $service->submit($this->token, [['menu_item_id' => $this->dish->id, 'quantity' => 2]], 3));
+        $this->assertBlockedByRowLock(fn () => $service->submit($this->token, [['menu_item_id' => $this->dish->id, 'quantity' => 2]], 3));
+        $this->assertBlockedByRowLock(fn () => app(GroupPreOrderSubmissionService::class)->submit($this->reservation, $this->owner));
+        $this->heldConnection->commit();
+        $this->assertSame('37.50', $service->submit($this->token, [['menu_item_id' => $this->dish->id, 'quantity' => 2]], 3)['selections']['subtotal']);
+        $this->assertSame(2, $this->preOrder->items()->count());
+        $this->assertSame('37.50', app(GroupPreOrderSubmissionService::class)->submit($this->reservation, $this->owner)['grand_total']);
+    }
+
+    public function test_group_submission_wins_without_appending_a_pending_additional_cart(): void
+    {
+        $this->reservation->update(['status' => 'confirmed']);
+        $service = app(GuestPreOrderService::class);
+        $service->identify($this->token, 'Alice');
+        $service->submit($this->token, [['menu_item_id' => $this->dish->id, 'quantity' => 1]], 1);
+        app(GuestAdditionalPreOrderService::class)->start($this->token, 1);
+        app(GuestDishSelectionService::class)->replace($this->token, [['menu_item_id' => $this->dish->id, 'quantity' => 2]], 2);
+        $this->holdOperation(fn () => app(GroupPreOrderSubmissionService::class)->submit($this->reservation, $this->owner));
+        $this->assertBlockedByRowLock(fn () => $service->submit($this->token, [['menu_item_id' => $this->dish->id, 'quantity' => 2]], 3));
+        $this->heldConnection->commit();
+        try {
+            $service->submit($this->token, [['menu_item_id' => $this->dish->id, 'quantity' => 2]], 3);
+            $this->fail('An additional cart cannot be appended to a submitted group.');
+        } catch (ConflictHttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+        $this->assertSame(1, $this->preOrder->items()->count());
+        $this->assertSame('submitted', $this->preOrder->fresh()->status);
+    }
+
+    public function test_owner_revision_serializes_with_restaurant_review_and_invalidates_its_old_version(): void
+    {
+        $this->actingAs($this->owner);
+        app(GroupPreOrderSubmissionService::class)->submit($this->reservation, $this->owner);
+        $staff = User::factory()->create();
+        $restaurant = $this->reservation->restaurant;
+        $staff->staffRestaurants()->attach($restaurant, ['role' => 'waiter', 'is_active' => true]);
+        $review = app(RestaurantPreOrderReviewService::class);
+        $old = $this->preOrder->items()->sole();
+        $review->decide($restaurant, $this->reservation, $staff, $old->id, 'confirmed', $review->view($restaurant, $this->reservation, $staff)['version']);
+        $oldVersion = $review->view($restaurant, $this->reservation, $staff)['version'];
+        $group = app(OwnerGroupPreOrderService::class);
+        $this->holdOperation(fn () => $group->quantity($this->reservation, $this->owner, $old->id, 2, $group->view($this->reservation, $this->owner)['version']));
+        $this->assertBlockedByRowLock(fn () => $review->submit($restaurant, $this->reservation, $staff, $oldVersion));
+        $this->heldConnection->commit();
+        try {
+            $review->submit($restaurant, $this->reservation, $staff, $oldVersion);
+            $this->fail('A stale review must not publish over the new owner revision.');
+        } catch (ConflictHttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+        $this->assertSame(1, $old->fresh()->quantity);
+        $this->assertNotNull($old->fresh()->superseded_at);
+        $active = $this->preOrder->items()->whereNull('superseded_at')->sole();
+        $this->assertSame(2, $active->quantity);
+        $this->assertSame('12.50', $active->unit_price);
+        $this->assertSame('pending', $active->restaurant_decision);
+        $this->assertDatabaseCount('pre_order_customer_revisions', 2);
+        $this->assertDatabaseCount('pre_order_review_rounds', 0);
     }
 
     private function holdOperation(callable $operation): mixed

@@ -60,7 +60,10 @@ const page = usePage();
 let warningTimer: ReturnType<typeof setInterval> | undefined;
 onMounted(() => {
     warningTimer = setInterval(
-        () => router.reload({ only: ['preOrderWarnings'] }),
+        () =>
+            router.reload({
+                only: ['preOrderWarnings', 'reservations', 'reservationCounts'],
+            }),
         30000,
     );
 });
@@ -71,19 +74,28 @@ onBeforeUnmount(() => clearInterval(warningTimer));
     <Head :title="pageTitle"><meta name="robots" content="noindex" /></Head>
     <div class="bg-accent">
         <SiteContainer
-            class="flex flex-wrap items-center justify-between gap-4 py-3"
+            class="flex min-h-[84px] flex-wrap items-center justify-between gap-x-6 gap-y-3 py-4"
         >
             <div class="min-w-0">
-                <h1 class="text-[26px] leading-10 font-medium">
-                    {{ pageTitle }}
+                <h1 class="text-[26px] leading-10 font-medium wrap-anywhere">
+                    {{
+                        dashboardPage
+                            ? pageTitle
+                            : `Hello, ${page.props.auth.user.name}`
+                    }}
                 </h1>
                 <p
+                    v-if="dashboardPage"
                     class="text-sm leading-6 wrap-anywhere text-muted-foreground"
                 >
                     Hello, {{ page.props.auth.user.name }}
                 </p>
             </div>
-            <BookingSupport greeting class="max-w-[440px]" />
+            <BookingSupport
+                greeting
+                phone="+123 445 678 8990"
+                class="w-full sm:w-[428px]"
+            />
         </SiteContainer>
     </div>
     <div
@@ -102,7 +114,7 @@ onBeforeUnmount(() => clearInterval(warningTimer));
                 >
             </p>
             <p>
-                You have unsubmitted saved selections. Changes close in
+                Some pre-order items are still unconfirmed. Changes close in
                 {{ notice.minutes }} minutes. Saved dishes will be retained.
             </p></SiteContainer
         >
@@ -201,6 +213,7 @@ onBeforeUnmount(() => clearInterval(warningTimer));
                                 @invite="inviting = reservation"
                                 @feedback="feedback = reservation"
                                 @group="group = reservation"
+                                @changed="reload"
                             />
                         </li>
                     </ul>

@@ -39,6 +39,19 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->belongsToMany(Restaurant::class, 'restaurant_staff')->withPivot(['role', 'is_active'])->withTimestamps();
     }
 
+    public function hasStaffAccess(): bool
+    {
+        return $this->hasVerifiedEmail() && $this->staffRestaurants()
+            ->wherePivot('role', 'waiter')->wherePivot('is_active', true)
+            ->where('restaurants.is_active', true)->exists();
+    }
+
+    public function isStaffAccount(): bool
+    {
+        // Revoking workplace access must not turn a staff account into a visitor.
+        return $this->staffRestaurants()->exists();
+    }
+
     public function sendEmailVerificationNotification(): void
     {
         app(AuthCodeService::class)->start(request(), 'registration', $this->email, $this);

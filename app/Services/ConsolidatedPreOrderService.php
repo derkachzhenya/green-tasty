@@ -37,7 +37,7 @@ class ConsolidatedPreOrderService
 
         $items = $preOrder->items()
             ->whereNull('superseded_at')
-            ->whereRelation('guest', 'reservation_id', $reservation->id)
+            ->whereRelation('guest', 'reservation_id', $reservation->id)->whereRelation('guest', 'removed_at', null)
             ->with(['guest', 'menuItem'])
             ->orderBy('id')
             ->get();

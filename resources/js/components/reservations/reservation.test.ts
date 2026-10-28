@@ -89,14 +89,14 @@ describe('consolidated group pre-order', () => {
         expect(html).toContain('Asia/Tbilisi');
         expect(html).toContain('34.50');
     });
-    it('shows aggregation and different saved prices without inventing a single current price or currency', async () => {
+    it('shows aggregation and different saved prices using saved prices and consistent dollar currency', async () => {
         const html = await renderOrder();
         expect(html).toContain('Consolidated dishes');
-        expect(html).toContain('12.50 · 11.00');
+        expect(html).toContain('$12.50 · $11.00');
         expect(html).toContain('34.50');
-        expect(html).toContain('Quantity: 2 · Saved unit price: 11.00');
+        expect(html).toContain('Quantity: 2 · Saved unit price: $11.00');
         expect(html).toContain('22.00');
-        expect(html).not.toContain('$');
+        expect(html).toContain('$34.50');
         expect(html).not.toContain('99.99');
         expect(html).not.toContain('<input');
         expect(html).not.toContain('Submit pre-order');
@@ -110,12 +110,12 @@ describe('consolidated group pre-order', () => {
         value.summary.guests[0].items[0].subtotal = '0.30';
         const html = await renderOrder(value);
         expect(html).toContain('123456789012345678.90');
-        expect(html).toContain('Saved unit price: 0.10');
+        expect(html).toContain('Saved unit price: $0.10');
         expect(html).toContain('0.30');
         expect(html).not.toContain('0.30000000000000004');
     });
 
-    it('labels submitted selections as locked with no editing or submission controls', async () => {
+    it('labels submitted selections with a link to current permissions and no duplicate submission controls', async () => {
         const html = await renderOrder(
             order({
                 status: 'submitted',
@@ -123,7 +123,7 @@ describe('consolidated group pre-order', () => {
             }),
         );
         expect(html).toContain(
-            'This group pre-order has been submitted. Selections are locked.',
+            'This group pre-order has been submitted. Open Group Pre-Order to view the current review and permitted changes.',
         );
         expect(html).not.toContain('Draft —');
         expect(html).not.toMatch(/<(button|input|form)\b/);

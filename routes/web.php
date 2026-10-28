@@ -10,6 +10,7 @@ use App\Http\Controllers\GuestPreOrderController;
 use App\Http\Controllers\MyReservationsController;
 use App\Http\Controllers\OwnerGroupPreOrderController;
 use App\Http\Controllers\OwnerPreOrderController;
+use App\Http\Controllers\OwnerReservationCancellationController;
 use App\Http\Controllers\ReservationDashboardController;
 use App\Http\Controllers\ReservationFeedbackController;
 use App\Http\Controllers\RestaurantBookingController;
@@ -31,6 +32,8 @@ Route::middleware(['auth', 'verified', 'cache.headers:private;no_store'])->group
     Route::patch('reservations/{reservation}/pre-order/owner-view/items/{item}', [OwnerGroupPreOrderController::class, 'quantity'])->whereNumber('item')->middleware('throttle:guest-selections');
     Route::delete('reservations/{reservation}/pre-order/owner-view/guests/{guest}', [OwnerGroupPreOrderController::class, 'removeGuest'])->whereNumber('guest')->middleware('throttle:invitation-management');
     Route::post('reservations/{reservation}/pre-order/owner-view/submit', [OwnerGroupPreOrderController::class, 'submit'])->middleware('throttle:pre-order-submission');
+    Route::post('reservations/{reservation}/pre-order/owner-view/seen', [OwnerGroupPreOrderController::class, 'seen'])->middleware('throttle:guest-selections');
+    Route::post('reservations/{reservation}/cancel', OwnerReservationCancellationController::class)->middleware('throttle:booking-create');
     Route::get('reservations/{reservation}/feedback', [ReservationFeedbackController::class, 'show'])->name('reservations.feedback.show');
     Route::put('reservations/{reservation}/feedback', [ReservationFeedbackController::class, 'update'])->middleware('throttle:guest-selections')->name('reservations.feedback.update');
     Route::get('reservations/{reservation}/owner-pre-order', [OwnerPreOrderController::class, 'show'])->name('reservations.owner-pre-order');
@@ -105,3 +108,8 @@ Route::post('invitations/{token}/submit', [GuestPreOrderController::class, 'subm
     ->withoutMiddleware('web')
     ->middleware([InvitationSecurityHeaders::class, 'throttle:guest-selections', AuthenticateGuestInvitation::class])
     ->name('invitations.submit');
+
+Route::post('invitations/{token}/start', [GuestPreOrderController::class, 'start'])
+    ->withoutMiddleware('web')
+    ->middleware([InvitationSecurityHeaders::class, 'throttle:guest-selections', AuthenticateGuestInvitation::class])
+    ->name('invitations.start');

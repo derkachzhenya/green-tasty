@@ -5,14 +5,15 @@ import { createSSRApp, h, type DefineComponent } from 'vue';
 import SiteHeader from './SiteHeader.vue';
 
 async function renderHeader(
-    auth?: { user: { id: number } | null },
+    auth?: { user: { id: number } | null; isStaff?: boolean },
     component = 'bookings/Create',
+    extraProps: Record<string, unknown> = {},
 ) {
     return createInertiaApp<{
         errors: Record<string, string>;
         name: string;
         sidebarOpen: boolean;
-        auth?: { user: { id: number } | null };
+        auth?: { user: { id: number } | null; isStaff?: boolean };
     }>({
         page: {
             component,
@@ -20,6 +21,7 @@ async function renderHeader(
                 errors: {},
                 name: 'Green Tasty',
                 sidebarOpen: true,
+                ...extraProps,
                 ...(auth ? { auth } : {}),
             },
             url: '/book',
@@ -38,6 +40,45 @@ async function renderHeader(
 }
 
 describe('site header server rendering', () => {
+    it('keeps staff navigation inside the workspace on every page and highlights its menu', async () => {
+        for (const component of [
+            'staff/Reservations',
+            'staff/Menu',
+            'settings/Profile',
+            'restaurants/Show',
+        ]) {
+            const result = await renderHeader(
+                { user: { id: 3 }, isStaff: true },
+                component,
+                {
+                    restaurant: { id: 7, slug: 'location-1' },
+                    staffRestaurants: [{ id: 7, name: 'Workplace' }],
+                },
+            );
+            expect(result?.body).toContain(
+                'href="/staff/restaurants/7/reservations"',
+            );
+            expect(result?.body).toContain('href="/staff/restaurants/7/menu"');
+            expect(result?.body).not.toContain('Book a Table');
+            expect(result?.body).not.toContain('Main page');
+            expect(result?.body).not.toContain('href="/reservations"');
+            expect(result?.body).not.toContain('/restaurants/location-1');
+            if (component === 'staff/Menu')
+                expect(result?.body).toMatch(
+                    /<a(?=[^>]*href="\/staff\/restaurants\/7\/menu")(?=[^>]*aria-current="page")[^>]*>\s*Menu\s*<\/a>/,
+                );
+        }
+    });
+    it('does not make invalid links when all staff workplaces have been revoked', async () => {
+        const result = await renderHeader(
+            { user: { id: 3 }, isStaff: true },
+            'staff/Access',
+            { staffRestaurants: [] },
+        );
+        expect(result?.body).toContain('href="/staff"');
+        expect(result?.body).not.toContain('undefined');
+        expect(result?.body).not.toContain('Book a Table');
+    });
     it('highlights Main page for a restaurant profile', async () => {
         const result = await renderHeader(undefined, 'restaurants/Show');
         expect(result?.body).toMatch(
@@ -47,6 +88,8 @@ describe('site header server rendering', () => {
     it('renders public navigation when auth shared props are absent', async () => {
         const result = await renderHeader();
         expect(result?.body).toContain('Sign In');
+        expect(result?.body).not.toContain('href="/staff"');
+        expect(result?.body).not.toContain('Staff area');
         expect(result?.body).toContain('aria-current="page"');
         expect(result?.body).not.toContain('Account settings');
         expect(result?.body).not.toContain('href="/reservations"');
@@ -62,7 +105,15 @@ describe('site header server rendering', () => {
         const result = await renderHeader({ user: { id: 1 } });
         expect(result?.body).toContain('Account menu');
         expect(result?.body).toContain('Reservations');
+        expect(result?.body).not.toContain('href="/staff"');
         expect(result?.body).not.toContain('Sign In');
+    });
+
+    it('keeps staff sign-in on public navigation without a staff link in the header', async () => {
+        const result = await renderHeader({ user: null }, 'staff/Access');
+        expect(result?.body).not.toContain('href="/staff"');
+        expect(result?.body).not.toContain('Staff area');
+        expect(result?.body).not.toContain('/staff/restaurants/undefined');
     });
 
     it('keeps Reservations active on reservation details and outside account settings', async () => {
