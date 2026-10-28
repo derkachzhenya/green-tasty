@@ -27,6 +27,11 @@ class AuthLoginResponse implements LoginResponse
             return $request->expectsJson() ? response()->json(['next' => 'verify', 'challenge' => $context]) : redirect()->route('auth.verify');
         }
         $redirect = redirect()->intended(config('fortify.home'))->getTargetUrl();
+        // Do not restore the obsolete detail/confirmation screen after sign-in.
+        $path = parse_url($redirect, PHP_URL_PATH);
+        if (is_string($path) && preg_match('#^/reservations/[0-9]+(?:/confirmation)?/?$#', $path)) {
+            $redirect = route('dashboard');
+        }
         $request->session()->put('password_hash_'.config('auth.defaults.guard'), $user->getAuthPassword());
         Inertia::flash('authNotification', 'You have signed in successfully.');
 
