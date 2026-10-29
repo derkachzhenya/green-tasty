@@ -23,6 +23,9 @@ class MyReservationsService
     {
         Gate::forUser($owner)->authorize('viewAny', Reservation::class);
 
+        $cutoff = app(PreOrderCutoffService::class);
+        $cutoff->due()->where('owner_user_id', $owner->id)->eachById(fn (Reservation $reservation) => $cutoff->expire($reservation));
+
         $reservations = Reservation::query()
             // Ownership is always derived from authentication, never query parameters.
             ->where('owner_user_id', $owner->id)
@@ -33,7 +36,7 @@ class MyReservationsService
                 'guests as removed_participants' => fn (Builder $q) => $q->whereNotNull('removed_at'),
                 'guests as submitted_pre_orders' => fn (Builder $q) => $q->whereNull('removed_at')
                     ->where(fn (Builder $guest) => $guest->whereNotNull('pre_order_submitted_at')->orWhereHas('reservation.preOrder', fn (Builder $order) => $order->where('status', 'submitted')->whereNotNull('submitted_at')))
-                    ->whereHas('preOrderItems', fn (Builder $items) => $items->whereHas('preOrder', fn (Builder $order) => $order->whereColumn('pre_orders.reservation_id', 'reservation_guests.reservation_id')))])
+                    ->whereHas('preOrderItems', fn (Builder $items) => $items->whereNull('superseded_at')->whereHas('preOrder', fn (Builder $order) => $order->whereColumn('pre_orders.reservation_id', 'reservation_guests.reservation_id')))])
             ->withExists(['guests as owner_submitted' => fn (Builder $q) => $q
                 ->whereColumn('user_id', 'reservations.owner_user_id')->whereNotNull('pre_order_submitted_at')])
             ->when($filter !== 'all', fn (Builder $query) => $this->filter($query, $filter))

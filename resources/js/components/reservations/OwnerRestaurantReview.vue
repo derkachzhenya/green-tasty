@@ -26,7 +26,7 @@ watch(
 const rejected = computed(() =>
     props.review.participants.flatMap((p) =>
         p.items
-            .filter((i) => i.decision === 'rejected')
+            .filter((i) => i.decision === 'rejected' && !i.cancelled)
             .map((i) => ({ ...i, participant: p.name, guestId: p.id })),
     ),
 );

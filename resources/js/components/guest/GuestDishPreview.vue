@@ -115,19 +115,22 @@ defineEmits<{ add: [] }>();
                                 /{{ dishWeight(dish.name) }}</span
                             >
                         </p>
-                        <Button
-                            v-if="!readOnly"
-                            :disabled="disabled || locked || !dish.available"
-                            class="min-h-11"
-                            @click="$emit('add')"
-                            >{{
-                                !dish.available
-                                    ? 'Sold Out'
-                                    : locked
-                                      ? 'Selections locked'
-                                      : 'Pre-Order'
-                            }}</Button
-                        >
+                        <DialogClose v-if="!readOnly" as-child>
+                            <Button
+                                :disabled="
+                                    disabled || locked || !dish.available
+                                "
+                                class="min-h-11"
+                                @click="$emit('add')"
+                                >{{
+                                    !dish.available
+                                        ? 'Sold Out'
+                                        : locked
+                                          ? 'Selections locked'
+                                          : 'Pre-Order'
+                                }}</Button
+                            >
+                        </DialogClose>
                     </div>
                 </div>
                 <DialogClose

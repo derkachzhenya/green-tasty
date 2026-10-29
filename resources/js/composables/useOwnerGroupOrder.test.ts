@@ -61,6 +61,75 @@ afterEach(() => {
     vi.unstubAllGlobals();
 });
 describe('owner group order concurrency and recovery', () => {
+    it('keeps revised quantity rows in place without merging repeated dishes or using old API ids', async () => {
+        const initial = fixture();
+        const item = {
+            id: 11,
+            menu_item_id: 10,
+            name: 'Salad',
+            quantity: 1,
+            unit_price: '14.00',
+            subtotal: '14.00',
+            notes: null,
+        };
+        initial.participants = [
+            {
+                id: 1,
+                name: 'Owner',
+                is_owner: true,
+                confirmed: true,
+                revoked: false,
+                editable: true,
+                can_remove: false,
+                items: [
+                    item,
+                    { ...item, id: 12 },
+                    { ...item, id: 13, menu_item_id: 20, name: 'Toast' },
+                ],
+                subtotal: '42.00',
+            },
+        ];
+        request.mockResolvedValueOnce(initial);
+        await api.load();
+        const revised = structuredClone(initial);
+        revised.version = `"${'b'.repeat(64)}"`;
+        revised.participants[0].items = [
+            initial.participants[0].items[1],
+            initial.participants[0].items[2],
+            { ...item, id: 99, quantity: 2, subtotal: '28.00' },
+        ];
+        request.mockResolvedValueOnce(revised);
+        await api.mutate('/items/11', 'patch', { quantity: 2 });
+        expect(api.order.value?.participants[0].items.map((i) => i.id)).toEqual(
+            [99, 12, 13],
+        );
+        expect(
+            api.order.value?.participants[0].items.map((i) => i.display_key),
+        ).toEqual([11, 12, 13]);
+
+        const next = structuredClone(revised);
+        next.version = `"${'c'.repeat(64)}"`;
+        next.participants[0].items = [
+            initial.participants[0].items[1],
+            initial.participants[0].items[2],
+            { ...item, id: 100, quantity: 3, subtotal: '42.00' },
+        ];
+        request.mockResolvedValueOnce(next);
+        await api.mutate('/items/99', 'patch', { quantity: 3 });
+        expect(request).toHaveBeenLastCalledWith(
+            '/reservations/7/pre-order/owner-view/items/99',
+            'patch',
+            expect.any(AbortSignal),
+            { quantity: 3 },
+            revised.version,
+        );
+        expect(api.order.value?.participants[0].items.map((i) => i.id)).toEqual(
+            [100, 12, 13],
+        );
+        expect(
+            api.order.value?.participants[0].items.map((i) => i.display_key),
+        ).toEqual([11, 12, 13]);
+    });
     it('acknowledges only the loaded event snapshot and keeps reads usable if acknowledgement races', async () => {
         const result = { ...fixture(), notification_event_id: 12 };
         request

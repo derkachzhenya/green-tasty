@@ -114,8 +114,9 @@ onBeforeUnmount(() => clearInterval(warningTimer));
                 >
             </p>
             <p>
-                Some pre-order items are still unconfirmed. Changes close in
-                {{ notice.minutes }} minutes. Saved dishes will be retained.
+                You have unconfirmed items in your pre-order. They will be
+                canceled in {{ notice.minutes }}
+                {{ notice.minutes === 1 ? 'minute' : 'minutes' }}.
             </p></SiteContainer
         >
     </div>
@@ -201,7 +202,7 @@ onBeforeUnmount(() => clearInterval(warningTimer));
                     </p>
                     <ul
                         aria-label="Your reservations"
-                        class="grid items-stretch gap-6 md:grid-cols-2 xl:grid-cols-3"
+                        class="grid items-start gap-6 md:grid-cols-2 xl:grid-cols-3"
                     >
                         <li
                             v-for="reservation in reservations.data"

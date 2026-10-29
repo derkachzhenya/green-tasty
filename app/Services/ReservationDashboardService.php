@@ -24,9 +24,10 @@ class ReservationDashboardService
     {
         return DB::transaction(function () use ($reservation): array {
             // Selection updates and submission lock this same parent before touching the order.
-            $locked = Reservation::query()->whereKey($reservation->id)->sharedLock()->firstOrFail();
+            $locked = Reservation::query()->whereKey($reservation->id)->lockForUpdate()->firstOrFail();
             Gate::authorize('view', $locked);
             Gate::authorize('viewSummary', $locked);
+            app(PreOrderCutoffService::class)->expireLocked($locked);
             $preOrder = $locked->preOrder()->first();
             $summary = $this->summaries->summarize($locked);
             $participants = $locked->guests()->active()->select([

@@ -58,6 +58,62 @@ export function useOwnerGroupOrder(reservationId: number, changed: () => void) {
             error.value =
                 'The result could not be confirmed. Refresh the saved order before trying again.';
     }
+    function retainItemPositions(
+        result: OwnerGroupOrder,
+        path: string,
+        body?: Record<string, unknown>,
+    ): OwnerGroupOrder {
+        const match = /^\/items\/(\d+)$/.exec(path);
+        if (!match || typeof body?.quantity !== 'number' || body.quantity <= 0)
+            return result;
+        const itemId = Number(match[1]);
+        return {
+            ...result,
+            participants: result.participants.map((participant) => {
+                const previous = order.value?.participants.find(
+                    (p) => p.id === participant.id,
+                );
+                if (!previous) return participant;
+                const oldRows = new Map(previous.items.map((i) => [i.id, i]));
+                const edited = oldRows.get(itemId);
+                const replacements = edited
+                    ? participant.items.filter(
+                          (i) =>
+                              !oldRows.has(i.id) &&
+                              i.menu_item_id === edited.menu_item_id &&
+                              i.unit_price === edited.unit_price &&
+                              i.notes === edited.notes &&
+                              i.quantity === body.quantity,
+                      )
+                    : [];
+                const positions = new Map(
+                    previous.items.map((i, index) => [
+                        i.display_key ?? i.id,
+                        index,
+                    ]),
+                );
+                const items = participant.items.map((item) => {
+                    const old =
+                        oldRows.get(item.id) ??
+                        (replacements.length === 1 &&
+                        replacements[0].id === item.id
+                            ? edited
+                            : undefined);
+                    return {
+                        ...item,
+                        display_key: old?.display_key ?? old?.id ?? item.id,
+                    };
+                });
+                items.sort(
+                    (a, b) =>
+                        (positions.get(a.display_key) ??
+                            previous.items.length) -
+                        (positions.get(b.display_key) ?? previous.items.length),
+                );
+                return { ...participant, items };
+            }),
+        };
+    }
     async function load() {
         if (loading.value || busy.value) return;
         loading.value = true;
@@ -116,7 +172,7 @@ export function useOwnerGroupOrder(reservationId: number, changed: () => void) {
                 ),
             );
             if (current !== sequence) return false;
-            order.value = result;
+            order.value = retainItemPositions(result, path, body);
             if (path === '/submit') submitted.value = true;
             changed();
             return true;

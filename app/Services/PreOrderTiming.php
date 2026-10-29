@@ -27,18 +27,16 @@ class PreOrderTiming
     public static function state(Reservation $reservation): array
     {
         $order = $reservation->preOrder()->first();
-        $pending = in_array($reservation->status, ['draft', 'confirmed'], true)
-            && $order?->status === 'draft' && $order->submitted_at === null
-            && $reservation->guests()->whereNull('pre_order_submitted_at')->whereNull('invitation_revoked_at')
-                ->whereHas('preOrderItems', fn ($q) => $q->where('pre_order_id', $order->id))->exists();
+        $pending = false;
         if (in_array($reservation->status, ['draft', 'confirmed'], true) && $order !== null) {
-            $activeGuests = $reservation->guests()->active()->pluck('id');
-            if ($order->status === 'draft' && $order->submitted_at === null && Schema::hasTable('guest_pre_order_rounds')) {
-                $pending = $pending || GuestPreOrderRound::query()->whereIn('reservation_guest_id', $reservation->guests()->active()->whereNull('invitation_revoked_at')->select('id'))->whereNull('submitted_at')->get(['items'])->contains(fn (GuestPreOrderRound $round): bool => $round->items !== []);
-            }
-            if ($order->status === 'submitted' && $order->submitted_at !== null) {
-                $pending = ((int) $order->review_revision > 1 && (int) $order->review_revision !== (int) $order->reviewed_revision) || $order->items()->whereIn('reservation_guest_id', $activeGuests)->whereNull('superseded_at')
-                    ->where(fn ($q) => $q->whereNull('review_published_at')->orWhere('restaurant_decision', 'rejected'))->exists();
+            $activeGuests = $reservation->guests()->active()->whereNull('invitation_revoked_at')->select('id');
+            $pending = $order->items()->whereIn('reservation_guest_id', $activeGuests)->whereNull('superseded_at')
+                ->where(fn ($query) => $query->whereNull('review_published_at')->orWhere('restaurant_decision', '!=', 'confirmed'))->exists();
+            if (Schema::hasTable('guest_pre_order_rounds')) {
+                $pending = $pending || GuestPreOrderRound::query()->whereIn('reservation_guest_id', $activeGuests)
+                    ->whereNull('submitted_at')
+                    ->when(Schema::hasColumn('guest_pre_order_rounds', 'cancelled_at'), fn ($query) => $query->whereNull('cancelled_at'))->get(['items'])
+                    ->contains(fn (GuestPreOrderRound $round): bool => $round->items !== []);
             }
         }
 

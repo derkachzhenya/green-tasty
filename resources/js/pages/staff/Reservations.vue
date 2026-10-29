@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, usePage, router, Link } from '@inertiajs/vue3';
 import { ref, shallowRef, computed, onMounted, onBeforeUnmount } from 'vue';
+import { onClickOutside } from '@vueuse/core';
 import {
     CalendarDays,
     Clock,
@@ -13,7 +14,6 @@ import {
     X,
     UserRound,
     Salad,
-    ChevronDown,
 } from '@lucide/vue';
 import BookingDateInput from '@/components/bookings/BookingDateInput.vue';
 import ServiceOrderModal from '@/components/reservations/ServiceOrderModal.vue';
@@ -36,6 +36,10 @@ const props = defineProps<{
     notifications: { reservation_id: number; kind: string; revision: number }[];
 }>();
 const page = usePage();
+const notificationsMenu = ref<HTMLDetailsElement | null>(null);
+onClickOutside(notificationsMenu, () => {
+    if (notificationsMenu.value) notificationsMenu.value.open = false;
+});
 const root = computed(
     () => `/staff/restaurants/${props.restaurant.id}/reservations`,
 );
@@ -92,6 +96,39 @@ function openCancel(reservation: WaiterReservation, event: Event) {
     cancelling.value = reservation;
     error.value = '';
     stale.value = false;
+}
+async function changeTable(reservation: WaiterReservation, event: Event) {
+    const select = event.target as HTMLSelectElement;
+    const tableId = Number(select.value);
+    if (busy.value || tableId === reservation.table_id) return;
+    busy.value = true;
+    notice.value = '';
+    try {
+        await sessionJson(
+            `${root.value}/${reservation.id}`,
+            'patch',
+            new AbortController().signal,
+            {
+                table_id: tableId,
+                date: reservation.date,
+                time: reservation.time,
+                duration_minutes: reservation.duration_minutes,
+                guest_count: reservation.guest_count,
+            },
+            reservation.version,
+        );
+        notice.value = 'Table changed.';
+        refresh();
+    } catch (reason) {
+        select.value = String(reservation.table_id);
+        notice.value =
+            reason instanceof SessionRequestError && reason.status === 422
+                ? Object.values(reason.errors).flat().join(' ')
+                : 'The table change could not be confirmed. Refresh reservations before trying again.';
+        refresh();
+    } finally {
+        busy.value = false;
+    }
 }
 async function save(cancel = false) {
     if (busy.value || stale.value) return;
@@ -169,7 +206,7 @@ const labels = {
             <h1 class="text-2xl font-medium wrap-anywhere">
                 Hello, {{ page.props.auth.user.name }} (Waiter)
             </h1>
-            <details class="relative text-sm">
+            <details ref="notificationsMenu" class="relative text-sm">
                 <summary
                     class="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-3"
                     aria-label="Restaurant notifications"
@@ -208,12 +245,12 @@ const labels = {
         <p
             v-if="notice"
             role="status"
-            class="mb-4 flex items-center gap-3 rounded-lg border border-primary/20 bg-[#e8ffea] p-3 text-sm"
+            class="fixed top-24 right-4 z-50 flex w-[calc(100%-32px)] max-w-[330px] items-center gap-3 rounded-md border border-primary/20 bg-[#e8ffea] px-4 py-2 text-xs shadow-sm sm:right-8"
         >
             <CircleCheck class="size-5 shrink-0 text-primary" />{{ notice
             }}<button
                 aria-label="Dismiss notification"
-                class="ml-auto grid size-11 place-items-center"
+                class="ml-auto grid size-8 shrink-0 place-items-center"
                 @click="notice = ''"
             >
                 <X class="size-5" />
@@ -286,10 +323,10 @@ const labels = {
             <li
                 v-for="reservation in reservations.data"
                 :key="reservation.id"
-                class="min-w-0 overflow-hidden rounded-3xl bg-white shadow-sm"
+                class="min-w-0 overflow-hidden rounded-[20px] bg-white shadow-[0_2px_8px_#0000000a]"
             >
                 <div
-                    class="flex items-center justify-center gap-2 py-2 text-sm"
+                    class="flex min-h-6 items-center justify-center gap-2 py-1 text-xs"
                     :class="{
                         'bg-[#dfe9ff]': reservation.phase === 'upcoming',
                         'bg-[#fff3d2]': reservation.phase === 'in_progress',
@@ -303,9 +340,9 @@ const labels = {
                         class="size-2 rounded-full bg-amber-500"
                     />{{ labels[reservation.phase] }}
                 </div>
-                <div class="space-y-4 p-5">
+                <div class="space-y-3 p-4">
                     <div
-                        class="flex flex-wrap items-center justify-between gap-3 border-b pb-4"
+                        class="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 pb-3"
                     >
                         <h2
                             class="flex min-w-0 items-center gap-2 text-sm font-medium wrap-anywhere"
@@ -314,19 +351,29 @@ const labels = {
                                 reservation.owner_name
                             }}
                         </h2>
-                        <button
+                        <select
                             v-if="reservation.can_edit"
-                            class="min-h-11 rounded-lg border px-3 text-sm"
+                            class="min-h-10 max-w-full rounded-md border bg-card px-3 text-xs"
                             :aria-label="`Change table for ${reservation.code}`"
-                            @click="openForm(reservation, $event)"
+                            :value="reservation.table_id"
+                            :disabled="busy"
+                            @change="changeTable(reservation, $event)"
                         >
-                            {{ reservation.table?.name ?? 'Unassigned table'
-                            }}<ChevronDown class="ml-3 inline size-4" /></button
+                            <option
+                                v-for="table in tables"
+                                :key="table.id"
+                                :value="table.id"
+                                :disabled="
+                                    table.seats < reservation.guest_count
+                                "
+                            >
+                                {{ table.name }}
+                            </option></select
                         ><span v-else class="text-sm">{{
                             reservation.table?.name ?? 'Unassigned'
                         }}</span>
                     </div>
-                    <dl class="grid grid-cols-2 gap-3 text-xs">
+                    <dl class="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
                         <dt class="sr-only">Date</dt>
                         <dd class="flex items-center gap-2">
                             <CalendarDays
@@ -383,7 +430,7 @@ const labels = {
                     >
                         <button
                             v-if="reservation.can_cancel"
-                            class="grid size-11 place-items-center rounded focus-visible:outline-2"
+                            class="grid size-11 place-items-center rounded focus-visible:outline-2 sm:size-8"
                             :aria-label="`Cancel reservation ${reservation.code}`"
                             @click="openCancel(reservation, $event)"
                         >
@@ -391,7 +438,7 @@ const labels = {
                         </button>
                         <button
                             v-if="reservation.can_edit"
-                            class="grid size-11 place-items-center rounded focus-visible:outline-2"
+                            class="grid size-11 place-items-center rounded focus-visible:outline-2 sm:size-8"
                             :aria-label="`Edit reservation ${reservation.code}`"
                             @click="openForm(reservation, $event)"
                         >
@@ -409,7 +456,12 @@ const labels = {
                                     ? 'default'
                                     : 'outline'
                             "
-                            class="ml-auto min-h-11 text-xs"
+                            class="ml-auto min-h-11 rounded-md px-3 text-xs sm:h-8 sm:min-h-8"
+                            :class="{
+                                'text-primary':
+                                    !reservation.needs_review ||
+                                    !reservation.can_edit,
+                            }"
                             @click="reviewing = reservation"
                             >{{
                                 reservation.needs_review && reservation.can_edit
@@ -429,7 +481,13 @@ const labels = {
                                     ? 'default'
                                     : 'outline'
                             "
-                            class="ml-auto min-h-11 text-xs"
+                            class="ml-auto min-h-11 rounded-md px-3 text-xs sm:h-8 sm:min-h-8"
+                            :class="{
+                                'text-primary':
+                                    reservation.phase === 'completed' ||
+                                    reservation.has_service_order ||
+                                    reservation.has_pre_order,
+                            }"
                             @click="serving = reservation"
                             >{{
                                 reservation.phase === 'completed'
@@ -487,9 +545,8 @@ const labels = {
         @update:open="!$event && (cancelling = null)"
     >
         <p class="my-6 text-sm leading-6">
-            Cancel reservation {{ cancelling?.code }}? Invitation access and
-            further order changes will stop. Existing pre-orders and their
-            historical prices will be retained. This cannot be undone here.
+            Cancelling this reservation will cancel access to its pre-orders.
+            You won’t be able to undo this action here.
         </p>
         <p v-if="error" role="alert" class="mb-4 text-sm text-destructive">
             {{ error }}
