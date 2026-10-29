@@ -627,7 +627,7 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                     {{
                         menu?.order.status === 'submitted'
                             ? 'Your changes were sent successfully. Wait for confirmation from the restaurant.'
-                            : 'Your pre-order was saved successfully. Review your reservation for its current status.'
+                            : 'Your pre-order was saved successfully. Review the group order in Reservations and submit it to the restaurant.'
                     }}
                 </p>
                 <a

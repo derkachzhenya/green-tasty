@@ -95,7 +95,7 @@ const status = computed(() =>
     order.value?.restaurant_review?.status === 'Confirmed by Restaurant'
         ? 'Confirmed by Restaurant'
         : order.value?.restaurant_review?.status === 'Updated Pre-Order'
-          ? 'Created New Pre-Order'
+          ? 'Updated Pre-Order'
           : order.value?.status === 'submitted'
             ? 'Sent to Restaurant'
             : order.value?.status === 'draft' || order.value?.status == null
@@ -160,7 +160,7 @@ async function confirm() {
             <div
                 v-if="removalNotice"
                 role="status"
-                class="fixed top-4 right-4 z-[60] flex max-w-[calc(100%-32px)] items-center gap-3 rounded-md border border-primary/40 bg-[#e8ffea] px-4 py-3 text-xs shadow-sm sm:top-6 sm:right-6"
+                class="absolute top-3 right-16 z-[60] flex max-w-[calc(100%-80px)] items-center gap-3 rounded-lg border border-primary/40 bg-[#e8ffea] px-4 py-3 text-sm shadow-md"
             >
                 <CircleCheck
                     class="size-5 shrink-0 text-primary"
@@ -263,6 +263,17 @@ async function confirm() {
                 class="min-h-0 overflow-y-auto overscroll-contain px-4 py-5 sm:px-10"
                 :aria-busy="loading || busy"
             >
+                <OwnerRestaurantReview
+                    v-if="order?.restaurant_review"
+                    :review="order.restaurant_review"
+                    :reservation-id="reservation.id"
+                    :locked="cutoffLocked"
+                    class="mb-5"
+                    @changed="
+                        load();
+                        emit('changed');
+                    "
+                />
                 <p v-if="loading" role="status" class="py-8">
                     Loading group pre-order…
                 </p>
@@ -298,19 +309,6 @@ async function confirm() {
                 >
                 <template v-else-if="order">
                     <p
-                        v-if="
-                            order.restaurant_review &&
-                            Number(order.restaurant_review.totals.rejected) >
-                                0 &&
-                            !cutoffLocked
-                        "
-                        role="status"
-                        class="mb-4 flex items-center gap-2 rounded-md border border-destructive/10 bg-[#fff5f7] p-3 text-xs leading-5"
-                    >
-                        <Bell class="size-4 shrink-0" />Some items were
-                        rejected. Tell your guest and confirm their acceptance.
-                    </p>
-                    <p
                         v-if="!order.editable || cutoffLocked"
                         role="status"
                         class="mb-4 flex gap-2 rounded-lg bg-[#fff5f7] p-3 text-sm leading-6"
@@ -342,7 +340,7 @@ async function confirm() {
                             order.editable &&
                             !cutoffLocked
                         "
-                        class="sr-only"
+                        class="mb-4 text-sm leading-6 text-muted-foreground"
                     >
                         Changes are sent to the restaurant for review. Previous
                         versions are kept.
@@ -472,7 +470,7 @@ async function confirm() {
                                         type="button"
                                         :aria-label="`Remove ${item.name} for ${participant.name}`"
                                         :disabled="busy || stale"
-                                        class="grid size-11 shrink-0 place-items-center rounded focus-visible:outline-2 sm:size-8"
+                                        class="grid size-11 shrink-0 place-items-center rounded focus-visible:outline-2"
                                         @click="
                                             mutate(
                                                 `/items/${item.id}`,
@@ -506,7 +504,7 @@ async function confirm() {
                                 </div>
                                 <div class="min-w-0">
                                     <p
-                                        class="text-xs font-medium wrap-anywhere"
+                                        class="text-sm font-medium wrap-anywhere"
                                     >
                                         {{ item.name }}
                                         <span
@@ -527,11 +525,7 @@ async function confirm() {
                                     </p>
                                 </div>
                                 <QuantityControl
-                                    v-if="
-                                        participant.editable &&
-                                        !cutoffLocked &&
-                                        item.decision !== 'rejected'
-                                    "
+                                    v-if="participant.editable && !cutoffLocked"
                                     :name="`${item.name} for ${participant.name}`"
                                     :quantity="item.quantity"
                                     :disabled="busy || stale"
@@ -561,23 +555,6 @@ async function confirm() {
                         </div>
                     </section>
                 </template>
-                <details
-                    v-if="order?.restaurant_review"
-                    class="mt-3 text-xs text-muted-foreground"
-                >
-                    <summary class="min-h-8 cursor-pointer py-2">
-                        Restaurant review details and replacements
-                    </summary>
-                    <OwnerRestaurantReview
-                        :review="order.restaurant_review"
-                        :reservation-id="reservation.id"
-                        :locked="cutoffLocked"
-                        @changed="
-                            load();
-                            emit('changed');
-                        "
-                    />
-                </details>
             </div>
             <footer
                 v-if="order && !submitted"
@@ -615,7 +592,11 @@ async function confirm() {
                 <div
                     class="mb-4 flex items-center justify-between gap-4 text-xl font-medium"
                 >
-                    <span>Grand Total</span
+                    <span>{{
+                        order?.restaurant_review
+                            ? 'Requested total (includes rejections)'
+                            : 'Grand Total'
+                    }}</span
                     ><output
                         aria-label="Group pre-order total"
                         class="text-primary tabular-nums"
@@ -625,7 +606,7 @@ async function confirm() {
                 <Button
                     v-if="!cutoffLocked"
                     id="owner-group-submit"
-                    class="min-h-14 w-full disabled:bg-[#8b8b8b]! disabled:bg-none! disabled:text-white! disabled:opacity-100"
+                    class="min-h-14 w-full"
                     :disabled="
                         cutoffLocked ||
                         !order.can_submit ||
@@ -658,7 +639,5 @@ async function confirm() {
     max-width: 838px;
     padding: 0;
     gap: 0;
-    border: 0;
-    box-shadow: 0 12px 40px rgb(0 0 0 / 14%);
 }
 </style>

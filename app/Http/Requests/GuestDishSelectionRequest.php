@@ -21,7 +21,6 @@ class GuestDishSelectionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'send_to_restaurant' => [$this->route('reservation') instanceof Reservation && $this->isMethod('post') ? 'sometimes' : 'prohibited', 'boolean'],
             'items' => ['present', 'array', 'list', 'max:100'],
             'items.*' => ['required', 'array:menu_item_id,quantity'],
             'items.*.menu_item_id' => ['required', 'integer:strict', 'min:1', 'distinct:strict'],
@@ -33,7 +32,7 @@ class GuestDishSelectionRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator): void {
-            foreach (array_diff(array_keys($this->all()), ['items', 'send_to_restaurant']) as $field) {
+            foreach (array_diff(array_keys($this->all()), ['items']) as $field) {
                 $validator->errors()->add($field, 'Only items may be submitted.');
             }
         }];

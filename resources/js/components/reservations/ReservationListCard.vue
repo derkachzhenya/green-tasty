@@ -73,7 +73,7 @@ const label = computed(
         :aria-labelledby="`reservation-heading-${reservation.id}`"
     >
         <p
-            class="py-1 text-center text-xs leading-6 font-medium"
+            class="py-1 text-center text-sm leading-6 font-medium"
             :class="{
                 'bg-[#dfe8ff]': phase === 'upcoming',
                 'bg-[#fff3d1]': phase === 'in_progress',
@@ -132,14 +132,14 @@ const label = computed(
                 </p>
                 <button
                     type="button"
-                    class="min-h-11 rounded-md border border-primary px-3 text-xs font-medium text-primary hover:bg-accent focus-visible:outline-2 sm:min-h-8"
+                    class="min-h-11 rounded-md border border-primary px-3 text-xs font-medium text-primary hover:bg-accent focus-visible:outline-2"
                     @click="$emit('invite')"
                 >
                     Invite Guests
                 </button>
             </div>
             <dl
-                class="my-4 grid grid-cols-2 gap-x-3 gap-y-2 border-y border-border/40 py-4 text-xs leading-5"
+                class="my-4 grid grid-cols-2 gap-x-3 gap-y-2 border-y border-border/40 py-4 text-sm leading-5"
             >
                 <div class="flex min-w-0 items-start gap-2">
                     <CalendarDays
@@ -207,23 +207,18 @@ const label = computed(
                     </dd>
                 </div>
             </dl>
-            <div
-                class="mt-auto flex min-h-11 flex-wrap justify-end gap-2 sm:min-h-8"
-            >
+            <div class="mt-auto flex min-h-11 flex-wrap justify-end gap-2">
                 <a
                     v-if="reservation.can_add_pre_order"
                     :href="`/reservations/${reservation.id}/owner-pre-order`"
-                    class="inline-flex min-h-11 items-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-2 sm:min-h-8"
+                    class="inline-flex min-h-11 items-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-2"
                     >Add Pre-Order</a
                 >
                 <button
-                    v-if="
-                        reservation.can_view_group &&
-                        !reservation.can_add_pre_order
-                    "
+                    v-if="reservation.can_view_group"
                     type="button"
                     @click="$emit('group')"
-                    class="inline-flex min-h-11 items-center rounded-md border border-primary px-3 text-xs font-medium text-primary hover:bg-accent focus-visible:outline-2 sm:min-h-8"
+                    class="inline-flex min-h-11 items-center rounded-md border border-primary px-3 text-xs font-medium text-primary hover:bg-accent focus-visible:outline-2"
                 >
                     <span class="relative"
                         >Group Pre-Order<span
@@ -236,7 +231,7 @@ const label = computed(
                 <button
                     v-if="reservation.feedback_action"
                     type="button"
-                    class="min-h-11 rounded-md px-3 text-xs font-medium focus-visible:outline-2 sm:min-h-8"
+                    class="min-h-11 rounded-md px-3 text-xs font-medium focus-visible:outline-2"
                     :class="
                         reservation.feedback_action === 'update'
                             ? 'border border-primary text-primary'

@@ -202,7 +202,7 @@ onBeforeUnmount(() => clearInterval(warningTimer));
                     </p>
                     <ul
                         aria-label="Your reservations"
-                        class="grid items-start gap-6 md:grid-cols-2 xl:grid-cols-3"
+                        class="grid items-stretch gap-6 md:grid-cols-2 xl:grid-cols-3"
                     >
                         <li
                             v-for="reservation in reservations.data"

@@ -767,7 +767,6 @@ describe('owner cart local editing', () => {
                 expect(options.headers).toMatchObject({ 'If-Match': '"1"' });
                 expect(JSON.parse(options.body as string)).toEqual({
                     items: [{ menu_item_id: 10, quantity: 2 }],
-                    send_to_restaurant: true,
                 });
                 server.selections.items[0].quantity = 2;
                 server.selections.items[0].subtotal = '34.00';

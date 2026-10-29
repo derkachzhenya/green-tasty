@@ -39,6 +39,6 @@ class OwnerPreOrderController extends Controller
     {
         Gate::authorize('view', $reservation);
 
-        return response()->json($service->submit($reservation, $request->user(), $request->selections(), $request->expectedVersion(), $request->boolean('send_to_restaurant')));
+        return response()->json($service->submit($reservation, $request->user(), $request->selections(), $request->expectedVersion()));
     }
 }

@@ -15,7 +15,7 @@ defineEmits<{ change: [quantity: number] }>();
             type="button"
             variant="outline"
             class="relative size-11 shrink-0 border-0 bg-transparent p-0 text-base shadow-none before:absolute before:inset-1.5 before:rounded-md before:border before:border-primary disabled:before:border-border"
-            :disabled="disabled || quantity <= 1"
+            :disabled="disabled || quantity === 0"
             :aria-label="`Decrease ${name} quantity`"
             @click="$emit('change', quantity - 1)"
             >−</Button

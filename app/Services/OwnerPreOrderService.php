@@ -19,9 +19,9 @@ class OwnerPreOrderService
      * @param  list<array{menu_item_id: int, quantity: int}>  $items
      * @return GuestMenu
      */
-    public function submit(Reservation $reservation, User $owner, array $items, int $version, bool $sendToRestaurant = false): array
+    public function submit(Reservation $reservation, User $owner, array $items, int $version): array
     {
-        return DB::transaction(function () use ($reservation, $owner, $items, $version, $sendToRestaurant): array {
+        return DB::transaction(function () use ($reservation, $owner, $items, $version): array {
             $locked = Reservation::query()->whereKey($reservation->id)->lockForUpdate()->firstOrFail();
             Gate::forUser($owner)->authorize('view', $locked);
             $guest = $locked->guests()->where('user_id', $owner->id)->lockForUpdate()->firstOrFail();
@@ -32,10 +32,6 @@ class OwnerPreOrderService
             ksort($previous);
             // Lost-success retries are read-only, including after the cutoff or group submission.
             if (($guest->pre_order_submitted_at !== null || $locked->preOrder?->status === 'submitted') && $quantities === $previous && $version <= $guest->selection_version) {
-                if ($sendToRestaurant && $items !== [] && $locked->preOrder?->status === 'draft') {
-                    app(GroupPreOrderSubmissionService::class)->submit($locked, $owner);
-                }
-
                 return $this->menus->forOwner($locked, $owner);
             }
             PreOrderTiming::ensureOpen($locked);
@@ -52,9 +48,6 @@ class OwnerPreOrderService
             }
             $this->selections->replaceForOwner($locked, $owner, $items, $version);
             $guest->refresh()->forceFill(['pre_order_submitted_at' => $items === [] ? null : now()])->save();
-            if ($sendToRestaurant && $items !== []) {
-                app(GroupPreOrderSubmissionService::class)->submit($locked, $owner);
-            }
 
             return $this->menus->forOwner($locked, $owner);
         }, attempts: 3);

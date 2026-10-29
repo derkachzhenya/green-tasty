@@ -361,12 +361,7 @@ export function useGuestSelections(
                 await guestAction(
                     `${path}/submit`,
                     controller.signal,
-                    {
-                        items: input.value,
-                        ...(ownerReservationId
-                            ? { send_to_restaurant: true }
-                            : {}),
-                    },
+                    { items: input.value },
                     menu.value.guest_state.version,
                 ),
             );
