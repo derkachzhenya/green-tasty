@@ -108,8 +108,80 @@ beforeEach(async () => {
     });
     await flush();
 });
-afterEach(() => mounted.unmount());
+afterEach(() => {
+    mounted.unmount();
+    vi.useRealTimers();
+});
 describe('restaurant review controls', () => {
+    it('identifies owner-only updates that need a new restaurant review', async () => {
+        const updated = fixture();
+        updated.revision = 2;
+        updated.status = 'Updated Pre-Order';
+        request.mockResolvedValueOnce(updated);
+        mounted.unmount();
+        mounted = mountComponent(RestaurantReviewModal, {
+            restaurantId: 1,
+            reservation: {
+                id: 7,
+                code: 'GT-TEST',
+                restaurant: { address: 'Address' },
+            },
+        });
+        await flush();
+        expect(textContent(mounted.root).replace(/\s+/g, ' ')).toContain(
+            'Owner has updated the pre-order. Review all new dishes before submitting.',
+        );
+    });
+    it('refreshes at the cutoff and cannot confirm canceled dishes', async () => {
+        mounted.unmount();
+        vi.useFakeTimers({
+            toFake: ['setInterval', 'clearInterval', 'performance'],
+        });
+        const initial = fixture();
+        initial.timing = {
+            server_now: '2026-11-01T07:29:59Z',
+            warning_at: '2026-11-01T07:15:00Z',
+            locks_at: '2026-11-01T07:30:00Z',
+            locked: false,
+            unconfirmed: true,
+        };
+        request.mockResolvedValueOnce(initial);
+        mounted = mountComponent(RestaurantReviewModal, {
+            restaurantId: 1,
+            reservation: { id: 7, restaurant: { address: 'Actual address' } },
+        });
+        await flush();
+        const expired = fixture();
+        expired.timing = {
+            ...initial.timing,
+            locked: true,
+            unconfirmed: false,
+        };
+        expired.editable = expired.can_submit = false;
+        expired.participants[0].items[0].superseded = true;
+        expired.participants[0].items[0].cancelled = true;
+        expired.totals.requested = expired.totals.pending = '0.00';
+        request.mockResolvedValueOnce(expired);
+        await vi.advanceTimersByTimeAsync(1000);
+        await flush();
+        expect(textContent(mounted.root)).toContain(
+            'Canceled at the 30-minute deadline',
+        );
+        expect(
+            buttons().some(
+                (n) => n.props['aria-label'] === 'Confirm Salad (Owner)',
+            ),
+        ).toBe(false);
+        expect(
+            buttons().find((n) => textContent(n) === 'Submit Pre-order')!.props
+                .disabled,
+        ).toBe(true);
+        await vi.advanceTimersByTimeAsync(5000);
+        expect(request).toHaveBeenCalledTimes(3);
+        expect(request.mock.calls.every((call) => call[1] === 'get')).toBe(
+            true,
+        );
+    });
     it('renders real quantities, saved prices, notes and accessible pending controls', () => {
         expect(textContent(mounted.root)).toContain('No onions');
         expect(textContent(mounted.root)).toContain('10.00 each');

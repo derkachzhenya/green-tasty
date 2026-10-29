@@ -199,12 +199,14 @@ class WaiterPreOrderReviewTest extends TestCase
         $this->actingAs($this->owner)->postJson('/reservations/'.$this->reservation->id.'/restaurant-review/items/'.$this->ownItem->id.'/replace', ['menu_item_id' => $this->replacement->id, 'quantity' => 1], ['If-Match' => $version])->assertConflict();
     }
 
-    public function test_cutoff_blocks_customer_corrections_but_allows_staff_review(): void
+    public function test_cutoff_blocks_customer_corrections_and_late_staff_review(): void
     {
+        $version = $this->version();
         $this->reservation->update(['reserved_at' => now()->addMinutes(30)]);
-        $this->decide($this->ownItem, 'confirmed')->assertOk();
-        $this->decide($this->guestItem, 'rejected')->assertOk();
-        $this->submit()->assertOk();
+        $this->decide($this->ownItem, 'confirmed', $version)->assertConflict();
+        $this->submit($version)->assertConflict();
+        $this->getJson($this->root.'/review')->assertOk()->assertJsonPath('editable', false)->assertJsonPath('totals.requested', '0.00');
+        $this->assertNotNull($this->ownItem->fresh()->cancelled_at);
         $this->correct()->assertConflict();
         $this->assertDatabaseCount('pre_order_items', 2);
     }

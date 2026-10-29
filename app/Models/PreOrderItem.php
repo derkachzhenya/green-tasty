@@ -30,6 +30,7 @@ class PreOrderItem extends Model
             'unit_price' => 'decimal:2',
             'review_published_at' => 'immutable_datetime',
             'superseded_at' => 'immutable_datetime',
+            'cancelled_at' => 'immutable_datetime',
         ];
     }
 

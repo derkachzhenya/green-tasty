@@ -41,6 +41,17 @@ const { order, loading, busy, stale, error, submitted, load, mutate } =
 const { cutoffLocked, warning, minutes } = usePreOrderClock(
     computed(() => order.value?.timing),
 );
+let refreshAtCutoff = false;
+watch(cutoffLocked, (locked) => {
+    if (locked && order.value?.timing && !order.value.timing.locked)
+        refreshAtCutoff = true;
+});
+watch([cutoffLocked, loading, busy], () => {
+    if (refreshAtCutoff && !loading.value && !busy.value) {
+        refreshAtCutoff = false;
+        void load();
+    }
+});
 const confirming = ref<'submit' | null>(null);
 const removing = shallowRef<OwnerGroupParticipant | null>(null);
 const removalTrigger = shallowRef<HTMLElement | null>(null);
@@ -84,7 +95,7 @@ const status = computed(() =>
     order.value?.restaurant_review?.status === 'Confirmed by Restaurant'
         ? 'Confirmed by Restaurant'
         : order.value?.restaurant_review?.status === 'Updated Pre-Order'
-          ? 'Updated Pre-Order'
+          ? 'Created New Pre-Order'
           : order.value?.status === 'submitted'
             ? 'Sent to Restaurant'
             : order.value?.status === 'draft' || order.value?.status == null
@@ -120,6 +131,17 @@ function restore(event: Event) {
 function close() {
     if (!busy.value) emit('close');
 }
+async function changeQuantity(itemId: number, quantity: number) {
+    const top = scrollArea.value?.scrollTop ?? 0;
+    const focused = document.activeElement as HTMLElement | null;
+    const keepFocus = focused && scrollArea.value?.contains?.(focused);
+    if (await mutate(`/items/${itemId}`, 'patch', { quantity })) {
+        await nextTick();
+        if (keepFocus && focused.isConnected)
+            focused.focus({ preventScroll: true });
+        if (scrollArea.value) scrollArea.value.scrollTop = top;
+    }
+}
 async function confirm() {
     if (confirming.value === null) return;
     if (await mutate('/submit', 'post')) confirming.value = null;
@@ -138,7 +160,7 @@ async function confirm() {
             <div
                 v-if="removalNotice"
                 role="status"
-                class="absolute top-3 right-16 z-[60] flex max-w-[calc(100%-80px)] items-center gap-3 rounded-lg border border-primary/40 bg-[#e8ffea] px-4 py-3 text-sm shadow-md"
+                class="fixed top-4 right-4 z-[60] flex max-w-[calc(100%-32px)] items-center gap-3 rounded-md border border-primary/40 bg-[#e8ffea] px-4 py-3 text-xs shadow-sm sm:top-6 sm:right-6"
             >
                 <CircleCheck
                     class="size-5 shrink-0 text-primary"
@@ -241,17 +263,6 @@ async function confirm() {
                 class="min-h-0 overflow-y-auto overscroll-contain px-4 py-5 sm:px-10"
                 :aria-busy="loading || busy"
             >
-                <OwnerRestaurantReview
-                    v-if="order?.restaurant_review"
-                    :review="order.restaurant_review"
-                    :reservation-id="reservation.id"
-                    :locked="cutoffLocked"
-                    class="mb-5"
-                    @changed="
-                        load();
-                        emit('changed');
-                    "
-                />
                 <p v-if="loading" role="status" class="py-8">
                     Loading group pre-order…
                 </p>
@@ -287,6 +298,19 @@ async function confirm() {
                 >
                 <template v-else-if="order">
                     <p
+                        v-if="
+                            order.restaurant_review &&
+                            Number(order.restaurant_review.totals.rejected) >
+                                0 &&
+                            !cutoffLocked
+                        "
+                        role="status"
+                        class="mb-4 flex items-center gap-2 rounded-md border border-destructive/10 bg-[#fff5f7] p-3 text-xs leading-5"
+                    >
+                        <Bell class="size-4 shrink-0" />Some items were
+                        rejected. Tell your guest and confirm their acceptance.
+                    </p>
+                    <p
                         v-if="!order.editable || cutoffLocked"
                         role="status"
                         class="mb-4 flex gap-2 rounded-lg bg-[#fff5f7] p-3 text-sm leading-6"
@@ -296,7 +320,7 @@ async function confirm() {
                             aria-hidden="true"
                         />{{
                             cutoffLocked
-                                ? '30 minutes or less before the reservation. No pre-order changes can be applied. Saved dishes are retained.'
+                                ? 'Less than 30 minutes before the reservation time. No changes can be applied.'
                                 : 'This group pre-order is read-only. Saved quantities and prices are preserved.'
                         }}
                     </p>
@@ -308,9 +332,9 @@ async function confirm() {
                         <Bell
                             class="mt-1 size-4 shrink-0"
                             aria-hidden="true"
-                        />Some pre-order items are still unconfirmed. Changes
-                        close in {{ minutes }} minutes. Saved dishes will be
-                        retained.
+                        />You have unconfirmed items in your pre-order. They
+                        will be canceled in {{ minutes }}
+                        {{ minutes === 1 ? 'minute' : 'minutes' }}.
                     </p>
                     <p
                         v-if="
@@ -318,7 +342,7 @@ async function confirm() {
                             order.editable &&
                             !cutoffLocked
                         "
-                        class="mb-4 text-sm leading-6 text-muted-foreground"
+                        class="sr-only"
                     >
                         Changes are sent to the restaurant for review. Previous
                         versions are kept.
@@ -337,6 +361,30 @@ async function confirm() {
                         {{ pending.length === 1 ? 'is' : 'are' }} waiting for
                         you to submit the group.
                     </p>
+                    <details
+                        v-if="order.cancelled_items?.length"
+                        class="mb-5 rounded-xl bg-card p-4 text-sm"
+                    >
+                        <summary
+                            class="min-h-11 cursor-pointer py-3 font-medium"
+                        >
+                            Canceled at the 30-minute deadline
+                        </summary>
+                        <p class="mb-3 text-muted-foreground">
+                            These dishes were not confirmed by the restaurant
+                            and are excluded from the total.
+                        </p>
+                        <p
+                            v-for="item in order.cancelled_items"
+                            :key="item.id"
+                            class="py-2"
+                        >
+                            {{ item.participant }} · {{ item.name }} ×
+                            {{ item.quantity }} ·
+                            {{ dollarPrice(item.unit_price) }} each
+                            <span v-if="item.notes"> · {{ item.notes }}</span>
+                        </p>
+                    </details>
                     <section
                         v-if="!ownerPresent"
                         class="mb-5 rounded-xl bg-card p-4"
@@ -412,7 +460,7 @@ async function confirm() {
                         >
                             <li
                                 v-for="item in participant.items"
-                                :key="item.id"
+                                :key="item.display_key ?? item.id"
                                 class="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 py-3 sm:grid-cols-[auto_minmax(0,1fr)_auto_auto]"
                             >
                                 <div class="flex items-center gap-1">
@@ -424,7 +472,7 @@ async function confirm() {
                                         type="button"
                                         :aria-label="`Remove ${item.name} for ${participant.name}`"
                                         :disabled="busy || stale"
-                                        class="grid size-11 shrink-0 place-items-center rounded focus-visible:outline-2"
+                                        class="grid size-11 shrink-0 place-items-center rounded focus-visible:outline-2 sm:size-8"
                                         @click="
                                             mutate(
                                                 `/items/${item.id}`,
@@ -458,7 +506,7 @@ async function confirm() {
                                 </div>
                                 <div class="min-w-0">
                                     <p
-                                        class="text-sm font-medium wrap-anywhere"
+                                        class="text-xs font-medium wrap-anywhere"
                                     >
                                         {{ item.name }}
                                         <span
@@ -479,16 +527,16 @@ async function confirm() {
                                     </p>
                                 </div>
                                 <QuantityControl
-                                    v-if="participant.editable && !cutoffLocked"
+                                    v-if="
+                                        participant.editable &&
+                                        !cutoffLocked &&
+                                        item.decision !== 'rejected'
+                                    "
                                     :name="`${item.name} for ${participant.name}`"
                                     :quantity="item.quantity"
                                     :disabled="busy || stale"
                                     class="col-start-2 sm:col-start-auto"
-                                    @change="
-                                        mutate(`/items/${item.id}`, 'patch', {
-                                            quantity: $event,
-                                        })
-                                    "
+                                    @change="changeQuantity(item.id, $event)"
                                 />
                                 <p
                                     v-else
@@ -497,7 +545,7 @@ async function confirm() {
                                     Qty: {{ item.quantity }}
                                 </p>
                                 <p
-                                    class="col-start-2 text-right text-sm font-medium tabular-nums sm:col-start-auto"
+                                    class="col-start-2 text-right text-sm font-medium tabular-nums sm:col-start-auto sm:w-24"
                                 >
                                     {{ dollarPrice(item.subtotal) }}
                                 </p>
@@ -513,6 +561,23 @@ async function confirm() {
                         </div>
                     </section>
                 </template>
+                <details
+                    v-if="order?.restaurant_review"
+                    class="mt-3 text-xs text-muted-foreground"
+                >
+                    <summary class="min-h-8 cursor-pointer py-2">
+                        Restaurant review details and replacements
+                    </summary>
+                    <OwnerRestaurantReview
+                        :review="order.restaurant_review"
+                        :reservation-id="reservation.id"
+                        :locked="cutoffLocked"
+                        @changed="
+                            load();
+                            emit('changed');
+                        "
+                    />
+                </details>
             </div>
             <footer
                 v-if="order && !submitted"
@@ -550,11 +615,7 @@ async function confirm() {
                 <div
                     class="mb-4 flex items-center justify-between gap-4 text-xl font-medium"
                 >
-                    <span>{{
-                        order?.restaurant_review
-                            ? 'Requested total (includes rejections)'
-                            : 'Grand Total'
-                    }}</span
+                    <span>Grand Total</span
                     ><output
                         aria-label="Group pre-order total"
                         class="text-primary tabular-nums"
@@ -564,7 +625,7 @@ async function confirm() {
                 <Button
                     v-if="!cutoffLocked"
                     id="owner-group-submit"
-                    class="min-h-14 w-full"
+                    class="min-h-14 w-full disabled:bg-[#8b8b8b]! disabled:bg-none! disabled:text-white! disabled:opacity-100"
                     :disabled="
                         cutoffLocked ||
                         !order.can_submit ||
@@ -597,5 +658,7 @@ async function confirm() {
     max-width: 838px;
     padding: 0;
     gap: 0;
+    border: 0;
+    box-shadow: 0 12px 40px rgb(0 0 0 / 14%);
 }
 </style>

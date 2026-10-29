@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
-/** Restaurant review is independent from customer submission and its T−30 lock. */
+/** Restaurant review publishes decisions before the pre-order's T−30 deadline. */
 class RestaurantPreOrderReviewService
 {
     /**
@@ -23,7 +23,12 @@ class RestaurantPreOrderReviewService
      */
     public function view(Restaurant $restaurant, Reservation $reservation, User $staff): array
     {
-        return DB::transaction(fn (): array => $this->snapshot($this->staffLock($restaurant, $reservation, $staff)), attempts: 3);
+        return DB::transaction(function () use ($restaurant, $reservation, $staff): array {
+            $locked = $this->staffLock($restaurant, $reservation, $staff);
+            app(PreOrderCutoffService::class)->expireLocked($locked);
+
+            return $this->snapshot($locked);
+        }, attempts: 3);
     }
 
     /**
@@ -192,14 +197,14 @@ class RestaurantPreOrderReviewService
                 }
                 $lines[] = ['id' => $item->id, 'menu_item_id' => $item->menu_item_id, 'name' => $item->menuItem->name ?? 'Unavailable dish',
                     'quantity' => $item->quantity, 'unit_price' => $item->unit_price, 'total' => (string) $amount->toScale(2), 'notes' => $item->notes,
-                    'decision' => $item->restaurant_decision, 'published' => $item->review_published_at !== null, 'superseded' => $item->superseded_at !== null];
+                    'decision' => $item->restaurant_decision, 'published' => $item->review_published_at !== null, 'superseded' => $item->superseded_at !== null, 'cancelled' => $item->cancelled_at !== null];
             }
             $participants[] = ['id' => $guest->id, 'name' => $guest->name, 'is_owner' => $guest->user_id === $reservation->owner_user_id, 'items' => $lines];
         }
         $unreviewed = (int) $order->review_revision !== (int) $order->reviewed_revision;
-        $editable = $unreviewed && in_array(ReservationCardState::phase($reservation), ['upcoming', 'in_progress'], true);
+        $editable = $unreviewed && ! PreOrderTiming::locked($reservation) && in_array(ReservationCardState::phase($reservation), ['upcoming', 'in_progress'], true);
 
-        return ['version' => $this->version($reservation), 'revision' => (int) $order->review_revision,
+        return ['timing' => PreOrderTiming::state($reservation), 'version' => $this->version($reservation), 'revision' => (int) $order->review_revision,
             'status' => $unreviewed ? ((int) $order->review_revision > 1 ? 'Updated Pre-Order' : 'Created by Customer') : 'Confirmed by Restaurant',
             'editable' => $editable, 'can_submit' => $editable && ($order->items()->whereNull('superseded_at')->exists() || (int) $order->review_revision > 1)
                 && ! $order->items()->whereNull('superseded_at')->where('restaurant_decision', 'pending')->exists(),
@@ -244,6 +249,7 @@ class RestaurantPreOrderReviewService
 
     private function reviewable(Reservation $reservation, PreOrder $order): void
     {
+        PreOrderTiming::ensureOpen($reservation);
         if (! in_array(ReservationCardState::phase($reservation), ['upcoming', 'in_progress'], true)) {
             throw new ConflictHttpException('This reservation review is read-only.');
         }

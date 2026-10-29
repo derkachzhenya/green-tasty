@@ -11,12 +11,22 @@ export type OwnerGroupParticipant = {
     can_remove: boolean;
     items: (GuestSelection & {
         id: number;
+        // Client-only identity retained when a quantity edit creates a new revision.
+        display_key?: number;
         notes: string | null;
         decision?: string;
     })[];
     subtotal: string;
 };
 export type OwnerGroupOrder = {
+    cancelled_items?: {
+        id: number;
+        name: string;
+        participant: string;
+        quantity: number;
+        unit_price: string;
+        notes: string | null;
+    }[];
     restaurant_review?: RestaurantReview;
     timing?: PreOrderTiming;
     active_participants?: number;

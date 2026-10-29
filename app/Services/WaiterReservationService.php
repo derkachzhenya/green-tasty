@@ -21,6 +21,8 @@ class WaiterReservationService
     public function dashboard(Restaurant $restaurant, User $staff, array $filters): array
     {
         Gate::forUser($staff)->authorize('staff', $restaurant);
+        $cutoff = app(PreOrderCutoffService::class);
+        $cutoff->due()->where('restaurant_id', $restaurant->id)->eachById(fn (Reservation $reservation) => $cutoff->expire($reservation));
         $date = $filters['date'] ?? CarbonImmutable::now(BookingRules::TIMEZONE)->format('Y-m-d');
         $start = CarbonImmutable::parse($date, BookingRules::TIMEZONE)->startOfDay()->utc();
         $query = $restaurant->reservations()->where('reserved_at', '>', $start->subMinutes(BookingRules::MAX_DURATION_MINUTES))->where('reserved_at', '<', $start->addDay())->endingAfter($start)
@@ -56,8 +58,8 @@ class WaiterReservationService
             'phase' => $phase, 'version' => $this->reviews->version($reservation),
             'pre_orders' => $reservation->guests()->active()->whereHas('preOrderItems', fn ($q) => $q->where('pre_order_id', $order?->id)->whereNull('superseded_at'))
                 ->when(! $submitted, fn ($q) => $q->whereNotNull('pre_order_submitted_at'))->count(),
-            'has_pre_order' => $submitted, 'needs_review' => $submitted && (int) $order->review_revision !== (int) $order->reviewed_revision,
-            'updated' => $submitted && (int) $order->review_revision > (int) $order->reviewed_revision && (int) $order->review_revision > 1,
+            'has_pre_order' => $submitted, 'needs_review' => $submitted && ! PreOrderTiming::locked($reservation) && (int) $order->review_revision !== (int) $order->reviewed_revision,
+            'updated' => $submitted && ! PreOrderTiming::locked($reservation) && (int) $order->review_revision > (int) $order->reviewed_revision && (int) $order->review_revision > 1,
             'has_service_order' => DB::table('restaurant_service_orders')->where('reservation_id', $reservation->id)->exists(),
             'can_edit' => in_array($phase, ['upcoming', 'in_progress'], true) && $reservation->status === 'confirmed',
             'can_cancel' => $phase === 'upcoming' && $reservation->status === 'confirmed'];

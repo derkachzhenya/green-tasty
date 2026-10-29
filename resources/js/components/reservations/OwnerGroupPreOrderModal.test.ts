@@ -167,9 +167,98 @@ beforeEach(async () => {
 });
 afterEach(() => {
     mounted.unmount();
+    vi.useRealTimers();
     vi.unstubAllGlobals();
 });
 describe('guest removal and empty owner group', () => {
+    it('refreshes at the deadline and shows canceled dishes as history without editable controls', async () => {
+        mounted.unmount();
+        vi.useFakeTimers({
+            toFake: ['setInterval', 'clearInterval', 'performance'],
+        });
+        const initial = fixture();
+        initial.timing = {
+            server_now: '2026-11-01T07:29:59Z',
+            warning_at: '2026-11-01T07:15:00Z',
+            locks_at: '2026-11-01T07:30:00Z',
+            locked: false,
+            unconfirmed: true,
+        };
+        request.mockResolvedValueOnce(initial);
+        mounted = mountComponent(OwnerGroupPreOrderModal, {
+            reservation: { id: 7, restaurant: { address: 'Actual address' } },
+        });
+        await flush();
+        expect(text()).toContain('They will be canceled in 1 minute');
+        const expired = fixture();
+        expired.timing = {
+            ...initial.timing,
+            locked: true,
+            unconfirmed: false,
+        };
+        expired.editable = expired.can_submit = false;
+        expired.participants[1].items = [];
+        expired.participants[1].subtotal = '0.00';
+        expired.summary.grand_total = '0.00';
+        expired.cancelled_items = [
+            {
+                id: 12,
+                participant: 'Alex',
+                name: 'Salad',
+                quantity: 1,
+                unit_price: '14.00',
+                notes: 'No sauce',
+            },
+        ];
+        request.mockResolvedValueOnce(expired);
+        await vi.advanceTimersByTimeAsync(1000);
+        await flush();
+        expect(
+            request.mock.calls.filter((call) => call[1] === 'get'),
+        ).toHaveLength(3);
+        expect(text()).toContain('No changes can be applied');
+        expect(text()).toContain('No sauce');
+        expect(findAll(mounted.root, (n) => n.tag === 'details')).toHaveLength(
+            1,
+        );
+        expect(
+            findAll(
+                mounted.root,
+                (n) => n.tag === 'button' && textContent(n) === '+',
+            ),
+        ).toHaveLength(0);
+        await vi.advanceTimersByTimeAsync(5000);
+        expect(
+            request.mock.calls.filter((call) => call[1] !== 'get'),
+        ).toHaveLength(0);
+        expect(request).toHaveBeenCalledTimes(3);
+    });
+    it('retains the same quantity buttons when the server replaces a submitted row with a new revision', async () => {
+        const increase = button('+');
+        const row = findAll(mounted.root, (n) => n.tag === 'li')[0];
+        const updated = fixture();
+        updated.version = `"${'b'.repeat(64)}"`;
+        updated.participants[1].items[0] = {
+            ...updated.participants[1].items[0],
+            id: 33,
+            quantity: 2,
+            subtotal: '28.00',
+        };
+        request.mockResolvedValueOnce(updated);
+        await click('+');
+        expect(button('+')).toBe(increase);
+        expect(findAll(mounted.root, (n) => n.tag === 'li')[0]).toBe(row);
+        expect(textContent(row)).toContain('28.00');
+        request.mockResolvedValueOnce(updated);
+        await click('+');
+        expect(request).toHaveBeenLastCalledWith(
+            '/reservations/7/pre-order/owner-view/items/33',
+            'patch',
+            expect.any(AbortSignal),
+            { quantity: 3 },
+            updated.version,
+        );
+    });
     it('shows the empty owner entry and cancels removal without any write', async () => {
         expect(text()).toContain('My Pre-Order');
         expect(text()).toContain('Edit Pre-Order');

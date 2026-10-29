@@ -481,9 +481,9 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                         role="status"
                         class="mb-4 rounded-lg bg-[#fff5f7] p-4 text-sm"
                     >
-                        Some pre-order items are still unconfirmed. Changes
-                        close in
-                        {{ minutes }} minutes. Saved dishes will be retained.
+                        You have unconfirmed items in your pre-order. They will
+                        be canceled in {{ minutes }}
+                        {{ minutes === 1 ? 'minute' : 'minutes' }}.
                     </p>
                     <p
                         v-if="locked"
@@ -492,7 +492,7 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                     >
                         {{
                             cutoffLocked
-                                ? '30 minutes or less before the reservation. No pre-order changes can be applied. Saved dishes are retained.'
+                                ? 'Less than 30 minutes before the reservation time. No changes can be applied. Unconfirmed dishes are canceled; confirmed dishes are retained.'
                                 : 'This group order is read-only. You can review your saved dishes in the cart.'
                         }}
                     </p>
@@ -627,7 +627,7 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                     {{
                         menu?.order.status === 'submitted'
                             ? 'Your changes were sent successfully. Wait for confirmation from the restaurant.'
-                            : 'Your pre-order was saved successfully. Review the group order in Reservations and submit it to the restaurant.'
+                            : 'Your pre-order was saved successfully. Review your reservation for its current status.'
                     }}
                 </p>
                 <a

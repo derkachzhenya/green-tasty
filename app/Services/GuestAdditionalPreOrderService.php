@@ -30,7 +30,8 @@ class GuestAdditionalPreOrderService
             return null;
         }
 
-        return GuestPreOrderRound::query()->where('reservation_guest_id', $guest->id)->whereNull('submitted_at')->first();
+        return GuestPreOrderRound::query()->where('reservation_guest_id', $guest->id)->whereNull('submitted_at')
+            ->when(Schema::hasColumn('guest_pre_order_rounds', 'cancelled_at'), fn ($query) => $query->whereNull('cancelled_at'))->first();
     }
 
     public function ensureOpen(Reservation $reservation): void

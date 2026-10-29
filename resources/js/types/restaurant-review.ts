@@ -9,8 +9,10 @@ export type ReviewItem = {
     decision: 'pending' | 'confirmed' | 'rejected';
     published: boolean;
     superseded: boolean;
+    cancelled?: boolean;
 };
 export type RestaurantReview = {
+    timing?: PreOrderTiming;
     version: string;
     revision: number;
     status: string;
@@ -81,3 +83,4 @@ export type ServiceOrder = {
         is_available: boolean;
     }[];
 };
+import type { PreOrderTiming } from '@/composables/usePreOrderClock';

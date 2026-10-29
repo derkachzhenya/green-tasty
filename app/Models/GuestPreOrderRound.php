@@ -13,6 +13,6 @@ class GuestPreOrderRound extends Model
 
     protected function casts(): array
     {
-        return ['items' => 'array', 'number' => 'integer', 'submitted_at' => 'immutable_datetime'];
+        return ['items' => 'array', 'number' => 'integer', 'submitted_at' => 'immutable_datetime', 'cancelled_at' => 'immutable_datetime'];
     }
 }

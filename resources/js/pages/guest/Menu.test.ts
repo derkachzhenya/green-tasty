@@ -713,7 +713,7 @@ describe('owner cart local editing', () => {
             ),
         ).toBe(true);
     });
-    it('discards only unsaved owner edits at the automatic cutoff and keeps the saved total', async () => {
+    it('refreshes canceled selections at the cutoff and discards unsaved owner edits', async () => {
         vi.useFakeTimers({
             toFake: ['setInterval', 'clearInterval', 'performance'],
         });
@@ -730,11 +730,24 @@ describe('owner cart local editing', () => {
         await click('Increase Fresh Strawberry Mint Salad quantity');
         await click('Open cart, 2 items');
         expect(text()).toContain('34.00');
+        server.selections = {
+            ...server.selections,
+            items: [],
+            subtotal: '0.00',
+        };
+        server.timing.locked = true;
+        server.order.editable = false;
         vi.advanceTimersByTime(2000);
         await flush();
-        expect(text()).toContain('Unsaved changes were discarded');
+        expect(text()).toContain('Unconfirmed dishes are canceled');
+        expect(text()).toContain('Your cart is empty');
+        expect(
+            fetchMock.mock.calls.filter(
+                ([, options]) => options.method === 'GET',
+            ),
+        ).toHaveLength(2);
         expect(text()).not.toContain('34.00');
-        expect(server.selections.subtotal).toBe('17.00');
+        expect(server.selections.subtotal).toBe('0.00');
         expect(
             fetchMock.mock.calls.every(
                 ([, options]) => options.method === 'GET',
@@ -754,6 +767,7 @@ describe('owner cart local editing', () => {
                 expect(options.headers).toMatchObject({ 'If-Match': '"1"' });
                 expect(JSON.parse(options.body as string)).toEqual({
                     items: [{ menu_item_id: 10, quantity: 2 }],
+                    send_to_restaurant: true,
                 });
                 server.selections.items[0].quantity = 2;
                 server.selections.items[0].subtotal = '34.00';

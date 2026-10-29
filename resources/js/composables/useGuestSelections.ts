@@ -88,7 +88,18 @@ export function useGuestSelections(
         if (value && dirty.value) {
             restoreSaved();
             error.value =
-                'The cutoff was reached. Unsaved changes were discarded; saved selections are unchanged.';
+                'The cutoff was reached. Unsaved changes were discarded.';
+        }
+    });
+    let refreshAtCutoff = false;
+    watch(cutoffLocked, (value) => {
+        if (value && menu.value?.timing && !menu.value.timing.locked)
+            refreshAtCutoff = true;
+    });
+    watch([cutoffLocked, busy], () => {
+        if (refreshAtCutoff && !busy.value) {
+            refreshAtCutoff = false;
+            void load();
         }
     });
     function clear() {
@@ -350,7 +361,12 @@ export function useGuestSelections(
                 await guestAction(
                     `${path}/submit`,
                     controller.signal,
-                    { items: input.value },
+                    {
+                        items: input.value,
+                        ...(ownerReservationId
+                            ? { send_to_restaurant: true }
+                            : {}),
+                    },
                     menu.value.guest_state.version,
                 ),
             );

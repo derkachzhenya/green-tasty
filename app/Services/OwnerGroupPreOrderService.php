@@ -22,6 +22,8 @@ class OwnerGroupPreOrderService
         return DB::transaction(function () use ($reservation, $owner): array {
             $locked = $this->lock($reservation, $owner);
 
+            app(PreOrderCutoffService::class)->expireLocked($locked);
+
             return $this->snapshot($locked);
         }, attempts: 3);
     }
@@ -41,6 +43,9 @@ class OwnerGroupPreOrderService
             $this->guestEditable($locked, $guest);
             if ($item->superseded_at !== null) {
                 throw new ConflictHttpException('This item was replaced. Refresh the order.');
+            }
+            if ($quantity > 0 && $item->review_published_at !== null && $item->restaurant_decision === 'rejected') {
+                throw ValidationException::withMessages(['quantity' => 'Remove or replace this rejected dish instead of changing its quantity.']);
             }
             if ($quantity > 0) {
                 // Match the existing category -> dish lock order and stabilize availability.
@@ -210,6 +215,10 @@ class OwnerGroupPreOrderService
             'active_participants' => $guests->count(),
             'removed_participants' => $reservation->guests()->whereNotNull('removed_at')->count(),
             'participants' => $participants, 'summary' => $data['summary'],
+            'cancelled_items' => app(PreOrderCutoffService::class)->available() ? ($order?->items()->whereNotNull('cancelled_at')->with('menuItem', 'guest')->orderBy('id')->get()->map(fn (PreOrderItem $item): array => [
+                'id' => $item->id, 'name' => $item->menuItem->name ?? 'Unavailable dish', 'participant' => $item->guest->name,
+                'quantity' => $item->quantity, 'unit_price' => $item->unit_price, 'notes' => $item->notes,
+            ])->all() ?? []) : [],
             ...($order?->status === 'submitted' && $order->submitted_at !== null ? ['restaurant_review' => app(RestaurantPreOrderReviewService::class)->ownerState($reservation)] : []),
         ];
     }

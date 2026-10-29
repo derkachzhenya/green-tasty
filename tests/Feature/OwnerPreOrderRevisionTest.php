@@ -175,10 +175,12 @@ class OwnerPreOrderRevisionTest extends TestCase
         PreOrderItem::whereKey($this->guestItem)->update(['restaurant_decision' => 'rejected']);
         $this->assertTrue(PreOrderTiming::state($this->reservation)['unconfirmed']);
         $this->travelTo($this->reservation->reserved_at->toImmutable()->subMinutes(30));
-        $before = PreOrderItem::orderBy('id')->get()->toJson();
+        $before = PreOrderItem::findOrFail($this->ownItem)->toJson();
         $this->patchJson($this->root.'/items/'.$this->ownItem, ['quantity' => 2], ['If-Match' => $this->version()])->assertConflict();
         $this->deleteJson($this->root.'/guests/'.PreOrderItem::findOrFail($this->guestItem)->reservation_guest_id, [], ['If-Match' => $this->version()])->assertConflict();
-        $this->assertSame($before, PreOrderItem::orderBy('id')->get()->toJson());
+        $this->assertSame($before, PreOrderItem::findOrFail($this->ownItem)->toJson());
+        $this->assertNotNull(PreOrderItem::findOrFail($this->guestItem)->cancelled_at);
+        $this->assertDatabaseCount('pre_order_items', 2);
     }
 
     public function test_cancellation_from_card_keeps_all_records_and_closes_mutations(): void
@@ -208,7 +210,8 @@ class OwnerPreOrderRevisionTest extends TestCase
         $guest = PreOrderItem::findOrFail($this->guestItem)->guest;
         $this->deleteJson($this->root.'/guests/'.$guest->id, [], ['If-Match' => $this->version()])->assertOk()->assertJsonPath('summary.grand_total', '0.00');
         $this->travelTo($this->reservation->reserved_at->toImmutable()->subMinutes(44));
-        $this->assertTrue(PreOrderTiming::state($this->reservation)['unconfirmed']);
+        // There are no active dishes left to cancel or warn about.
+        $this->assertFalse(PreOrderTiming::state($this->reservation)['unconfirmed']);
         try {
             $review->submit($restaurant, $this->reservation, $staff, $oldVersion);
             $this->fail('A stale review must not acknowledge a changed order.');

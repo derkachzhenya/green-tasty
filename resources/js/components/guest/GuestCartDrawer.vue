@@ -72,11 +72,11 @@ function close(): void {
             >
                 <SheetTitle class="text-[26px] leading-10 font-medium"
                     >Cart</SheetTitle
-                ><SheetDescription class="sr-only"
-                    >Your dishes for this reservation. Confirming your selection
-                    leaves group submission with the reservation
-                    owner.</SheetDescription
-                >
+                ><SheetDescription class="sr-only">{{
+                    ownerEdit
+                        ? 'Your dishes for this reservation. Submit Pre-Order sends the order to the restaurant.'
+                        : 'Your dishes for this reservation. Confirm your selection for the reservation owner.'
+                }}</SheetDescription>
             </header>
             <div
                 v-if="!items.length"

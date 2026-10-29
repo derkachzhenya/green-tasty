@@ -37,12 +37,14 @@ class GuestMenuService
             }
 
             // Match selection/submission lock order. Keep the saved selections and status consistent.
-            $reservation = Reservation::query()->whereKey($initial->reservation_id)->sharedLock()->firstOrFail();
+            $reservation = Reservation::query()->whereKey($initial->reservation_id)->lockForUpdate()->firstOrFail();
             $guest = $this->invitations->resolve($token, lockForUpdate: true);
             if ($guest === null || $guest->reservation_id !== $reservation->id) {
                 return null;
             }
 
+            app(PreOrderCutoffService::class)->expireLocked($reservation);
+            $guest->refresh();
             $invitation = $this->invitations->view($token);
             $selections = $this->selections->view($token);
             if ($invitation === null || $selections === null) {
@@ -57,8 +59,9 @@ class GuestMenuService
     public function forOwner(Reservation $reservation, User $owner): array
     {
         return DB::transaction(function () use ($reservation, $owner): array {
-            $locked = Reservation::query()->whereKey($reservation->id)->sharedLock()->firstOrFail();
+            $locked = Reservation::query()->whereKey($reservation->id)->lockForUpdate()->firstOrFail();
             Gate::forUser($owner)->authorize('view', $locked);
+            app(PreOrderCutoffService::class)->expireLocked($locked);
             $guest = $locked->guests()->where('user_id', $owner->id)->lockForUpdate()->firstOrFail();
 
             return $this->build($locked, $guest, $this->selections->forGuest($guest), null, true);

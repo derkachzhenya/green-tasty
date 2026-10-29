@@ -1,5 +1,7 @@
 # Pre-order cutoff and owner editing
 
+> Historical report (2026-10-26). The T−45/T−30 retention rule described below was superseded on 2026-10-29: unconfirmed dishes now expire at T−30 while published restaurant confirmations remain. See [current implementation and verification](qa-2026-10-29/pre-order-cutoff-ru.md), including migration and scheduler requirements.
+
 Verified locally on 2026-10-26, on `feature/consolidated-group-preorder-figma-owner`, starting from clean HEAD `e5a8061`. No commit, push, merge, deployment or development-data reset was performed. This report supersedes the earlier consolidated-group report for cutoff and personal-cart editing rules.
 
 ## Screenshot-to-feature checklist

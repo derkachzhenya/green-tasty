@@ -1,9 +1,24 @@
 <script setup lang="ts">
 import { CircleCheck, CircleAlert, X } from '@lucide/vue';
-withDefaults(defineProps<{ message: string; error?: boolean }>(), {
-    error: false,
+import { onMounted, watch } from 'vue';
+const props = withDefaults(
+    defineProps<{ message: string; error?: boolean }>(),
+    {
+        error: false,
+    },
+);
+const emit = defineEmits<{ dismiss: [] }>();
+onMounted(() => {
+    watch(
+        [() => props.message, () => props.error],
+        ([message, error], _previous, onCleanup) => {
+            if (!message || error) return;
+            const timer = setTimeout(() => emit('dismiss'), 5000);
+            onCleanup(() => clearTimeout(timer));
+        },
+        { immediate: true },
+    );
 });
-defineEmits<{ dismiss: [] }>();
 </script>
 <template>
     <div

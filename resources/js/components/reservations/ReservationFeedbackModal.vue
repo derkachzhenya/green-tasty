@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { Star } from '@lucide/vue';
 import BookingModal from '@/components/bookings/BookingModal.vue';
 import { Button } from '@/components/ui/button';
 import { sessionJson } from '@/lib/sessionJson';
@@ -96,40 +97,62 @@ onBeforeUnmount(() => controller.abort());
         </p>
         <p v-if="loading" role="status">Loading feedback…</p>
         <form v-else class="space-y-5" @submit.prevent="save">
-            <div
+            <fieldset
                 v-for="field in ['restaurant', 'service']"
                 :key="field"
-                class="space-y-2"
+                class="space-y-3 rounded-xl border border-border/50 p-4"
             >
-                <label
-                    :for="`feedback-${field}`"
-                    class="block text-sm font-medium"
-                    >{{
+                <legend class="block text-sm font-medium">
+                    {{
                         field === 'restaurant'
-                            ? 'Restaurant rating'
-                            : 'Service rating'
-                    }}</label
-                >
-                <select
-                    :id="`feedback-${field}`"
-                    :value="field === 'restaurant' ? restaurant : service"
-                    required
-                    :disabled="busy || !!error"
-                    class="min-h-11 w-full rounded-md border border-border bg-card px-3 focus-visible:outline-2"
-                    @change="
-                        field === 'restaurant'
-                            ? (restaurant = ($event.target as HTMLSelectElement)
-                                  .value)
-                            : (service = ($event.target as HTMLSelectElement)
-                                  .value)
-                    "
-                >
-                    <option value="" disabled>Select a rating</option>
-                    <option v-for="rating in 5" :key="rating" :value="rating">
-                        {{ rating }} / 5
-                    </option>
-                </select>
-            </div>
+                            ? '1. Restaurant rating'
+                            : '2. Service rating'
+                    }}
+                </legend>
+                <div class="flex gap-2">
+                    <label
+                        v-for="rating in 5"
+                        :key="rating"
+                        class="relative cursor-pointer"
+                    >
+                        <input
+                            :name="`feedback-${field}`"
+                            type="radio"
+                            :value="rating"
+                            :checked="
+                                Number(
+                                    field === 'restaurant'
+                                        ? restaurant
+                                        : service,
+                                ) === rating
+                            "
+                            :aria-label="`${field === 'restaurant' ? 'Restaurant' : 'Service'}: ${rating} out of 5`"
+                            required
+                            :disabled="busy || !!error"
+                            class="peer absolute inset-0 size-full cursor-pointer opacity-0"
+                            @change="
+                                field === 'restaurant'
+                                    ? (restaurant = String(rating))
+                                    : (service = String(rating))
+                            "
+                        />
+                        <span
+                            class="grid size-11 place-items-center rounded-md peer-focus-visible:outline-2 peer-focus-visible:outline-primary"
+                            ><Star
+                                class="size-7 text-primary"
+                                :class="
+                                    Number(
+                                        field === 'restaurant'
+                                            ? restaurant
+                                            : service,
+                                    ) >= rating
+                                        ? 'fill-primary'
+                                        : 'fill-none'
+                                "
+                        /></span>
+                    </label>
+                </div>
+            </fieldset>
             <label for="feedback-comment" class="block text-sm font-medium"
                 >Comment (optional)</label
             >
@@ -146,7 +169,7 @@ onBeforeUnmount(() => controller.abort());
             <Button
                 type="submit"
                 class="min-h-11 w-full"
-                :disabled="busy || !!error"
+                :disabled="busy || !!error || !restaurant || !service"
                 >{{ busy ? 'Saving…' : 'Save Feedback' }}</Button
             >
         </form>
