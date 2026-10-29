@@ -15,7 +15,6 @@ use App\Http\Controllers\ReservationDashboardController;
 use App\Http\Controllers\ReservationFeedbackController;
 use App\Http\Controllers\RestaurantBookingController;
 use App\Http\Controllers\RestaurantController;
-use App\Http\Controllers\SharedInvitationController;
 use App\Http\Middleware\AuthenticateGuestInvitation;
 use App\Http\Middleware\InvitationSecurityHeaders;
 use Illuminate\Support\Facades\Route;
@@ -29,7 +28,6 @@ Route::post('book/continue', [BookingSearchController::class, 'resume'])->middle
 Route::get('restaurants/{restaurant:slug}', [RestaurantController::class, 'show'])->name('restaurants.show');
 
 Route::middleware(['auth', 'verified', 'cache.headers:private;no_store'])->group(function () {
-    Route::post('reservations/{reservation}/invite-link', [SharedInvitationController::class, 'issue'])->middleware('throttle:invitation-management');
     Route::get('reservations/{reservation}/pre-order/owner-view', [OwnerGroupPreOrderController::class, 'show'])->name('reservations.pre-order.owner-view');
     Route::patch('reservations/{reservation}/pre-order/owner-view/items/{item}', [OwnerGroupPreOrderController::class, 'quantity'])->whereNumber('item')->middleware('throttle:guest-selections');
     Route::delete('reservations/{reservation}/pre-order/owner-view/guests/{guest}', [OwnerGroupPreOrderController::class, 'removeGuest'])->whereNumber('guest')->middleware('throttle:invitation-management');
@@ -49,9 +47,6 @@ Route::middleware(['auth', 'verified', 'cache.headers:private;no_store'])->group
     Route::post('restaurants/{restaurant:slug}/book', [RestaurantBookingController::class, 'store'])->middleware('throttle:booking-create')->name('restaurants.bookings.store');
     Route::get('reservations/{reservation}/confirmation', [RestaurantBookingController::class, 'show'])->name('reservations.confirmation');
 });
-
-Route::get('join/{reservation}', [SharedInvitationController::class, 'show'])->middleware(['signed', InvitationSecurityHeaders::class, 'throttle:invitation-access'])->name('invitations.join');
-Route::post('join/{reservation}', [SharedInvitationController::class, 'join'])->middleware(['signed', InvitationSecurityHeaders::class, 'throttle:invitation-management']);
 
 Route::get('reservations', MyReservationsController::class)
     ->middleware(['auth', 'verified', 'cache.headers:private;no_store'])

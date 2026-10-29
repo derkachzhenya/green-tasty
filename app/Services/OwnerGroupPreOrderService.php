@@ -44,9 +44,6 @@ class OwnerGroupPreOrderService
             if ($item->superseded_at !== null) {
                 throw new ConflictHttpException('This item was replaced. Refresh the order.');
             }
-            if ($quantity > 0 && $item->review_published_at !== null && $item->restaurant_decision === 'rejected') {
-                throw ValidationException::withMessages(['quantity' => 'Remove or replace this rejected dish instead of changing its quantity.']);
-            }
             if ($quantity > 0) {
                 // Match the existing category -> dish lock order and stabilize availability.
                 $category = MenuCategory::query()->whereHas('items', fn ($query) => $query->whereKey($item->menu_item_id))->sharedLock()->first();
