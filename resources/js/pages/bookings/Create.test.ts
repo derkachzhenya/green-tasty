@@ -91,13 +91,14 @@ vi.mock('@/components/bookings/BookingModal.vue', async () => {
     const { defineComponent } = await import('vue');
     return {
         default: defineComponent({
-            props: ['open', 'title', 'description', 'busy'],
+            props: ['open', 'title', 'description', 'subtitle', 'busy'],
             setup:
                 (props, { slots }) =>
                 () =>
                     props.open
                         ? h('section', { role: 'dialog' }, [
                               h('h2', props.title),
+                              props.subtitle ? h('p', props.subtitle) : null,
                               slots.default?.(),
                           ])
                         : null,
@@ -201,7 +202,7 @@ describe('database-backed booking search and review', () => {
         expect(form.date).toBe('');
         expect(text()).not.toContain('Garden table');
     });
-    it('uses the supplied default photo, actual addresses and real support phone without an initial booking', () => {
+    it('uses the supplied default photo, actual addresses and the design support phone without an initial booking', () => {
         expect(
             findAll(mounted.root, (node) => node.tag === 'img').some((node) =>
                 decodeURIComponent(String(node.props.src)).endsWith(
@@ -210,8 +211,10 @@ describe('database-backed booking search and review', () => {
             ),
         ).toBe(true);
         expect(text()).toContain('48 Rustaveli Avenue');
-        expect(text()).toContain('+995 32 123 4567');
-        expect(text()).not.toContain('+123 445');
+        expect(text()).toContain(
+            'For groups larger than 4, please call us directly at',
+        );
+        expect(text()).toContain('+123 445 678 8990');
         expect(transport.post).not.toHaveBeenCalled();
     });
     it.each([
@@ -271,8 +274,20 @@ describe('database-backed booking search and review', () => {
                 .props.disabled,
         ).toBe(true);
         await fire(slot(), 'onClick');
+        const review = findAll(
+            mounted.root,
+            (node) => node.props.role === 'dialog',
+        )[0];
+        const reviewText = textContent(review);
         expect(text()).toContain('12:00 – 14:00');
-        expect(text()).toContain('Asia/Tbilisi');
+        expect(text()).not.toContain(
+            '2-hour bookings · Asia/Tbilisi. Guest count includes you.',
+        );
+        expect(reviewText).toContain(
+            'You can cancel up to 30 min before your reservation.',
+        );
+        expect(reviewText).not.toContain('TableGarden table');
+        expect(reviewText).not.toContain('Times in Asia/Tbilisi');
         expect(text()).not.toContain('Reservation Confirmed');
         expect(transport.post).not.toHaveBeenCalled();
     });
@@ -423,6 +438,12 @@ describe('database-backed booking search and review', () => {
         await fire(slot(), 'onClick');
         await fire(button('Edit'), 'onClick');
         expect(text()).toContain('Edit Reservation');
+        expect(text()).toContain(
+            '48 Rustaveli Avenue · Garden table · Oct 24, 2026',
+        );
+        expect(text()).toContain('Need more time or want to make changes?');
+        expect(text()).toContain('+123 445 678 8990');
+        expect(text()).not.toContain('Times in Asia/Tbilisi');
         const duration = findAll(
             mounted.root,
             (node) => node.props.id === 'edit-duration',

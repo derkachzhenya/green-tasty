@@ -20,12 +20,16 @@ import type {
     BookingSearchTable,
 } from '@/types/booking';
 
-const props = defineProps<{
-    restaurant: BookingRestaurant | null;
-    restaurants: BookingRestaurant[];
-    bookingRules: BookingRules;
-    initialSelection?: Record<string, unknown>;
-}>();
+const props = withDefaults(
+    defineProps<{
+        restaurant: BookingRestaurant | null;
+        restaurants: BookingRestaurant[];
+        bookingRules: BookingRules;
+        initialSelection?: Record<string, unknown>;
+        backgroundOnly?: boolean;
+    }>(),
+    { backgroundOnly: false },
+);
 const page = usePage();
 const hint = props.initialSelection ?? {};
 const safeString = (value: unknown) => (typeof value === 'string' ? value : '');
@@ -295,9 +299,10 @@ onMounted(async () => {
     if (
         safeString(hint.date) &&
         safeString(hint.time) &&
-        Number(hint.table) > 0
+        (props.backgroundOnly || Number(hint.table) > 0)
     ) {
         await findTables();
+        if (props.backgroundOnly) return;
         const table = tables.value?.find(
             (table) =>
                 table.id === Number(hint.table) &&
@@ -309,7 +314,7 @@ onMounted(async () => {
 </script>
 
 <template>
-    <Head title="Book a Table" />
+    <Head v-if="!backgroundOnly" title="Book a Table" />
     <div
         class="booking-page mx-auto grid min-h-[calc(100dvh-68px)] max-w-[1440px] bg-background lg:grid-cols-[512px_minmax(0,1fr)]"
     >
@@ -325,7 +330,7 @@ onMounted(async () => {
                 @change="change"
                 @search="findTables"
             />
-            <BookingSupport :phone="selectedRestaurant?.phone" />
+            <BookingSupport phone="+123 445 678 8990" />
         </aside>
         <section
             class="min-w-0"
@@ -402,6 +407,7 @@ onMounted(async () => {
         </section>
     </div>
     <BookingModal
+        v-if="!backgroundOnly"
         :open="modal !== null"
         :title="
             modal === 'edit'
@@ -409,32 +415,39 @@ onMounted(async () => {
                 : 'Review & Confirm Reservation'
         "
         description="Review your selected restaurant, table, date, time and guests before confirming."
+        :subtitle="
+            modal === 'edit' && selected
+                ? `${selected.table.restaurant.address} · ${selected.table.name} · ${bookingDate(form.date)}`
+                : undefined
+        "
         :busy="form.processing || loading || authBusy"
         @update:open="!$event && (modal = null)"
     >
         <template v-if="selected && end">
-            <ReservationFacts
-                :address="selected.table.restaurant.address"
-                :table="selected.table.name"
-                :date="form.date"
-                :time="selected.time"
-                :end-date="end.date"
-                :end-time="end.time"
-                :guests="form.guest_count"
-                :timezone="bookingRules.timezone"
-            />
             <template v-if="modal === 'review'">
+                <ReservationFacts
+                    class="!gap-x-8"
+                    :address="selected.table.restaurant.address"
+                    :table="selected.table.name"
+                    :date="form.date"
+                    :time="selected.time"
+                    :end-date="end.date"
+                    :end-time="end.time"
+                    :guests="form.guest_count"
+                    :timezone="bookingRules.timezone"
+                    :show-table="false"
+                    :show-timezone="false"
+                />
                 <p
-                    class="mb-4 rounded-lg border border-primary/15 bg-[#f0fff0] p-3 text-xs leading-5"
+                    class="mb-4 rounded-lg border border-primary/15 bg-[#f0fff0] p-3 text-sm leading-6"
                 >
-                    Your table is reserved only after confirmation. Availability
-                    is checked again when you confirm.
+                    You can cancel up to 30 min before your reservation.
                 </p>
                 <div class="flex gap-4">
                     <Button
                         variant="outline"
                         :disabled="form.processing || authBusy"
-                        class="h-14 bg-card"
+                        class="h-14 w-20 bg-card text-primary"
                         @click="edit"
                         >Edit</Button
                     ><Button

@@ -29,7 +29,7 @@ class MyReservationsService
         $reservations = Reservation::query()
             // Ownership is always derived from authentication, never query parameters.
             ->where('owner_user_id', $owner->id)
-            ->select(['id', 'restaurant_id', 'restaurant_table_id', 'owner_user_id', 'code', 'reserved_at', 'duration_minutes', 'guest_count', 'status', 'updated_at', 'pre_order_seen_event_id'])
+            ->select(['id', 'restaurant_id', 'restaurant_table_id', 'owner_user_id', 'code', 'reserved_at', 'duration_minutes', 'guest_count', 'status', 'created_at', 'updated_at', 'pre_order_seen_event_id'])
             ->addSelect(['latest_pre_order_event_id' => DB::table('reservation_events')->selectRaw('MAX(id)')->whereColumn('reservation_id', 'reservations.id')->where('audience', 'owner')->whereColumn('recipient_user_id', 'reservations.owner_user_id')])
             ->with(['restaurant:id,name,slug,address', 'table:id,name,seats', 'preOrder:id,reservation_id,status,submitted_at', 'feedback:id,reservation_id'])
             ->withCount(['guests as active_participants' => fn (Builder $q) => $q->whereNull('removed_at'),
@@ -40,7 +40,7 @@ class MyReservationsService
             ->withExists(['guests as owner_submitted' => fn (Builder $q) => $q
                 ->whereColumn('user_id', 'reservations.owner_user_id')->whereNotNull('pre_order_submitted_at')])
             ->when($filter !== 'all', fn (Builder $query) => $this->filter($query, $filter))
-            ->orderByDesc('reserved_at')->orderByDesc('id')
+            ->orderByDesc('created_at')->orderByDesc('id')
             ->paginate(self::PER_PAGE, page: $page)
             ->withPath(route($route))
             ->appends($filter === 'all' ? [] : ['status' => $filter]);

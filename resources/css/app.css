@@ -195,6 +195,27 @@
     --gt-card-shadow: 0 0 10px 4px rgb(218 218 218 / 70%);
 }
 
+.gt-toast {
+    pointer-events: auto;
+    position: fixed;
+    top: 136px;
+    right: 16px;
+    z-index: 100;
+    width: min(380px, calc(100% - 32px));
+}
+
+@media (min-width: 640px) {
+    .gt-toast {
+        right: 32px;
+    }
+}
+
+@media (min-width: 1024px) {
+    .gt-toast {
+        top: 84px;
+    }
+}
+
 /* The same white surface is used by Figma's dish cards and owner dialogs. */
 .green-tasty .gt-card {
     border-radius: 24px;

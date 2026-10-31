@@ -19,6 +19,7 @@ import Confirmation from './Confirmation.vue';
 
 const transport = vi.hoisted(() => ({
     patch: vi.fn(),
+    visit: vi.fn(),
     before: undefined as
         | undefined
         | ((event: { detail: { visit: { url: URL } } }) => void),
@@ -35,6 +36,7 @@ vi.mock('@inertiajs/vue3', async () => {
     return {
         Head: { render: () => null },
         router: {
+            visit: transport.visit,
             on: (_event: string, callback: typeof transport.before) => {
                 transport.before = callback;
                 return () => {
@@ -76,6 +78,16 @@ vi.mock('@inertiajs/vue3', async () => {
         },
     };
 });
+vi.mock('./Create.vue', async () => {
+    const { defineComponent, h } = await import('vue');
+    return {
+        __esModule: true,
+        default: defineComponent({
+            props: ['backgroundOnly'],
+            setup: () => () => h('div', 'Book a Table background'),
+        }),
+    };
+});
 vi.mock('@/components/ui/button', () => ({
     Button: {
         setup:
@@ -91,13 +103,14 @@ vi.mock('@/components/bookings/BookingModal.vue', async () => {
     const { defineComponent } = await import('vue');
     return {
         default: defineComponent({
-            props: ['open', 'title', 'description', 'busy'],
+            props: ['open', 'title', 'description', 'subtitle', 'busy'],
             setup:
                 (props, { slots }) =>
                 () =>
                     props.open
                         ? h('section', { role: 'dialog' }, [
                               h('h2', props.title),
+                              props.subtitle ? h('p', props.subtitle) : null,
                               slots.default?.(),
                           ])
                         : null,
@@ -127,6 +140,39 @@ const issued = {
     expires_at: '2026-10-30T12:00:00Z',
     invitation_url: `http://localhost/invitations/${'a'.repeat(64)}`,
 };
+const bookingBackground = {
+    restaurant: {
+        id: 2,
+        name: 'Actual restaurant',
+        address: '14 Baratashvili Street',
+        slug: 'location-2',
+    },
+    restaurants: [
+        {
+            id: 2,
+            name: 'Actual restaurant',
+            address: '14 Baratashvili Street',
+            slug: 'location-2',
+        },
+    ],
+    bookingRules: {
+        timezone: 'Asia/Tbilisi',
+        duration_minutes: 120,
+        allowed_durations: [90, 120, 150, 180],
+        slot_minutes: 30,
+        min_date: '2026-10-30',
+        max_date: '2027-01-28',
+        default_date: '2026-10-31',
+        max_guests: 255,
+    },
+    initialSelection: {
+        restaurant: 'location-2',
+        date: '2026-10-24',
+        time: '23:30',
+        guest_count: 2,
+        duration_minutes: 120,
+    },
+};
 let mounted: ReturnType<typeof mountComponent>;
 let fetchMock: ReturnType<typeof vi.fn>;
 let copy: ReturnType<typeof vi.fn>;
@@ -152,7 +198,13 @@ async function generate(): Promise<void> {
     );
     await flush();
 }
-beforeEach(() => {
+async function startEditing(): Promise<void> {
+    mounted.setProps({ startEditing: false });
+    await flush();
+    mounted.setProps({ startEditing: true });
+    await flush();
+}
+beforeEach(async () => {
     vi.stubGlobal('Document', class {});
     vi.stubGlobal('ShadowRoot', class {});
     pageWindow = Object.assign(new EventTarget(), {
@@ -180,7 +232,13 @@ beforeEach(() => {
     transport.patch.mockReset().mockImplementation(() => {
         form.processing = true;
     });
-    mounted = mountComponent(Confirmation, { reservation, canEdit: true });
+    transport.visit.mockReset();
+    mounted = mountComponent(Confirmation, {
+        reservation,
+        canEdit: true,
+        bookingBackground,
+    });
+    await flush();
 });
 afterEach(() => {
     mounted.unmount();
@@ -191,8 +249,14 @@ describe('persisted booking confirmation', () => {
     it('renders saved identities and cross-midnight interval with real navigation and no invitation side effects', () => {
         expect(text()).toContain('Reservation Confirmed');
         expect(text()).toContain('14 Baratashvili Street');
-        expect(text()).toContain('Patio');
         expect(text()).toContain('23:30 – 01:30 (Oct 25, 2026)');
+        expect(text()).toContain('Book a Table background');
+        const dialog = findAll(
+            mounted.root,
+            (node) => node.props.role === 'dialog',
+        )[0];
+        expect(textContent(dialog)).not.toContain('Patio');
+        expect(textContent(dialog)).not.toContain('Times in Asia/Tbilisi');
         const links = findAll(mounted.root, (node) => node.tag === 'a');
         expect(
             links.some(
@@ -223,9 +287,17 @@ describe('persisted booking confirmation', () => {
                 body: JSON.stringify({ name: 'Alice' }),
             }),
         );
-        await fire(button('Copy Link'), 'onClick');
+        const copyButton = findAll(
+            mounted.root,
+            (node) => node.props['aria-label'] === 'Copy invite link',
+        )[0];
+        await fire(copyButton, 'onClick');
         expect(copy).toHaveBeenCalledWith(issued.invitation_url);
         expect(text()).toContain('Link copied!');
+        expect(text()).toContain('Share it with your friend.');
+        expect(text()).toContain(
+            'You are able to share this link for pre-order with Alice.',
+        );
     });
     it('clears the raw link on page lifecycle events and never places it in props or URLs', async () => {
         await generate();
@@ -252,7 +324,7 @@ describe('persisted booking confirmation', () => {
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
     it('saves only supported edits with the real reservation id and blocks repeat saves', async () => {
-        await fire(button('Edit Reservation'), 'onClick');
+        await startEditing();
         form.time = '22:00';
         form.guest_count = 3;
         const duration = findAll(
@@ -275,7 +347,7 @@ describe('persisted booking confirmation', () => {
         expect(text()).toContain('1.5 hours');
     });
     it('keeps edit errors and requires reload after an uncertain result', async () => {
-        await fire(button('Edit Reservation'), 'onClick');
+        await startEditing();
         await fire(
             findAll(mounted.root, (node) => node.tag === 'form')[0],
             'onSubmit',
@@ -287,7 +359,7 @@ describe('persisted booking confirmation', () => {
         expect(button('Save Changes').props.disabled).toBe(true);
     });
     it('does not clear uncertain-edit protection when reopening the edit form', async () => {
-        await fire(button('Edit Reservation'), 'onClick');
+        await startEditing();
         await fire(
             findAll(mounted.root, (node) => node.tag === 'form')[0],
             'onSubmit',
@@ -295,7 +367,7 @@ describe('persisted booking confirmation', () => {
         transport.patch.mock.calls[0][1].onNetworkError();
         form.processing = false;
         await flush();
-        await fire(button('Edit Reservation'), 'onClick');
+        await startEditing();
         expect(text()).toContain('Reload the saved reservation');
         await fire(
             findAll(mounted.root, (node) => node.tag === 'form')[0],
@@ -306,7 +378,7 @@ describe('persisted booking confirmation', () => {
     it.each([0, 5, 1.5])(
         'rejects edit guest count %s outside the real table capacity',
         async (count) => {
-            await fire(button('Edit Reservation'), 'onClick');
+            await startEditing();
             form.guest_count = count;
             await fire(
                 findAll(mounted.root, (node) => node.tag === 'form')[0],
@@ -317,7 +389,7 @@ describe('persisted booking confirmation', () => {
         },
     );
     it('permits another edit only after receiving a refreshed saved reservation', async () => {
-        await fire(button('Edit Reservation'), 'onClick');
+        await startEditing();
         await fire(
             findAll(mounted.root, (node) => node.tag === 'form')[0],
             'onSubmit',
@@ -329,7 +401,7 @@ describe('persisted booking confirmation', () => {
             reservation: { ...reservation, time: '22:00', end_time: '00:00' },
         });
         await flush();
-        await fire(button('Edit Reservation'), 'onClick');
+        await startEditing();
         expect(text()).not.toContain('Reload the saved reservation');
         expect(form.time).toBe('22:00');
         await fire(
@@ -342,6 +414,7 @@ describe('persisted booking confirmation', () => {
         mounted.setProps({
             reservation: { ...reservation, status: 'completed' },
             canEdit: false,
+            startEditing: false,
         });
         await flush();
         expect(text()).not.toContain('Create Invite Link');

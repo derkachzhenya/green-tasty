@@ -1,26 +1,43 @@
 <script setup lang="ts">
-import { Head, Link, useForm } from '@inertiajs/vue3';
-import { computed, ref, watch } from 'vue';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { CircleCheck, Copy, X } from '@lucide/vue';
+import { computed, defineAsyncComponent, ref, watch } from 'vue';
 import BookingModal from '@/components/bookings/BookingModal.vue';
 import EditBookingFields from '@/components/bookings/EditBookingFields.vue';
 import ReservationFacts from '@/components/bookings/ReservationFacts.vue';
 import InputError from '@/components/InputError.vue';
-import SiteContainer from '@/components/site/SiteContainer.vue';
 import { Button } from '@/components/ui/button';
 import { useGuestInvitations } from '@/composables/useGuestInvitations';
-import { bookingGuestError } from '@/lib/booking';
+import { bookingDate, bookingGuestError } from '@/lib/booking';
 import { dashboard } from '@/routes';
-import { create } from '@/routes/booking';
+import { create as bookingCreate } from '@/routes/booking';
 import { show as reservationShow } from '@/routes/reservations';
 import { update } from '@/routes/reservations/booking';
-import type { BookingConfirmation } from '@/types/booking';
+import type {
+    BookingConfirmation,
+    BookingRestaurant,
+    BookingRules,
+} from '@/types/booking';
 
-const props = defineProps<{
-    reservation: BookingConfirmation;
-    canEdit: boolean;
-}>();
+const BookingPage = defineAsyncComponent(() => import('./Create.vue'));
+
+type BookingBackground = {
+    restaurant: BookingRestaurant | null;
+    restaurants: BookingRestaurant[];
+    bookingRules: BookingRules;
+    initialSelection: Record<string, unknown>;
+};
+const props = withDefaults(
+    defineProps<{
+        reservation: BookingConfirmation;
+        canEdit: boolean;
+        startEditing?: boolean;
+        bookingBackground: BookingBackground;
+    }>(),
+    { startEditing: false },
+);
 const open = ref(true);
-const editing = ref(false);
+const editing = ref(props.startEditing && props.canEdit);
 const duration = computed(
     () =>
         (Date.parse(
@@ -57,6 +74,21 @@ function generate(): void {
     invitation.open('create');
     name.value = guestName;
     void invitation.submit();
+}
+function dismissCopyMessage(): void {
+    copyMessage.value = '';
+}
+function handleModalOpen(next: boolean): void {
+    if (next) {
+        open.value = true;
+        return;
+    }
+    open.value = false;
+    router.visit(
+        editing.value
+            ? reservationShow(props.reservation.id).url
+            : bookingCreate().url,
+    );
 }
 function beginEdit(): void {
     form.time = props.reservation.time;
@@ -101,10 +133,16 @@ watch(
     },
 );
 watch(
+    () => props.startEditing,
+    (value) => {
+        if (value && props.canEdit) beginEdit();
+    },
+);
+watch(
     () => props.reservation.id,
     () => {
         invitation.clear();
-        editing.value = false;
+        editing.value = props.startEditing && props.canEdit;
         open.value = true;
     },
 );
@@ -113,54 +151,45 @@ watch(
     <Head title="Your reservation"
         ><meta name="robots" content="noindex"
     /></Head>
-    <SiteContainer class="py-12">
-        <section
-            class="mx-auto max-w-[600px] space-y-6 rounded-3xl bg-card p-6 sm:p-10"
-        >
-            <h1 class="text-[32px] leading-10 font-medium">
+    <BookingPage
+        :restaurant="bookingBackground.restaurant"
+        :restaurants="bookingBackground.restaurants"
+        :booking-rules="bookingBackground.bookingRules"
+        :initial-selection="bookingBackground.initialSelection"
+        background-only
+    />
+    <div
+        v-if="copyMessage"
+        role="status"
+        class="gt-toast flex items-start gap-3 rounded-lg border border-primary bg-[#edffed] px-5 py-4 shadow-lg"
+    >
+        <CircleCheck class="mt-0.5 size-5 shrink-0 fill-primary text-white" />
+        <div class="min-w-0 flex-1">
+            <p class="text-sm font-medium">
                 {{
-                    reservation.status === 'confirmed'
-                        ? 'Reservation Confirmed'
-                        : 'Reservation details'
+                    copyMessage === 'Invitation link copied.'
+                        ? 'Link copied!'
+                        : copyMessage
                 }}
-            </h1>
-            <p class="text-sm wrap-anywhere">
-                Reference: {{ reservation.code }} · {{ reservation.status }}
             </p>
-            <ReservationFacts
-                :address="reservation.restaurant.address"
-                :table="reservation.table?.name ?? 'No longer assigned'"
-                :date="reservation.date"
-                :time="reservation.time"
-                :end-date="reservation.end_date"
-                :end-time="reservation.end_time"
-                :guests="reservation.guest_count"
-                :timezone="reservation.timezone"
-            />
-            <div class="flex flex-wrap gap-3">
-                <Button v-if="canEdit" variant="outline" @click="beginEdit"
-                    >Edit Reservation</Button
-                ><Button
-                    variant="outline"
-                    @click="
-                        editing = false;
-                        open = true;
-                    "
-                    >Show confirmation</Button
-                ><Link
-                    :href="dashboard()"
-                    class="inline-flex min-h-11 items-center underline"
-                    >My Reservations</Link
-                ><Link
-                    :href="create()"
-                    class="inline-flex min-h-11 items-center underline"
-                    >Book another table</Link
-                >
-            </div>
-        </section>
-    </SiteContainer>
+            <p
+                v-if="copyMessage === 'Invitation link copied.'"
+                class="mt-1 text-sm"
+            >
+                Share it with your friend.
+            </p>
+        </div>
+        <button
+            type="button"
+            aria-label="Dismiss notification"
+            class="-m-2 rounded-md p-2 focus-visible:outline-2"
+            @click="dismissCopyMessage"
+        >
+            <X class="size-5" />
+        </button>
+    </div>
     <BookingModal
-        v-model:open="open"
+        :open="open"
         :title="
             editing
                 ? 'Edit Reservation'
@@ -169,9 +198,16 @@ watch(
                   : 'Reservation details'
         "
         description="Saved reservation details and individual guest invitations."
+        :subtitle="
+            editing
+                ? `${reservation.restaurant.address} · ${reservation.table?.name ?? 'No longer assigned'} · ${bookingDate(reservation.date)}`
+                : undefined
+        "
         :busy="form.processing || busy"
+        @update:open="handleModalOpen"
     >
         <ReservationFacts
+            v-if="!editing"
             :address="reservation.restaurant.address"
             :table="reservation.table?.name ?? 'No longer assigned'"
             :date="reservation.date"
@@ -180,6 +216,8 @@ watch(
             :end-time="reservation.end_time"
             :guests="reservation.guest_count"
             :timezone="reservation.timezone"
+            :show-table="false"
+            :show-timezone="false"
         />
         <template v-if="editing">
             <p v-if="editError" role="alert" class="text-sm text-destructive">
@@ -204,29 +242,31 @@ watch(
                 <h2 class="text-sm font-medium">Invite Link</h2>
                 <template v-if="issued">
                     <div
-                        class="flex min-w-0 items-center gap-2 rounded-lg border border-primary/20 bg-[#f0fff0] p-2"
+                        class="flex min-w-0 items-center gap-2 rounded-lg border border-[#b9e6bd] bg-[#efffef] px-3"
                     >
                         <input
                             :value="issued.invitation_url"
                             readonly
                             aria-label="Guest invite link"
-                            class="min-w-0 flex-1 bg-transparent text-sm"
+                            autocomplete="off"
+                            spellcheck="false"
+                            class="min-h-12 min-w-0 flex-1 bg-transparent text-sm focus-visible:outline-2"
                             @focus="
                                 ($event.target as HTMLInputElement).select()
                             "
                         /><button
                             type="button"
+                            aria-label="Copy invite link"
                             :disabled="copying"
-                            class="min-h-11 shrink-0 rounded-md px-2 text-sm text-primary focus-visible:outline-2"
+                            class="grid size-11 shrink-0 place-items-center rounded-md focus-visible:outline-2"
                             @click="invitation.copy"
                         >
-                            Copy Link
+                            <Copy class="size-5" />
                         </button>
                     </div>
-                    <p class="text-xs leading-5">
-                        This individual link is for {{ issued.name }}. Create
-                        separate invitations for other guests in your
-                        reservation.
+                    <p class="text-xs leading-5 text-muted-foreground">
+                        You are able to share this link for pre-order with
+                        {{ issued.name }}.
                     </p>
                 </template>
                 <form v-else class="space-y-2" @submit.prevent="generate">
@@ -256,27 +296,15 @@ watch(
                         }}</Button
                     >
                     <p class="text-xs leading-5 text-muted-foreground">
-                        Create one private link per guest for their pre-order.
-                        Links are shown once; manage or regenerate them from
-                        your reservation.
+                        Enter a guest name to create their private pre-order
+                        link. Create a separate link for each guest.
                     </p>
                 </form>
                 <p v-if="error" role="alert" class="text-sm text-destructive">
                     {{ error }}
                 </p>
-                <p
-                    v-if="copyMessage"
-                    role="status"
-                    class="rounded-lg bg-accent p-3 text-sm"
-                >
-                    {{
-                        copyMessage === 'Invitation link copied.'
-                            ? 'Link copied! Share it with your guest.'
-                            : copyMessage
-                    }}
-                </p>
             </div>
-            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+            <div class="mt-6 grid gap-3 sm:grid-cols-2">
                 <Button as-child variant="outline" class="min-h-14 bg-card"
                     ><Link :href="dashboard()">View Reservation</Link></Button
                 ><Button as-child class="min-h-14"
@@ -291,13 +319,6 @@ watch(
                     ></Button
                 >
             </div>
-            <Button
-                v-if="canEdit"
-                variant="outline"
-                class="min-h-11"
-                @click="beginEdit"
-                >Edit Reservation</Button
-            >
         </template>
     </BookingModal>
 </template>

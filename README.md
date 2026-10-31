@@ -20,17 +20,17 @@ Green Tasty allows customers to discover restaurants, make reservations, invite 
 
 ## Technology Stack
 
-| Layer | Technologies |
-|---|---|
-| Backend | PHP 8.3+, Laravel 13 |
-| Frontend | Vue 3, TypeScript |
-| Full-stack Integration | Inertia.js |
-| Styling | Tailwind CSS 4 |
-| Database | MySQL 8.4 |
+| Layer                   | Technologies         |
+| ----------------------- | -------------------- |
+| Backend                 | PHP 8.3+, Laravel 13 |
+| Frontend                | Vue 3, TypeScript    |
+| Full-stack Integration  | Inertia.js           |
+| Styling                 | Tailwind CSS 4       |
+| Database                | MySQL 8.4            |
 | Development Environment | Docker, Laravel Sail |
-| Build Tools | Vite, Vite Plus |
-| Testing | PHPUnit, Vitest |
-| Deployment | AWS |
+| Build Tools             | Vite, Vite Plus      |
+| Testing                 | PHPUnit, Vitest      |
+| Deployment              | AWS                  |
 
 ## Getting Started
 

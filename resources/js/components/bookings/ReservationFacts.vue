@@ -1,15 +1,20 @@
 <script setup lang="ts">
 import { bookingDate } from '@/lib/booking';
-defineProps<{
-    address: string;
-    date: string;
-    time: string;
-    endTime: string;
-    endDate: string;
-    guests: number;
-    table: string;
-    timezone: string;
-}>();
+withDefaults(
+    defineProps<{
+        address: string;
+        date: string;
+        time: string;
+        endTime: string;
+        endDate: string;
+        guests: number;
+        table: string;
+        timezone: string;
+        showTable?: boolean;
+        showTimezone?: boolean;
+    }>(),
+    { showTable: true, showTimezone: true },
+);
 </script>
 <template>
     <dl
@@ -17,8 +22,10 @@ defineProps<{
     >
         <dt>Location</dt>
         <dd class="wrap-anywhere">{{ address }}</dd>
-        <dt>Table</dt>
-        <dd class="wrap-anywhere">{{ table }}</dd>
+        <template v-if="showTable">
+            <dt>Table</dt>
+            <dd class="wrap-anywhere">{{ table }}</dd>
+        </template>
         <dt>Date</dt>
         <dd>{{ bookingDate(date) }}</dd>
         <dt>Time</dt>
@@ -28,9 +35,11 @@ defineProps<{
         </dd>
         <dt>Guests</dt>
         <dd>{{ guests }} {{ guests === 1 ? 'person' : 'people' }}</dd>
-        <dt class="sr-only">Timezone</dt>
-        <dd class="col-span-2 text-xs text-muted-foreground">
-            Times in {{ timezone }}
-        </dd>
+        <template v-if="showTimezone">
+            <dt class="sr-only">Timezone</dt>
+            <dd class="col-span-2 text-xs text-muted-foreground">
+                Times in {{ timezone }}
+            </dd>
+        </template>
     </dl>
 </template>

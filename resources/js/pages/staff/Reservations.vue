@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { Head, usePage, router, Link } from '@inertiajs/vue3';
 import { ref, shallowRef, computed, onMounted, onBeforeUnmount } from 'vue';
-import { onClickOutside } from '@vueuse/core';
 import {
     CalendarDays,
     Clock,
@@ -9,8 +8,9 @@ import {
     Trash2,
     Pencil,
     Search,
-    Bell,
+    Plus,
     CircleCheck,
+    CircleAlert,
     X,
     UserRound,
     Salad,
@@ -23,7 +23,10 @@ import SiteContainer from '@/components/site/SiteContainer.vue';
 import { Button } from '@/components/ui/button';
 import { sessionJson, SessionRequestError } from '@/lib/sessionJson';
 import { bookingDurations, bookingDate, bookingTimes } from '@/lib/booking';
-import type { WaiterReservation } from '@/types/restaurant-review';
+import type {
+    WaiterReservation,
+    RestaurantNotification,
+} from '@/types/restaurant-review';
 defineOptions({ inheritAttrs: false });
 const props = defineProps<{
     restaurant: { id: number; name: string; address: string };
@@ -33,13 +36,9 @@ const props = defineProps<{
         data: WaiterReservation[];
         links: { url: string | null; label: string; active: boolean }[];
     };
-    notifications: { reservation_id: number; kind: string; revision: number }[];
+    notifications: RestaurantNotification[];
 }>();
 const page = usePage();
-const notificationsMenu = ref<HTMLDetailsElement | null>(null);
-onClickOutside(notificationsMenu, () => {
-    if (notificationsMenu.value) notificationsMenu.value.open = false;
-});
 const root = computed(
     () => `/staff/restaurants/${props.restaurant.id}/reservations`,
 );
@@ -57,6 +56,20 @@ const formOpen = ref(false),
     error = ref(''),
     stale = ref(false),
     notice = ref('');
+const noticeIsError = ref(false);
+let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+function dismissNotice(): void {
+    clearTimeout(noticeTimer);
+    noticeTimer = undefined;
+    notice.value = '';
+    noticeIsError.value = false;
+}
+function showNotice(message: string, isError = false): void {
+    dismissNotice();
+    notice.value = message;
+    noticeIsError.value = isError;
+    if (!isError) noticeTimer = setTimeout(dismissNotice, 5000);
+}
 const formTrigger = shallowRef<HTMLElement | null>(null);
 const cancelTrigger = shallowRef<HTMLElement | null>(null);
 const form = ref({
@@ -102,7 +115,7 @@ async function changeTable(reservation: WaiterReservation, event: Event) {
     const tableId = Number(select.value);
     if (busy.value || tableId === reservation.table_id) return;
     busy.value = true;
-    notice.value = '';
+    dismissNotice();
     try {
         await sessionJson(
             `${root.value}/${reservation.id}`,
@@ -117,14 +130,16 @@ async function changeTable(reservation: WaiterReservation, event: Event) {
             },
             reservation.version,
         );
-        notice.value = 'Table changed.';
+        showNotice('Table changed.');
         refresh();
     } catch (reason) {
         select.value = String(reservation.table_id);
-        notice.value =
+        showNotice(
             reason instanceof SessionRequestError && reason.status === 422
                 ? Object.values(reason.errors).flat().join(' ')
-                : 'The table change could not be confirmed. Refresh reservations before trying again.';
+                : 'The table change could not be confirmed. Refresh reservations before trying again.',
+            true,
+        );
         refresh();
     } finally {
         busy.value = false;
@@ -134,6 +149,7 @@ async function save(cancel = false) {
     if (busy.value || stale.value) return;
     busy.value = true;
     error.value = '';
+    dismissNotice();
     const reservation = cancel ? cancelling.value : editing.value;
     try {
         const { owner_email, ...update } = form.value;
@@ -149,7 +165,7 @@ async function save(cancel = false) {
         );
         formOpen.value = false;
         cancelling.value = null;
-        notice.value = cancel ? 'Reservation Cancelled!' : 'Reservation saved.';
+        showNotice(cancel ? 'Reservation Cancelled!' : 'Reservation saved.');
         refresh();
     } catch (reason) {
         stale.value =
@@ -177,17 +193,10 @@ onMounted(() => {
             refresh();
     }, 30000);
 });
-onBeforeUnmount(() => clearInterval(polling));
-function notificationLabel(kind: string) {
-    const labels: Record<string, string> = {
-        customer_preorder_submitted: 'Customer pre-order submitted',
-        customer_preorder_updated: 'Customer updated the pre-order',
-        guest_preorder_submitted: 'Guest selections updated',
-        guest_removed: 'Guest removed',
-        group_submitted: 'Group pre-order submitted',
-    };
-    return labels[kind] ?? 'Customer pre-order changed';
-}
+onBeforeUnmount(() => {
+    clearInterval(polling);
+    dismissNotice();
+});
 const labels = {
     upcoming: 'Reserved',
     in_progress: 'In Progress',
@@ -201,77 +210,68 @@ const labels = {
     /></Head>
     <div class="bg-accent">
         <SiteContainer
-            class="flex min-h-[84px] flex-wrap items-center justify-between gap-3 py-4"
+            class="staff-container flex min-h-[84px] flex-wrap items-center justify-between gap-3 py-4"
         >
-            <h1 class="text-2xl font-medium wrap-anywhere">
+            <h1 class="text-[26px] leading-10 font-medium wrap-anywhere">
                 Hello, {{ page.props.auth.user.name }} (Waiter)
             </h1>
-            <details ref="notificationsMenu" class="relative text-sm">
-                <summary
-                    class="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-3"
-                    aria-label="Restaurant notifications"
-                >
-                    <Bell class="size-5" /><span class="sr-only"
-                        >Notifications</span
-                    ><span
-                        v-if="notifications.length"
-                        class="rounded-full bg-white px-2 text-xs"
-                        >{{ notifications.length }}</span
-                    >
-                </summary>
-                <div
-                    class="absolute right-0 z-20 mt-2 max-h-80 w-[min(340px,calc(100vw-32px))] overflow-y-auto rounded-xl border bg-white p-4 shadow-lg"
-                >
-                    <h2 class="mb-2 font-medium">Restaurant notifications</h2>
-                    <p v-if="!notifications.length">
-                        No pre-order notifications
-                    </p>
-                    <ul>
-                        <li
-                            v-for="(event, index) in notifications"
-                            :key="index"
-                            class="border-b py-3 last:border-0"
-                        >
-                            Reservation #{{ event.reservation_id }}<br />{{
-                                notificationLabel(event.kind)
-                            }}
-                        </li>
-                    </ul>
-                </div>
-            </details>
         </SiteContainer>
     </div>
-    <SiteContainer class="py-6">
-        <p
+    <SiteContainer class="staff-container py-6">
+        <div
             v-if="notice"
-            role="status"
-            class="fixed top-24 right-4 z-50 flex w-[calc(100%-32px)] max-w-[330px] items-center gap-3 rounded-md border border-primary/20 bg-[#e8ffea] px-4 py-2 text-xs shadow-sm sm:right-8"
+            :role="noticeIsError ? 'alert' : 'status'"
+            class="gt-toast flex items-center gap-3 rounded-lg border px-5 py-4 shadow-lg"
+            :class="
+                noticeIsError
+                    ? 'border-destructive bg-[#fff5f5]'
+                    : 'border-primary bg-[#edffed]'
+            "
         >
-            <CircleCheck class="size-5 shrink-0 text-primary" />{{ notice
-            }}<button
+            <component
+                :is="noticeIsError ? CircleAlert : CircleCheck"
+                class="size-5 shrink-0"
+                :class="
+                    noticeIsError
+                        ? 'text-destructive'
+                        : 'fill-primary text-white'
+                "
+                aria-hidden="true"
+            />
+            <p class="min-w-0 flex-1 text-sm font-medium">{{ notice }}</p>
+            <button
+                type="button"
                 aria-label="Dismiss notification"
-                class="ml-auto grid size-8 shrink-0 place-items-center"
-                @click="notice = ''"
+                class="-m-2 rounded-md p-2 focus-visible:outline-2"
+                @click="dismissNotice"
             >
                 <X class="size-5" />
             </button>
-        </p>
+        </div>
         <form
-            class="mb-6 flex flex-wrap items-end gap-3"
+            class="mb-6 flex flex-wrap items-center gap-4"
             @submit.prevent="search"
         >
-            <div class="w-full sm:w-[192px]">
+            <div class="w-full sm:w-[208px]">
                 <label for="staff-filter-date" class="sr-only">Date</label
                 ><BookingDateInput
                     id="staff-filter-date"
                     v-model="filter.date"
+                    variant="filter"
                     min="1900-01-01"
                     max="2100-12-31"
                 />
             </div>
-            <label class="grid w-full sm:w-[172px]"
+            <label class="relative grid w-full sm:w-[208px]"
                 ><span class="sr-only">Time</span
-                ><select v-model="filter.time" class="booking-input min-h-12">
+                ><Clock
+                    class="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-muted-foreground"
+                    aria-hidden="true"
+                />
+                <select
+                    v-model="filter.time"
+                    class="booking-input !min-h-14 !pl-11 text-sm"
+                >
                     <option value="">All times</option>
                     <option
                         v-for="time in bookingTimes"
@@ -282,9 +282,12 @@ const labels = {
                     </option>
                 </select></label
             >
-            <label class="grid w-full sm:w-[160px]"
+            <label class="grid w-full sm:w-[208px]"
                 ><span class="sr-only">Table</span
-                ><select v-model="filter.table" class="booking-input min-h-12">
+                ><select
+                    v-model="filter.table"
+                    class="booking-input !min-h-14 text-sm"
+                >
                     <option value="">All tables</option>
                     <option
                         v-for="table in tables"
@@ -298,15 +301,16 @@ const labels = {
             <Button
                 type="submit"
                 variant="outline"
-                class="min-h-12"
+                class="size-14 border-primary bg-white text-primary shadow-none"
                 aria-label="Search reservations"
                 ><Search class="size-5"
             /></Button>
             <Button
                 type="button"
-                class="min-h-12 sm:ml-auto"
+                class="min-h-14 gap-2 px-5 sm:ml-auto"
                 @click="openForm(null, $event)"
-                >+ New Reservation</Button
+                ><Plus class="size-5" aria-hidden="true" />New
+                Reservation</Button
             >
         </form>
         <p
@@ -318,15 +322,15 @@ const labels = {
         </p>
         <ul
             aria-label="Restaurant reservations"
-            class="grid items-start gap-6 md:grid-cols-2 xl:grid-cols-3"
+            class="grid items-stretch gap-6 md:grid-cols-2 xl:grid-cols-3"
         >
             <li
                 v-for="reservation in reservations.data"
                 :key="reservation.id"
-                class="min-w-0 overflow-hidden rounded-[20px] bg-white shadow-[0_2px_8px_#0000000a]"
+                class="flex min-w-0 flex-col overflow-hidden rounded-3xl bg-white shadow-[0_2px_12px_#00000009]"
             >
                 <div
-                    class="flex min-h-6 items-center justify-center gap-2 py-1 text-xs"
+                    class="flex items-center justify-center gap-2 py-1 text-sm leading-6 font-medium"
                     :class="{
                         'bg-[#dfe9ff]': reservation.phase === 'upcoming',
                         'bg-[#fff3d2]': reservation.phase === 'in_progress',
@@ -340,20 +344,25 @@ const labels = {
                         class="size-2 rounded-full bg-amber-500"
                     />{{ labels[reservation.phase] }}
                 </div>
-                <div class="space-y-3 p-4">
+                <div class="flex flex-1 flex-col gap-4 px-6 pt-4 pb-3">
                     <div
-                        class="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 pb-3"
+                        class="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 pb-3"
                     >
                         <h2
                             class="flex min-w-0 items-center gap-2 text-sm font-medium wrap-anywhere"
                         >
-                            <UserRound class="size-4 shrink-0 text-primary" />{{
-                                reservation.owner_name
-                            }}
+                            <UserRound
+                                class="size-4 shrink-0"
+                                :class="
+                                    reservation.phase === 'upcoming'
+                                        ? 'text-muted-foreground'
+                                        : 'text-primary'
+                                "
+                            />{{ reservation.owner_name }}
                         </h2>
                         <select
                             v-if="reservation.can_edit"
-                            class="min-h-10 max-w-full rounded-md border bg-card px-3 text-xs"
+                            class="min-h-11 max-w-full rounded-lg border border-border bg-card px-3 text-xs text-foreground"
                             :aria-label="`Change table for ${reservation.code}`"
                             :value="reservation.table_id"
                             :disabled="busy"
@@ -426,11 +435,12 @@ const labels = {
                         >
                     </dl>
                     <div
-                        class="flex flex-wrap items-center gap-1 border-t pt-3"
+                        v-if="reservation.phase !== 'canceled'"
+                        class="mt-auto flex min-h-11 flex-wrap items-center gap-1 border-t border-border/40 pt-3"
                     >
                         <button
                             v-if="reservation.can_cancel"
-                            class="grid size-11 place-items-center rounded focus-visible:outline-2 sm:size-8"
+                            class="grid size-11 place-items-center rounded text-muted-foreground hover:text-destructive focus-visible:outline-2"
                             :aria-label="`Cancel reservation ${reservation.code}`"
                             @click="openCancel(reservation, $event)"
                         >
@@ -438,7 +448,7 @@ const labels = {
                         </button>
                         <button
                             v-if="reservation.can_edit"
-                            class="grid size-11 place-items-center rounded focus-visible:outline-2 sm:size-8"
+                            class="grid size-11 place-items-center rounded text-muted-foreground hover:text-primary focus-visible:outline-2"
                             :aria-label="`Edit reservation ${reservation.code}`"
                             @click="openForm(reservation, $event)"
                         >
@@ -456,7 +466,7 @@ const labels = {
                                     ? 'default'
                                     : 'outline'
                             "
-                            class="ml-auto min-h-11 rounded-md px-3 text-xs sm:h-8 sm:min-h-8"
+                            class="ml-auto min-h-11 rounded-md border-primary px-3 text-xs sm:h-9 sm:min-h-9"
                             :class="{
                                 'text-primary':
                                     !reservation.needs_review ||
@@ -481,7 +491,7 @@ const labels = {
                                     ? 'default'
                                     : 'outline'
                             "
-                            class="ml-auto min-h-11 rounded-md px-3 text-xs sm:h-8 sm:min-h-8"
+                            class="ml-auto min-h-11 rounded-md border-primary px-3 text-xs sm:h-9 sm:min-h-9"
                             :class="{
                                 'text-primary':
                                     reservation.phase === 'completed' ||
@@ -544,22 +554,26 @@ const labels = {
         :return-focus-target="cancelTrigger"
         @update:open="!$event && (cancelling = null)"
     >
-        <p class="my-6 text-sm leading-6">
-            Cancelling this reservation will cancel access to its pre-orders.
-            You won’t be able to undo this action here.
+        <p class="my-2 text-sm leading-6">
+            Cancelling this reservation will cancel all pre-orders.<br />
+            You won't be able to undo this action.
         </p>
         <p v-if="error" role="alert" class="mb-4 text-sm text-destructive">
             {{ error }}
         </p>
         <div class="flex flex-wrap justify-end gap-3">
-            <Button variant="ghost" :disabled="busy" @click="cancelling = null"
+            <Button
+                variant="ghost"
+                class="min-h-11 rounded-none px-2 underline underline-offset-[14px]"
+                :disabled="busy"
+                @click="cancelling = null"
                 >Keep it</Button
             ><Button
                 variant="outline"
-                class="min-h-11 border-destructive! text-destructive!"
+                class="min-h-11 border-[#ed0000]! bg-white px-6 text-[#ed0000]! shadow-none hover:bg-red-50! hover:text-[#ed0000]!"
                 :disabled="busy || stale"
                 @click="save(true)"
-                >Cancel</Button
+                >{{ busy ? 'Cancelling…' : 'Cancel' }}</Button
             >
         </div>
     </BookingModal>
@@ -646,3 +660,11 @@ const labels = {
         </form>
     </BookingModal>
 </template>
+
+<style scoped>
+@media (min-width: 1024px) {
+    .staff-container {
+        padding-inline: 40px;
+    }
+}
+</style>

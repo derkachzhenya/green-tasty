@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
-import { findAll, fire, mountComponent } from '@/test-support/renderComponent';
+import {
+    findAll,
+    fire,
+    mountComponent,
+    textContent,
+} from '@/test-support/renderComponent';
 import BookingModal from './BookingModal.vue';
 
 // Real portal/focus behaviour is verified in Chrome; exercise the explicit
@@ -84,5 +89,16 @@ describe('booking modal keyboard dismissal', () => {
         const { update, content } = mount(false);
         await fire(content, 'onKeydown', key('Enter'));
         expect(update).not.toHaveBeenCalled();
+    });
+    it('renders the compact reservation summary under the edit title', () => {
+        mounted = mountComponent(BookingModal, {
+            open: true,
+            title: 'Edit Reservation',
+            description: 'Edit the selected reservation.',
+            subtitle: '48 Rustaveli Avenue · Table 1 · Oct 17, 2026',
+        });
+        expect(textContent(mounted.root)).toContain(
+            '48 Rustaveli Avenue · Table 1 · Oct 17, 2026',
+        );
     });
 });

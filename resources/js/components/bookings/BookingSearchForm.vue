@@ -62,7 +62,7 @@ const emit = defineEmits<{ change: [Partial<BookingFilters>]; search: [] }>();
                 :max="rules.max_date"
                 :disabled="busy"
                 :invalid="!!errors.date"
-                described-by="date-error booking-rules"
+                described-by="date-error"
                 @update:model-value="emit('change', { date: $event })"
             />
             <InputError id="date-error" :message="errors.date" />
@@ -78,7 +78,7 @@ const emit = defineEmits<{ change: [Partial<BookingFilters>]; search: [] }>();
                     :disabled="busy"
                     class="booking-input"
                     :aria-invalid="!!errors.time"
-                    aria-describedby="time-error booking-rules"
+                    aria-describedby="time-error"
                     @change="
                         emit('change', {
                             time: ($event.target as HTMLSelectElement).value,
@@ -100,7 +100,7 @@ const emit = defineEmits<{ change: [Partial<BookingFilters>]; search: [] }>();
                     :max="rules.max_guests ?? 255"
                     :disabled="busy"
                     :invalid="!!errors.guest_count"
-                    described-by="guests-error booking-rules"
+                    described-by="guests-error"
                     @update:model-value="
                         emit('change', { guest_count: $event })
                     "
@@ -144,9 +144,5 @@ const emit = defineEmits<{ change: [Partial<BookingFilters>]; search: [] }>();
         <Button type="submit" :disabled="busy" class="h-14 w-full text-base">{{
             busy ? 'Checking availability…' : 'Find a Table'
         }}</Button>
-        <p id="booking-rules" class="text-xs leading-5 text-muted-foreground">
-            {{ (filters.duration_minutes ?? rules.duration_minutes) / 60 }}-hour
-            bookings · {{ rules.timezone }}. Guest count includes you.
-        </p>
     </form>
 </template>

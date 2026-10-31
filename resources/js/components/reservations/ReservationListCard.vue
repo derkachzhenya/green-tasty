@@ -14,6 +14,7 @@ const emit = defineEmits<{
     invite: [];
     feedback: [];
     group: [];
+    cancelled: [];
     changed: [];
 }>();
 const cancelling = ref(false),
@@ -37,6 +38,7 @@ async function cancelReservation() {
             props.reservation.cancel_version,
         );
         cancelling.value = false;
+        emit('cancelled');
         emit('changed');
     } catch (reason) {
         cancelError.value =
@@ -257,10 +259,8 @@ const label = computed(
         @update:open="cancelling = $event"
     >
         <p class="my-5 text-sm leading-6">
-            Cancel your reservation at {{ reservation.restaurant.address }} on
-            {{ bookingDate(reservation.date) }} at {{ reservation.time }}? All
-            participants’ pre-orders will close. Your reservation and order
-            history will be kept.
+            Cancelling this reservation will cancel all pre-orders.<br />
+            You won't be able to undo this action.
         </p>
         <p
             v-if="cancelError"
@@ -271,15 +271,17 @@ const label = computed(
         </p>
         <div class="flex flex-wrap justify-end gap-3">
             <Button
-                variant="outline"
+                variant="ghost"
+                class="min-h-11 rounded-none px-2 underline underline-offset-[14px]"
                 :disabled="cancelBusy"
                 @click="cancelling = false"
-                >Keep Reservation</Button
+                >Keep it</Button
             ><Button
+                variant="outline"
                 :disabled="cancelBusy || Boolean(cancelError)"
-                class="bg-destructive text-white hover:bg-destructive/90"
+                class="min-h-11 border-[#ed0000]! bg-white px-6 text-[#ed0000]! shadow-none hover:bg-red-50! hover:text-[#ed0000]!"
                 @click="cancelReservation"
-                >{{ cancelBusy ? 'Cancelling…' : 'Cancel Reservation' }}</Button
+                >{{ cancelBusy ? 'Cancelling…' : 'Cancel' }}</Button
             >
         </div>
     </BookingModal>

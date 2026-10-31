@@ -155,9 +155,6 @@ function close(): void {
                                 Expected ready time –
                                 {{ dishPreparationMinutes(item.name) }} minutes
                             </p>
-                            <p class="mt-1 text-xs text-muted-foreground">
-                                Unit price: {{ dollarPrice(item.unit_price) }}
-                            </p>
                             <p v-if="!item.available" class="mt-1 text-xs">
                                 No longer available. Remove before submitting.
                             </p>
