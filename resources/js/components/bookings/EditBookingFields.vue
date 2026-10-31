@@ -91,6 +91,16 @@ defineEmits<{
                 :message="errors.duration_minutes"
             />
         </div>
+        <p
+            class="rounded-lg border border-primary/15 bg-[#f0fff0] p-3 text-sm leading-6"
+        >
+            Need more time or want to make changes?<br />Give us a call at
+            <a
+                href="tel:+1234456788990"
+                class="whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2"
+                >+123 445 678 8990</a
+            >.
+        </p>
         <Button type="submit" :disabled="busy || blocked" class="h-14 w-full">{{
             busy ? 'Saving changes…' : 'Save Changes'
         }}</Button>

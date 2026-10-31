@@ -428,7 +428,8 @@ describe('Figma guest pre-order flow', () => {
         mounted?.unmount();
         await mount();
         await cart();
-        expect(text()).toContain('Unit price: $0.10');
+        expect(server.selections.items[0].unit_price).toBe('0.10');
+        expect(text()).not.toContain('Unit price:');
         expect(text()).toContain('0.30');
     });
     it('confirms only after server success and refresh restores the submitted screen', async () => {

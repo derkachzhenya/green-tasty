@@ -6,7 +6,7 @@ import {
     it,
     vi,
 } from 'vite-plus/test';
-import { defineComponent, h } from 'vue';
+import { defineComponent, h, nextTick } from 'vue';
 import {
     findAll,
     fire,
@@ -281,7 +281,8 @@ describe('guest removal and empty owner group', () => {
         updated.removed_participants = 1;
         updated.summary.grand_total = '0.00';
         request.mockResolvedValueOnce(updated);
-        await click('Remove Guest', confirmation());
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        await fire(button('Remove Guest', confirmation()), 'onClick');
         expect(request).toHaveBeenLastCalledWith(
             '/reservations/7/pre-order/owner-view/guests/2',
             'delete',
@@ -295,6 +296,13 @@ describe('guest removal and empty owner group', () => {
         expect(text()).toContain('0.00');
         expect(text()).toContain('1 active participants');
         expect(changed).toHaveBeenCalledOnce();
+        vi.advanceTimersByTime(4999);
+        await nextTick();
+        expect(text()).toContain('Guest Removed');
+        vi.advanceTimersByTime(1);
+        await nextTick();
+        expect(text()).not.toContain('Guest Removed');
+        expect(text()).toContain('Group Pre-Order');
     });
     it('retains confirmation and guest on conflict without false success', async () => {
         await click('Remove Guest Alex');

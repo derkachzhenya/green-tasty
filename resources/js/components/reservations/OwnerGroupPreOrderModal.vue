@@ -59,7 +59,12 @@ const groupClose = ref<HTMLButtonElement | null>(null);
 const scrollArea = ref<HTMLElement | null>(null);
 const removalNotice = ref(false);
 let noticeTimer: ReturnType<typeof setTimeout> | undefined;
-onBeforeUnmount(() => clearTimeout(noticeTimer));
+function dismissRemovalNotice(): void {
+    clearTimeout(noticeTimer);
+    noticeTimer = undefined;
+    removalNotice.value = false;
+}
+onBeforeUnmount(dismissRemovalNotice);
 function askRemoval(guest: OwnerGroupParticipant, event: Event) {
     removalTrigger.value = event.currentTarget as HTMLElement;
     removing.value = guest;
@@ -71,9 +76,9 @@ async function removeGuest() {
     if (await mutate(`/guests/${removing.value.id}`, 'delete')) {
         removalTrigger.value = groupClose.value;
         removing.value = null;
+        dismissRemovalNotice();
         removalNotice.value = true;
-        clearTimeout(noticeTimer);
-        noticeTimer = setTimeout(() => (removalNotice.value = false), 6000);
+        noticeTimer = setTimeout(dismissRemovalNotice, 5000);
         await nextTick();
         if (scrollArea.value) scrollArea.value.scrollTop = top;
     }
@@ -148,6 +153,25 @@ async function confirm() {
 }
 </script>
 <template>
+    <div
+        v-if="removalNotice"
+        role="status"
+        class="green-tasty gt-toast flex items-center gap-3 rounded-lg border border-primary bg-[#edffed] px-5 py-4 font-[Poppins,sans-serif] text-foreground shadow-lg"
+    >
+        <CircleCheck
+            class="size-5 shrink-0 fill-primary text-white"
+            aria-hidden="true"
+        />
+        <p class="min-w-0 flex-1 text-sm font-medium">Guest Removed</p>
+        <button
+            type="button"
+            aria-label="Dismiss guest removed notification"
+            class="-m-2 rounded-md p-2 focus-visible:outline-2"
+            @click="dismissRemovalNotice"
+        >
+            <X class="size-5" aria-hidden="true" />
+        </button>
+    </div>
     <Dialog :open="true" @update:open="!$event && close()">
         <DialogContent
             :show-close-button="false"
@@ -157,25 +181,6 @@ async function confirm() {
             @escape-key-down="(busy || removing) && $event.preventDefault()"
             @interact-outside="$event.preventDefault()"
         >
-            <div
-                v-if="removalNotice"
-                role="status"
-                class="absolute top-3 right-16 z-[60] flex max-w-[calc(100%-80px)] items-center gap-3 rounded-lg border border-primary/40 bg-[#e8ffea] px-4 py-3 text-sm shadow-md"
-            >
-                <CircleCheck
-                    class="size-5 shrink-0 text-primary"
-                    aria-hidden="true"
-                />
-                Guest Removed
-                <button
-                    type="button"
-                    aria-label="Dismiss guest removed notification"
-                    class="grid size-8 place-items-center rounded focus-visible:outline-2"
-                    @click="removalNotice = false"
-                >
-                    <X class="size-4" aria-hidden="true" />
-                </button>
-            </div>
             <header
                 class="relative shrink-0 border-b border-primary/15 px-4 pt-6 pb-4 sm:px-10 sm:pt-8"
             >
@@ -200,9 +205,9 @@ async function confirm() {
                     changes for this reservation.</DialogDescription
                 >
                 <dl
-                    class="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs leading-5"
+                    class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs leading-5"
                 >
-                    <div class="flex items-start gap-2">
+                    <div class="flex min-w-0 items-center gap-2">
                         <MapPin
                             class="size-4 shrink-0 text-primary"
                             aria-hidden="true"
@@ -212,16 +217,19 @@ async function confirm() {
                             {{ reservation.restaurant.address }}
                         </dd>
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2 whitespace-nowrap">
                         <CalendarDays
-                            class="size-4 text-primary"
+                            class="size-4 shrink-0 text-primary"
                             aria-hidden="true"
                         />
                         <dt class="sr-only">Date</dt>
                         <dd>{{ bookingDate(reservation.date) }}</dd>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <Clock class="size-4 text-primary" aria-hidden="true" />
+                    <div class="flex items-center gap-2 whitespace-nowrap">
+                        <Clock
+                            class="size-4 shrink-0 text-primary"
+                            aria-hidden="true"
+                        />
                         <dt class="sr-only">Time</dt>
                         <dd>
                             {{ reservation.time }} – {{ reservation.end_time
@@ -229,19 +237,27 @@ async function confirm() {
                                 v-if="reservation.end_date !== reservation.date"
                             >
                                 ({{ reservation.end_date }})</span
-                            ><span class="sr-only">
-                                {{ reservation.timezone }}</span
-                            >
+                            ><span class="sr-only">{{
+                                ` ${reservation.timezone}`
+                            }}</span>
                         </dd>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <Users class="size-4 text-primary" aria-hidden="true" />
+                    <div class="flex items-center gap-2 whitespace-nowrap">
+                        <Users
+                            class="size-4 shrink-0 text-primary"
+                            aria-hidden="true"
+                        />
                         <dt class="sr-only">Guests</dt>
                         <dd>
-                            {{ reservation.guest_count }} Guests<span
+                            {{ reservation.guest_count }}
+                            {{
+                                reservation.guest_count === 1
+                                    ? 'Guest'
+                                    : 'Guests'
+                            }}<span
                                 v-if="order?.removed_participants"
-                                class="block text-muted-foreground"
-                                >{{ order.active_participants }} active
+                                class="sr-only"
+                                >. {{ order.active_participants }} active
                                 participants · booked places unchanged</span
                             >
                         </dd>

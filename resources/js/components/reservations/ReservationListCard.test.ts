@@ -37,6 +37,7 @@ describe('reservation group modal entry', () => {
             .mockReset()
             .mockResolvedValue({ status: 'cancelled' });
         const changed = vi.fn();
+        const cancelled = vi.fn();
         const version = `"${'a'.repeat(64)}"`;
         const mounted = mountComponent(ReservationListCard, {
             reservation: {
@@ -53,6 +54,7 @@ describe('reservation group modal entry', () => {
                 cancel_version: version,
             },
             onChanged: changed,
+            onCancelled: cancelled,
         });
         const button = (name: string) =>
             findAll(
@@ -70,10 +72,10 @@ describe('reservation group modal entry', () => {
             )[0];
         expect(textContent(mounted.root)).toContain('New pre-order updates');
         await fire(trigger(), 'onClick', { currentTarget: {} });
-        await fire(button('Keep Reservation'), 'onClick');
+        await fire(button('Keep it'), 'onClick');
         expect(request).not.toHaveBeenCalled();
         await fire(trigger(), 'onClick', { currentTarget: {} });
-        await fire(button('Cancel Reservation'), 'onClick');
+        await fire(button('Cancel'), 'onClick');
         expect(request).toHaveBeenCalledWith(
             '/reservations/7/cancel',
             'post',
@@ -82,6 +84,8 @@ describe('reservation group modal entry', () => {
             version,
         );
         expect(changed).toHaveBeenCalledOnce();
+        expect(cancelled).toHaveBeenCalledOnce();
+        expect(findAll(mounted.root, (n) => n.tag === 'aside')).toHaveLength(0);
         mounted.unmount();
     });
     it('retains the confirmation and reports a conflict without claiming cancellation', async () => {
@@ -119,9 +123,7 @@ describe('reservation group modal entry', () => {
         await fire(
             findAll(
                 mounted.root,
-                (n) =>
-                    n.tag === 'button' &&
-                    textContent(n).trim() === 'Cancel Reservation',
+                (n) => n.tag === 'button' && textContent(n).trim() === 'Cancel',
             )[0],
             'onClick',
         );

@@ -3,6 +3,8 @@ import { Link, usePage } from '@inertiajs/vue3';
 import { CircleUserRound } from '@lucide/vue';
 import { computed } from 'vue';
 import UserMenuContent from '@/components/UserMenuContent.vue';
+import RestaurantNotifications from './RestaurantNotifications.vue';
+import type { RestaurantNotification } from '@/types/restaurant-review';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -43,6 +45,9 @@ const workspaceHome = computed(() =>
     workspaceBase.value ? `${workspaceBase.value}/reservations` : '/staff',
 );
 const isStaffMenu = computed(() => page.component === 'staff/Menu');
+const notifications = computed(
+    () => (page.props.notifications ?? []) as RestaurantNotification[],
+);
 </script>
 
 <template>
@@ -149,32 +154,41 @@ const isStaffMenu = computed(() => page.component === 'staff/Menu');
                 >
                     Sign In
                 </Link>
-                <DropdownMenu v-else>
-                    <DropdownMenuTrigger as-child>
-                        <button
-                            type="button"
-                            aria-label="Account menu"
-                            class="inline-flex min-h-11 items-center justify-center rounded-lg border border-primary px-6 text-primary hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring md:justify-self-end"
-                            :class="
-                                page.component.startsWith('settings/') ||
-                                page.props.dashboardPage
-                                    ? 'bg-accent'
-                                    : ''
-                            "
+                <div v-else class="flex items-center justify-end gap-2">
+                    <RestaurantNotifications
+                        v-if="page.component === 'staff/Reservations'"
+                        :notifications="notifications"
+                    />
+                    <DropdownMenu>
+                        <DropdownMenuTrigger as-child>
+                            <button
+                                type="button"
+                                aria-label="Account menu"
+                                class="inline-flex min-h-11 items-center justify-center rounded-lg hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+                                :class="[
+                                    isStaff
+                                        ? 'w-11 text-foreground'
+                                        : 'border border-primary px-6 text-primary',
+                                    page.component.startsWith('settings/') ||
+                                    page.props.dashboardPage
+                                        ? 'bg-accent'
+                                        : '',
+                                ]"
+                            >
+                                <CircleUserRound
+                                    aria-hidden="true"
+                                    class="size-6"
+                                />
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                            align="end"
+                            class="green-tasty w-64 bg-card font-[Poppins,sans-serif] text-foreground"
                         >
-                            <CircleUserRound
-                                aria-hidden="true"
-                                class="size-6"
-                            />
-                        </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                        align="end"
-                        class="green-tasty w-64 bg-card font-[Poppins,sans-serif] text-foreground"
-                    >
-                        <UserMenuContent :user="user" />
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                            <UserMenuContent :user="user" />
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
             </div>
         </SiteContainer>
     </header>

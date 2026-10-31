@@ -623,16 +623,19 @@ function categoryKey(event: KeyboardEvent, index: number): void {
                 "
                 @update:open="ownerSubmitted = $event"
             >
-                <p class="my-5 text-sm leading-6">
-                    {{
-                        menu?.order.status === 'submitted'
-                            ? 'Your changes were sent successfully. Wait for confirmation from the restaurant.'
-                            : 'Your pre-order was saved successfully. Review the group order in Reservations and submit it to the restaurant.'
-                    }}
+                <p class="my-2 text-sm leading-6">
+                    <template v-if="menu?.order.status === 'submitted'">
+                        Your Pre-Order was sent successfully.<br />
+                        Wait for the confirmation from the restaurant.
+                    </template>
+                    <template v-else>
+                        Your Pre-Order was saved successfully.<br />
+                        Submit the group order from Reservations.
+                    </template>
                 </p>
                 <a
                     href="/reservations"
-                    class="inline-flex min-h-14 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground focus-visible:outline-2"
+                    class="inline-flex min-h-14 w-full items-center justify-center rounded-md bg-linear-to-r from-[#0b5b29] to-[#0f7a37] px-4 text-sm font-medium text-primary-foreground hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                     >View Reservations</a
                 >
             </BookingModal>

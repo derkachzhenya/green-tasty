@@ -20,10 +20,10 @@ defineEmits<{ close: []; confirm: [] }>();
         :return-focus-target="returnFocusTarget"
         @update:open="!$event && $emit('close')"
     >
-        <p class="guest-remove-copy my-6 text-sm leading-6 wrap-anywhere">
-            Remove <strong>{{ guestName }}</strong> and their current pre-order
-            from the active participants? Their invitation will stop working.
-            Booked places and reservation history are retained.
+        <p class="guest-remove-copy my-2 text-sm leading-6 wrap-anywhere">
+            Are you sure you want to remove <strong>{{ guestName }}</strong>
+            and their pre-order from this reservation? This action cannot be
+            undone.
         </p>
         <p
             v-if="error || blocked"
@@ -38,14 +38,14 @@ defineEmits<{ close: []; confirm: [] }>();
         <div class="flex flex-wrap justify-end gap-3">
             <Button
                 variant="ghost"
-                class="min-h-11 underline underline-offset-8"
+                class="min-h-11 rounded-none px-2 underline underline-offset-[14px]"
                 :disabled="busy"
                 @click="$emit('close')"
                 >Cancel</Button
             >
             <Button
                 variant="outline"
-                class="min-h-11 border-destructive! text-destructive! hover:bg-destructive/10! hover:text-destructive!"
+                class="min-h-11 border-[#ed0000]! bg-white px-6 text-[#ed0000]! shadow-none hover:bg-red-50! hover:text-[#ed0000]!"
                 :disabled="busy || blocked"
                 @click="$emit('confirm')"
                 >{{ busy ? 'Removing…' : 'Remove Guest' }}</Button

@@ -53,6 +53,13 @@ describe('site header server rendering', () => {
                 {
                     restaurant: { id: 7, slug: 'location-1' },
                     staffRestaurants: [{ id: 7, name: 'Workplace' }],
+                    notifications: [
+                        {
+                            reservation_id: 12,
+                            kind: 'group_submitted',
+                            revision: 1,
+                        },
+                    ],
                 },
             );
             expect(result?.body).toContain(
@@ -63,6 +70,16 @@ describe('site header server rendering', () => {
             expect(result?.body).not.toContain('Main page');
             expect(result?.body).not.toContain('href="/reservations"');
             expect(result?.body).not.toContain('/restaurants/location-1');
+            if (component === 'staff/Reservations') {
+                expect(result?.body).toContain(
+                    'aria-label="Restaurant notifications"',
+                );
+                expect(result?.body).toContain('Group pre-order submitted');
+            } else {
+                expect(result?.body).not.toContain(
+                    'aria-label="Restaurant notifications"',
+                );
+            }
             if (component === 'staff/Menu')
                 expect(result?.body).toMatch(
                     /<a(?=[^>]*href="\/staff\/restaurants\/7\/menu")(?=[^>]*aria-current="page")[^>]*>\s*Menu\s*<\/a>/,

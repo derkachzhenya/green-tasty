@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { CalendarDays } from '@lucide/vue';
+import { CalendarDays, ChevronDown } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 import InputError from '@/components/InputError.vue';
+import { bookingDate } from '@/lib/booking';
 
 const props = defineProps<{
     id: string;
@@ -11,9 +12,11 @@ const props = defineProps<{
     disabled?: boolean;
     invalid?: boolean;
     describedBy?: string;
+    variant?: 'filter';
 }>();
 const emit = defineEmits<{ 'update:modelValue': [string] }>();
 const touched = ref(false);
+const focused = ref(false);
 
 function displayDate(value: string): string {
     const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -61,6 +64,11 @@ function chooseDate(event: Event): void {
 <template>
     <div>
         <div class="relative">
+            <CalendarDays
+                v-if="variant === 'filter'"
+                class="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+            />
             <input
                 :id="id"
                 type="text"
@@ -71,17 +79,36 @@ function chooseDate(event: Event): void {
                 :value="draft"
                 :disabled="disabled"
                 class="booking-input !pr-12"
+                :class="{
+                    '!min-h-14 !pl-11': variant === 'filter',
+                    '!text-transparent':
+                        variant === 'filter' && !focused && !!modelValue,
+                }"
                 :aria-invalid="invalid || !!formatError"
                 :aria-describedby="
                     `${describedBy ?? ''} ${id}-format-error`.trim()
                 "
                 @input="input"
-                @blur="touched = true"
+                @focus="focused = true"
+                @blur="
+                    touched = true;
+                    focused = false;
+                "
             />
+            <span
+                v-if="variant === 'filter' && !focused && modelValue"
+                class="pointer-events-none absolute inset-y-0 right-12 left-11 flex items-center text-sm"
+                aria-hidden="true"
+                >{{ bookingDate(modelValue) }}</span
+            >
             <span
                 class="absolute inset-y-0 right-1 flex w-11 items-center justify-center rounded-md has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-primary"
             >
-                <CalendarDays class="size-5" aria-hidden="true" />
+                <component
+                    :is="variant === 'filter' ? ChevronDown : CalendarDays"
+                    class="size-5"
+                    aria-hidden="true"
+                />
                 <!-- Keep native calendar clicks and keyboard support; visible text uses a fixed format. -->
                 <input
                     type="date"

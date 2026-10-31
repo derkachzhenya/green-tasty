@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, usePage, router } from '@inertiajs/vue3';
+import { CircleCheck, X } from '@lucide/vue';
 import { computed, shallowRef, ref, onMounted, onBeforeUnmount } from 'vue';
 import OwnerGroupPreOrderModal from '@/components/reservations/OwnerGroupPreOrderModal.vue';
 import ReservationInviteModal from '@/components/reservations/ReservationInviteModal.vue';
@@ -40,6 +41,18 @@ const inviting = shallowRef<OwnedReservation | null>(null);
 const feedback = shallowRef<OwnedReservation | null>(null);
 const filtering = ref(false);
 const filterError = ref('');
+const cancellationNotice = ref(false);
+let cancellationNoticeTimeout: ReturnType<typeof setTimeout> | undefined;
+function dismissCancellationNotice(): void {
+    clearTimeout(cancellationNoticeTimeout);
+    cancellationNoticeTimeout = undefined;
+    cancellationNotice.value = false;
+}
+function showCancellationNotice(): void {
+    dismissCancellationNotice();
+    cancellationNotice.value = true;
+    cancellationNoticeTimeout = setTimeout(dismissCancellationNotice, 5000);
+}
 const tabs = [
     { id: 'all', label: 'All' },
     { id: 'upcoming', label: 'Upcoming' },
@@ -67,11 +80,30 @@ onMounted(() => {
         30000,
     );
 });
-onBeforeUnmount(() => clearInterval(warningTimer));
+onBeforeUnmount(() => {
+    clearInterval(warningTimer);
+    dismissCancellationNotice();
+});
 </script>
 
 <template>
     <Head :title="pageTitle"><meta name="robots" content="noindex" /></Head>
+    <div
+        v-if="cancellationNotice"
+        role="status"
+        class="gt-toast flex items-center gap-3 rounded-lg border border-primary bg-[#edffed] px-5 py-4 shadow-lg"
+    >
+        <CircleCheck class="size-5 shrink-0 fill-primary text-white" />
+        <p class="min-w-0 flex-1 text-sm font-medium">Reservation Cancelled!</p>
+        <button
+            type="button"
+            aria-label="Dismiss notification"
+            class="-m-2 rounded-md p-2 focus-visible:outline-2"
+            @click="dismissCancellationNotice"
+        >
+            <X class="size-5" />
+        </button>
+    </div>
     <div class="bg-accent">
         <SiteContainer
             class="flex min-h-[84px] flex-wrap items-center justify-between gap-x-6 gap-y-3 py-4"
@@ -214,6 +246,7 @@ onBeforeUnmount(() => clearInterval(warningTimer));
                                 @invite="inviting = reservation"
                                 @feedback="feedback = reservation"
                                 @group="group = reservation"
+                                @cancelled="showCancellationNotice"
                                 @changed="reload"
                             />
                         </li>

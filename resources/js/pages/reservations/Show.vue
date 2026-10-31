@@ -141,9 +141,9 @@ function refresh(): void {
         <div class="space-y-10 pb-12 sm:space-y-[60px]">
             <ReservationOverview :reservation="reservation" />
             <Link
-                :href="confirmation(reservation.id)"
+                :href="`${confirmation(reservation.id).url}?edit=1`"
                 class="inline-flex min-h-11 items-center rounded-sm text-sm text-primary underline focus-visible:outline-2 focus-visible:outline-offset-4"
-                >Confirmation and booking changes</Link
+                >Edit reservation</Link
             >
             <div
                 id="group-pre-order"

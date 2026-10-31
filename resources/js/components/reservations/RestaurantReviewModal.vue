@@ -16,6 +16,7 @@ import {
     Clock,
     Users,
     Bell,
+    CircleCheck,
 } from '@lucide/vue';
 import {
     Dialog,
@@ -27,7 +28,7 @@ import { Button } from '@/components/ui/button';
 import { sessionJson, SessionRequestError } from '@/lib/sessionJson';
 import { bookingDate } from '@/lib/booking';
 import { dollarPrice } from '@/lib/guestSelection';
-import { dishImage } from '@/lib/guestMenu';
+import { dishImage, dishImageCropped } from '@/lib/guestMenu';
 import type {
     RestaurantReview,
     WaiterReservation,
@@ -39,6 +40,23 @@ const props = defineProps<{
 const emit = defineEmits<{ close: []; changed: [] }>();
 const review = shallowRef<RestaurantReview | null>(null);
 const { cutoffLocked } = usePreOrderClock(computed(() => review.value?.timing));
+const participants = computed(() =>
+    [...(review.value?.participants ?? [])].sort(
+        (a, b) => Number(b.is_owner) - Number(a.is_owner),
+    ),
+);
+const rejectedItems = computed(() =>
+    participants.value.flatMap((participant) =>
+        participant.items.filter(
+            (item) => !item.superseded && item.decision === 'rejected',
+        ),
+    ),
+);
+const rejectionWasPublished = computed(
+    () =>
+        rejectedItems.value.length > 0 &&
+        rejectedItems.value.every((item) => item.published),
+);
 const pendingNames = computed(
     () =>
         review.value?.participants
@@ -49,6 +67,12 @@ const busy = ref(false),
     stale = ref(false),
     error = ref(''),
     notice = ref('');
+let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+function dismissNotice(): void {
+    clearTimeout(noticeTimer);
+    noticeTimer = undefined;
+    notice.value = '';
+}
 let refreshAtCutoff = false;
 watch(cutoffLocked, (locked) => {
     if (locked && review.value?.timing && !review.value.timing.locked)
@@ -68,11 +92,15 @@ async function request(
     method: 'get' | 'patch' | 'post' = 'get',
     body?: Record<string, unknown>,
 ) {
-    if (busy.value || (method !== 'get' && (stale.value || cutoffLocked.value)))
+    if (
+        busy.value ||
+        (method !== 'get' &&
+            (stale.value || cutoffLocked.value || !review.value?.editable))
+    )
         return;
     busy.value = true;
     error.value = '';
-    notice.value = '';
+    dismissNotice();
     try {
         review.value = (await sessionJson(
             root + path,
@@ -83,9 +111,10 @@ async function request(
         )) as RestaurantReview;
         stale.value = false;
         if (method !== 'get') emit('changed');
-        if (path === '/submit')
-            notice.value =
-                'Restaurant review saved. The owner can see the result.';
+        if (path === '/submit') {
+            notice.value = 'Pre-order submitted. The owner can see the result.';
+            noticeTimer = setTimeout(dismissNotice, 5000);
+        }
     } catch (reason) {
         stale.value = true;
         if (
@@ -114,13 +143,35 @@ function restore(event: Event) {
     }
 }
 onMounted(() => void request());
-onBeforeUnmount(() => controller.abort());
+onBeforeUnmount(() => {
+    controller.abort();
+    dismissNotice();
+});
 </script>
 <template>
+    <div
+        v-if="notice"
+        role="status"
+        class="green-tasty gt-toast flex items-center gap-3 rounded-lg border border-primary bg-[#edffed] px-5 py-4 font-[Poppins,sans-serif] text-foreground shadow-lg"
+    >
+        <CircleCheck
+            class="size-5 shrink-0 fill-primary text-white"
+            aria-hidden="true"
+        />
+        <p class="min-w-0 flex-1 text-sm font-medium">{{ notice }}</p>
+        <button
+            type="button"
+            aria-label="Dismiss notification"
+            class="-m-2 rounded-md p-2 focus-visible:outline-2"
+            @click="dismissNotice"
+        >
+            <X class="size-5" aria-hidden="true" />
+        </button>
+    </div>
     <Dialog :open="true" @update:open="!busy && emit('close')">
         <DialogContent
             :show-close-button="false"
-            class="green-tasty restaurant-review-dialog flex max-h-[calc(100dvh-32px)] w-[calc(100%-32px)] max-w-[838px] flex-col gap-0 overflow-hidden rounded-3xl bg-[#f7f7f7] p-0 font-[Poppins,sans-serif] sm:max-w-[838px]"
+            class="green-tasty restaurant-review-dialog flex max-h-[calc(100dvh-32px)] w-[calc(100%-32px)] max-w-[838px] flex-col gap-0 overflow-hidden rounded-3xl bg-[#f7f7f7] p-0 font-[Poppins,sans-serif] outline-none sm:max-w-[838px]"
             @open-auto-focus="remember"
             @close-auto-focus="restore"
             @escape-key-down="busy && $event.preventDefault()"
@@ -136,14 +187,14 @@ onBeforeUnmount(() => controller.abort());
                 <X aria-hidden="true" class="size-5" />
             </button>
             <header
-                class="mx-4 shrink-0 border-b border-primary/15 pt-8 pb-4 sm:mx-10"
+                class="mx-4 shrink-0 border-b border-primary/15 pt-6 pb-4 sm:mx-10 sm:pt-8"
             >
                 <div class="flex flex-wrap items-center gap-3 pr-10">
-                    <DialogTitle class="text-xl font-medium sm:text-2xl"
+                    <DialogTitle class="text-[26px] leading-10 font-medium"
                         >Reservation Pre-Order</DialogTitle
                     ><span
                         v-if="review"
-                        class="rounded px-2 py-1 text-xs"
+                        class="rounded-md px-3 py-1 text-xs leading-5"
                         :class="
                             review.status === 'Confirmed by Restaurant'
                                 ? 'bg-[#e8ffea]'
@@ -157,36 +208,53 @@ onBeforeUnmount(() => controller.abort());
                 <DialogDescription class="mt-2 text-xs wrap-anywhere"
                     >Reservation: {{ reservation.code }}</DialogDescription
                 >
-                <div class="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs">
-                    <span class="inline-flex items-center gap-1"
-                        ><MapPin class="size-4 text-primary" />{{
-                            reservation.restaurant.address
+                <div
+                    class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs leading-5"
+                >
+                    <span class="inline-flex min-w-0 items-center gap-2"
+                        ><MapPin
+                            class="size-4 shrink-0 text-primary"
+                            aria-hidden="true"
+                        />{{ reservation.restaurant.address }}</span
+                    >
+                    <span
+                        class="inline-flex items-center gap-2 whitespace-nowrap"
+                        ><CalendarDays
+                            class="size-4 shrink-0 text-primary"
+                            aria-hidden="true"
+                        />{{ bookingDate(reservation.date ?? '') }}</span
+                    >
+                    <span
+                        class="inline-flex items-center gap-2 whitespace-nowrap"
+                        ><Clock
+                            class="size-4 shrink-0 text-primary"
+                            aria-hidden="true"
+                        />{{ reservation.time }} –
+                        {{ reservation.end_time }}</span
+                    >
+                    <span
+                        class="inline-flex items-center gap-2 whitespace-nowrap"
+                        ><Users
+                            class="size-4 shrink-0 text-primary"
+                            aria-hidden="true"
+                        />{{ reservation.guest_count }}
+                        {{
+                            reservation.guest_count === 1 ? 'Guest' : 'Guests'
                         }}</span
-                    >
-                    <span class="inline-flex items-center gap-1"
-                        ><CalendarDays class="size-4 text-primary" />{{
-                            bookingDate(reservation.date ?? '')
-                        }}</span
-                    >
-                    <span class="inline-flex items-center gap-1"
-                        ><Clock class="size-4 text-primary" />{{
-                            reservation.time
-                        }}
-                        – {{ reservation.end_time }}</span
-                    >
-                    <span class="inline-flex items-center gap-1"
-                        ><Users class="size-4 text-primary" />{{
-                            reservation.guest_count
-                        }}
-                        Guests</span
                     >
                 </div>
             </header>
             <div
-                class="min-h-0 space-y-6 overflow-y-auto p-4 sm:px-10 sm:py-6"
+                class="min-h-0 space-y-5 overflow-y-auto overscroll-contain p-4 sm:px-10 sm:py-6"
                 :aria-busy="busy"
             >
-                <p v-if="busy" role="status">Saving or loading review…</p>
+                <p
+                    v-if="busy"
+                    role="status"
+                    :class="review ? 'sr-only' : 'py-8'"
+                >
+                    Saving or loading review…
+                </p>
                 <p
                     v-if="error"
                     role="alert"
@@ -201,24 +269,9 @@ onBeforeUnmount(() => controller.abort());
                     @click="request()"
                     >Refresh review</Button
                 >
-                <p
-                    v-if="notice"
-                    role="status"
-                    class="rounded bg-[#e8ffea] p-3 text-xs"
-                >
-                    {{ notice }}
-                </p>
                 <template v-if="review">
                     <p
-                        v-if="
-                            review.participants.some((p) =>
-                                p.items.some(
-                                    (i) =>
-                                        i.decision === 'rejected' &&
-                                        !i.superseded,
-                                ),
-                            )
-                        "
+                        v-if="rejectedItems.length"
                         role="status"
                         class="flex items-center gap-2 rounded-md border border-destructive/10 bg-[#fff6f8] p-3 text-xs"
                     >
@@ -226,9 +279,9 @@ onBeforeUnmount(() => controller.abort());
                         <span>
                             Some items were rejected.
                             {{
-                                review.editable
-                                    ? 'Owner will be notified after you submit.'
-                                    : 'Owner was notified about it.'
+                                rejectionWasPublished
+                                    ? 'Owner was notified about it.'
+                                    : 'Owner will be notified after you submit.'
                             }}
                         </span>
                     </p>
@@ -249,7 +302,7 @@ onBeforeUnmount(() => controller.abort());
                         the pre-order. Review all new dishes before submitting.
                     </p>
                     <section
-                        v-for="participant in review.participants"
+                        v-for="participant in participants"
                         :key="participant.id"
                         :aria-label="`${participant.is_owner ? 'Owner' : 'Guest'}: ${participant.name}`"
                         class="rounded-xl bg-white p-4"
@@ -274,7 +327,7 @@ onBeforeUnmount(() => controller.abort());
                                     (item) => !item.superseded,
                                 )"
                                 :key="item.id"
-                                class="flex flex-wrap items-center gap-3 border-b border-border/30 px-1 py-2 last:border-0"
+                                class="grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 border-b border-border/30 px-2 py-3 last:border-0 sm:grid-cols-[44px_minmax(0,1fr)_auto_auto] sm:gap-x-3"
                                 :class="
                                     item.decision === 'rejected'
                                         ? 'bg-[#fff6f8]'
@@ -285,17 +338,26 @@ onBeforeUnmount(() => controller.abort());
                                     v-if="dishImage(item.name)"
                                     :src="dishImage(item.name)!"
                                     alt=""
-                                    class="size-10 rounded-full object-contain"
+                                    class="size-10 sm:size-11"
+                                    :class="
+                                        dishImageCropped(item.name)
+                                            ? 'rounded-full object-cover'
+                                            : 'object-contain'
+                                    "
                                 />
                                 <span
                                     v-else
                                     aria-hidden="true"
-                                    class="grid size-10 place-items-center rounded-full bg-accent"
+                                    class="grid size-10 place-items-center rounded-full bg-[#e8ffea] text-primary sm:size-11"
                                     >{{ item.name[0] }}</span
                                 >
-                                <div class="min-w-0 flex-1 basis-28 text-xs">
-                                    <p class="wrap-anywhere">{{ item.name }}</p>
-                                    <p class="text-xs text-muted-foreground">
+                                <div class="col-span-2 min-w-0 sm:col-span-1">
+                                    <p class="text-sm leading-5 wrap-anywhere">
+                                        {{ item.name }}
+                                    </p>
+                                    <p
+                                        class="text-xs leading-5 text-muted-foreground"
+                                    >
                                         Qty: {{ item.quantity
                                         }}<span class="sr-only">
                                             ·
@@ -303,7 +365,10 @@ onBeforeUnmount(() => controller.abort());
                                             each</span
                                         >
                                     </p>
-                                    <p v-if="item.notes" class="text-xs">
+                                    <p
+                                        v-if="item.notes"
+                                        class="text-xs leading-5 wrap-anywhere text-muted-foreground"
+                                    >
                                         {{ item.notes }}
                                     </p>
                                     <p class="sr-only">
@@ -314,11 +379,12 @@ onBeforeUnmount(() => controller.abort());
                                         }}
                                     </p>
                                 </div>
-                                <span class="text-sm font-medium">{{
-                                    dollarPrice(item.total)
-                                }}</span>
+                                <span
+                                    class="col-start-2 text-right text-sm font-medium whitespace-nowrap tabular-nums sm:col-auto"
+                                    >{{ dollarPrice(item.total) }}</span
+                                >
                                 <div
-                                    class="ml-auto flex gap-1"
+                                    class="flex shrink-0 gap-2"
                                     role="group"
                                     :aria-label="`Decision for ${item.name} (${participant.name})`"
                                 >
@@ -336,11 +402,11 @@ onBeforeUnmount(() => controller.abort());
                                             item.published ||
                                             item.superseded
                                         "
-                                        class="grid size-11 place-items-center rounded-md border disabled:cursor-default sm:size-8"
+                                        class="grid size-11 place-items-center rounded-md border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-default sm:size-8"
                                         :class="
                                             item.decision === 'rejected'
-                                                ? 'border-destructive bg-destructive text-white'
-                                                : 'border-border'
+                                                ? 'border-[#d00000] bg-[#d00000] text-white'
+                                                : 'border-[#9b9b9b] bg-white text-[#8b8b8b]'
                                         "
                                         @click="
                                             request(
@@ -366,11 +432,11 @@ onBeforeUnmount(() => controller.abort());
                                             item.published ||
                                             item.superseded
                                         "
-                                        class="grid size-11 place-items-center rounded-md border disabled:cursor-default sm:size-8"
+                                        class="grid size-11 place-items-center rounded-md border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-default sm:size-8"
                                         :class="
                                             item.decision === 'confirmed'
-                                                ? 'border-primary bg-primary text-white'
-                                                : 'border-border'
+                                                ? 'border-[#0f7a37] bg-[#0f7a37] text-white'
+                                                : 'border-[#9b9b9b] bg-white text-[#8b8b8b]'
                                         "
                                         @click="
                                             request(
@@ -416,29 +482,24 @@ onBeforeUnmount(() => controller.abort());
                             </p>
                         </details>
                     </section>
-                    <details class="text-sm">
-                        <summary class="min-h-11 cursor-pointer py-3">
-                            Review totals
-                        </summary>
-                        <dl class="grid grid-cols-2 gap-2">
-                            <dt>Requested (active items)</dt>
-                            <dd class="text-right">
-                                {{ dollarPrice(review.totals.requested) }}
-                            </dd>
-                            <dt>Confirmed</dt>
-                            <dd class="text-right">
-                                {{ dollarPrice(review.totals.confirmed) }}
-                            </dd>
-                            <dt>Rejected · excluded</dt>
-                            <dd class="text-right">
-                                {{ dollarPrice(review.totals.rejected) }}
-                            </dd>
-                            <dt>Pending review</dt>
-                            <dd class="text-right">
-                                {{ dollarPrice(review.totals.pending) }}
-                            </dd>
-                        </dl>
-                    </details>
+                    <dl class="sr-only">
+                        <dt>Requested (active items)</dt>
+                        <dd class="text-right">
+                            {{ dollarPrice(review.totals.requested) }}
+                        </dd>
+                        <dt>Confirmed</dt>
+                        <dd class="text-right">
+                            {{ dollarPrice(review.totals.confirmed) }}
+                        </dd>
+                        <dt>Rejected · excluded</dt>
+                        <dd class="text-right">
+                            {{ dollarPrice(review.totals.rejected) }}
+                        </dd>
+                        <dt>Pending review</dt>
+                        <dd class="text-right">
+                            {{ dollarPrice(review.totals.pending) }}
+                        </dd>
+                    </dl>
                 </template>
             </div>
             <footer
@@ -446,9 +507,13 @@ onBeforeUnmount(() => controller.abort());
                 class="mx-4 shrink-0 space-y-3 border-t border-primary/15 py-6 sm:mx-10 sm:pb-10"
             >
                 <Button
-                    class="min-h-12 w-full disabled:bg-[#8b8b8b]! disabled:bg-none! disabled:text-white! disabled:opacity-100"
+                    class="min-h-14 w-full disabled:bg-[#8b8b8b]! disabled:bg-none! disabled:text-white! disabled:opacity-100"
                     :disabled="
-                        busy || stale || !review.can_submit || cutoffLocked
+                        busy ||
+                        stale ||
+                        !review.editable ||
+                        !review.can_submit ||
+                        cutoffLocked
                     "
                     @click="request('/submit', 'post')"
                     >Submit Pre-order</Button

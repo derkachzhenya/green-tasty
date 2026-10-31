@@ -9,6 +9,7 @@ const props = defineProps<{
     open: boolean;
     title: string;
     description: string;
+    subtitle?: string;
     busy?: boolean;
     returnFocusTarget?: HTMLElement | null;
 }>();
@@ -42,9 +43,17 @@ function restoreFocus(event: Event): void {
             @keydown.esc.stop.prevent="closeOnEscape"
             @interact-outside="$event.preventDefault()"
         >
-            <DialogTitle class="pr-6 text-[26px] leading-10 font-medium">{{
-                title
-            }}</DialogTitle>
+            <div class="min-w-0 space-y-1">
+                <DialogTitle class="pr-6 text-[26px] leading-10 font-medium">{{
+                    title
+                }}</DialogTitle>
+                <p
+                    v-if="subtitle"
+                    class="text-sm leading-6 wrap-anywhere text-foreground"
+                >
+                    {{ subtitle }}
+                </p>
+            </div>
             <DialogDescription class="sr-only">{{
                 description
             }}</DialogDescription>

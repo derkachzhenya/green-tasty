@@ -28,10 +28,17 @@ export function useGuestInvitations(
     const uncertain = ref(false);
     let controller: AbortController | null = null;
     let sequence = 0;
+    let copyMessageTimeout: ReturnType<typeof setTimeout> | undefined;
+
+    function clearCopyMessageTimeout(): void {
+        clearTimeout(copyMessageTimeout);
+        copyMessageTimeout = undefined;
+    }
 
     function clear(): void {
         sequence++;
         controller?.abort();
+        clearCopyMessageTimeout();
         issued.value = null;
         action.value = null;
         selected.value = null;
@@ -134,11 +141,17 @@ export function useGuestInvitations(
         if (!issued.value || copying.value) return;
         const current = sequence;
         copying.value = true;
+        clearCopyMessageTimeout();
         copyMessage.value = '';
         try {
             await navigator.clipboard.writeText(issued.value.invitation_url);
-            if (current === sequence)
+            if (current === sequence) {
                 copyMessage.value = 'Invitation link copied.';
+                copyMessageTimeout = setTimeout(() => {
+                    copyMessage.value = '';
+                    copyMessageTimeout = undefined;
+                }, 5000);
+            }
         } catch {
             if (current === sequence)
                 copyMessage.value =

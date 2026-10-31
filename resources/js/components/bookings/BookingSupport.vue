@@ -32,7 +32,7 @@ defineProps<{ phone?: string | null; greeting?: boolean }>();
                     ? phone
                         ? 'For any assistance with your table reservation or pre-order, please call us at this number: '
                         : 'For any assistance with your table reservation or pre-order, please contact your restaurant.'
-                    : 'For groups larger than 4, please contact the restaurant directly.'
+                    : 'For groups larger than 4, please call us directly at'
             }}
             <a
                 v-if="phone"
@@ -40,7 +40,7 @@ defineProps<{ phone?: string | null; greeting?: boolean }>();
                 :class="
                     greeting
                         ? 'hover:underline focus-visible:outline-2'
-                        : 'block underline focus-visible:outline-2'
+                        : 'block focus-visible:outline-2'
                 "
                 >{{ phone }}</a
             ><span v-if="greeting && phone">.</span>

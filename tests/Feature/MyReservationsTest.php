@@ -168,12 +168,16 @@ class MyReservationsTest extends TestCase
         $this->getJson(route('dashboard'), $headers)->assertUnauthorized()->assertDontSee($second->code);
     }
 
-    public function test_reservation_date_precedes_id_when_sorting_and_history_is_not_hidden(): void
+    public function test_newly_created_reservations_are_shown_before_older_cards(): void
     {
-        $future = $this->reservation(['reserved_at' => '2027-01-01 08:00:00']);
-        $past = $this->reservation(['reserved_at' => '2020-01-01 08:00:00', 'status' => 'completed']);
+        $olderFutureReservation = $this->reservation(['reserved_at' => '2027-01-01 08:00:00']);
+        $olderFutureReservation->forceFill(['created_at' => '2026-10-01 08:00:00'])->save();
+
+        $newerPastReservation = $this->reservation(['reserved_at' => '2020-01-01 08:00:00', 'status' => 'completed']);
+        $newerPastReservation->forceFill(['created_at' => '2026-10-02 08:00:00'])->save();
+
         $result = app(MyReservationsService::class)->forOwner($this->owner);
-        $this->assertSame([$future->id, $past->id], array_column($result['data'], 'id'));
+        $this->assertSame([$newerPastReservation->id, $olderFutureReservation->id], array_column($result['data'], 'id'));
     }
 
     public function test_out_of_range_page_is_distinct_from_an_owner_with_no_reservations(): void

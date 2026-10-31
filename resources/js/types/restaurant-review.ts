@@ -1,3 +1,9 @@
+export type RestaurantNotification = {
+    reservation_id: number;
+    kind: string;
+    revision: number;
+};
+
 export type ReviewItem = {
     id: number;
     menu_item_id: number;
