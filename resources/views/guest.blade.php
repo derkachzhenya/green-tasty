@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="referrer" content="no-referrer">
         <meta name="robots" content="noindex, nofollow">
-        <title>Your pre-order · Green Tasty</title>
+        <title>Your pre-order | Green Tasty</title>
         <link rel="icon" href="/favicon.svg?v=green-tasty-1" type="image/svg+xml">
         <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=green-tasty-1">
         @fonts

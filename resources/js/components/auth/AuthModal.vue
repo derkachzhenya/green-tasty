@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { router } from '@inertiajs/vue3';
+import { Head, router } from '@inertiajs/vue3';
 import { X } from '@lucide/vue';
 import {
     computed,
@@ -64,6 +64,16 @@ const title = computed(
             register: 'Create an Account',
             forgot: 'Reset Password',
             verify: 'Enter Verification Code',
+            reset: 'Reset Password',
+        })[step.value],
+);
+const pageTitle = computed(
+    () =>
+        ({
+            login: 'Login',
+            register: 'Register',
+            forgot: 'Forgot Password',
+            verify: 'Verify Email',
             reset: 'Reset Password',
         })[step.value],
 );
@@ -344,6 +354,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+    <Head :title="pageTitle" />
     <Dialog :open="true" @update:open="close">
         <DialogContent
             class="green-tasty auth-dialog font-[Poppins,sans-serif] text-foreground"

@@ -87,7 +87,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <Head :title="pageTitle"><meta name="robots" content="noindex" /></Head>
+    <Head :title="dashboardPage ? 'Dashboard' : 'Reservations'"
+        ><meta name="robots" content="noindex"
+    /></Head>
     <div
         v-if="cancellationNotice"
         role="status"

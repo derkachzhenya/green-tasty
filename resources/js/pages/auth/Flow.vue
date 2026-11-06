@@ -12,7 +12,7 @@ defineProps<{
 }>();
 </script>
 <template>
-    <Head title="Your account"><meta name="robots" content="noindex" /></Head>
+    <Head><meta name="robots" content="noindex" /></Head>
     <RestaurantLanding :restaurants="restaurants" prices-resolved />
     <AuthModal
         :initial-step="initialStep"

@@ -14,7 +14,7 @@ const user = computed(() => page.props.auth.user);
 </script>
 
 <template>
-    <Head title="Profile settings" />
+    <Head title="Account Settings" />
 
     <div class="flex flex-col space-y-6">
         <Heading

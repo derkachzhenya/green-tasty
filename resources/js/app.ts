@@ -6,10 +6,11 @@ import SettingsLayout from '@/layouts/settings/Layout.vue';
 import SiteLayout from '@/layouts/SiteLayout.vue';
 import { initializeFlashToast } from '@/lib/flashToast';
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+const appName = 'Green Tasty';
 
 void createInertiaApp({
-    title: (title) => (title ? `${title} - ${appName}` : appName),
+    title: (title) =>
+        title && title !== appName ? `${title} | ${appName}` : appName,
     layout: (name) => {
         switch (true) {
             case name === 'Dashboard':

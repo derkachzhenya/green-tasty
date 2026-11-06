@@ -21,7 +21,10 @@ const navigation = vi.hoisted(() => ({
     visit: vi.fn(),
     clearHistory: vi.fn(),
 }));
-vi.mock('@inertiajs/vue3', () => ({ router: navigation }));
+vi.mock('@inertiajs/vue3', () => ({
+    router: navigation,
+    Head: { render: () => null },
+}));
 vi.mock('@/components/ui/button', () => ({
     Button: {
         setup:
