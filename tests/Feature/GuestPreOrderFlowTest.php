@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\ConsolidatedPreOrderService;
 use App\Services\GroupPreOrderSubmissionService;
 use App\Services\GuestInvitationService;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -29,6 +30,7 @@ class GuestPreOrderFlowTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->travelTo(CarbonImmutable::parse('2026-10-31 08:00:00', 'UTC'));
         $this->withoutVite();
         $restaurant = Restaurant::create(['name' => 'Green Tasty', 'slug' => 'guest-flow', 'address' => '48 Rustaveli Avenue']);
         $table = $restaurant->tables()->create(['name' => 'Window table', 'seats' => 4]);

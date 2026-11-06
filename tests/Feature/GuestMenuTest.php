@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\ConsolidatedPreOrderService;
 use App\Services\GuestDishSelectionService;
 use App\Services\GuestInvitationService;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery\MockInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -30,6 +31,7 @@ class GuestMenuTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->travelTo(CarbonImmutable::parse('2026-10-31 08:00:00', 'UTC'));
         $this->withoutVite();
         $restaurant = Restaurant::create(['name' => 'Green Tasty Test', 'slug' => 'test', 'address' => 'Private address']);
         $this->reservation = $restaurant->reservations()->create([

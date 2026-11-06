@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\ConsolidatedPreOrderService;
 use App\Services\GuestDishSelectionService;
 use App\Services\GuestInvitationService;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -85,6 +86,7 @@ class RestaurantMenuInstallationTest extends TestCase
 
     public function test_installation_preserves_existing_rows_and_orders_and_the_live_guest_api_sees_new_dishes(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-10-31 08:00:00', 'UTC'));
         $restaurant = Restaurant::create(['name' => 'Existing restaurant', 'slug' => 'location-1', 'address' => 'Keep address']);
         $table = $restaurant->tables()->create(['name' => 'Existing table', 'seats' => 4]);
         $category = $restaurant->menuCategories()->create(['name' => 'Starters', 'slug' => 'starters', 'sort_order' => 1]);
